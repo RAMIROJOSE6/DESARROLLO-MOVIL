@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { photosRepo } from '@/db/repositories/photos';
 import type { Photo } from '@/db/schema';
+import { File } from 'expo-file-system';
 
 export const BUCKET = 'geocam';
 
@@ -21,6 +22,46 @@ export interface RemotePhoto {
 }
 
 /**
+ * Lee el archivo local de forma nativa como ArrayBuffer para asegurar
+ * que la imagen completa en binario se envíe a Supabase (y no texto ni 0 bytes).
+ */
+async function getPhotoBinary(uri: string): Promise<ArrayBuffer> {
+  // 1. Lectura directa mediante Expo File System (Next API)
+  try {
+    const file = new File(uri);
+    if (file.exists) {
+      const bytes = await file.bytes();
+      if (bytes && bytes.byteLength > 0) {
+        return bytes.buffer as ArrayBuffer;
+      }
+    }
+  } catch (err) {
+    console.warn('Fallo File.bytes(), usando fallback base64:', err);
+  }
+
+  // 2. Fallback de alta compatibilidad mediante lectura base64
+  try {
+    const FileSystem = await import('expo-file-system/legacy');
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: 'base64',
+    });
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  } catch (err) {
+    console.warn('Fallo fallback base64, usando fetch:', err);
+  }
+
+  // 3. Fallback estándar fetch (para URLs HTTP o blob)
+  const res = await fetch(uri);
+  return await res.arrayBuffer();
+}
+
+/**
  * T5 & C2: Sube una foto a Supabase Storage y su fila a PostgreSQL.
  * Previene duplicados con upsert y elimina el archivo del bucket si la inserción en la BD falla.
  */
@@ -29,8 +70,14 @@ export async function uploadPhoto(photo: Photo, userId: string): Promise<string>
     throw new Error('La foto no tiene clientId: ejecuta ensureSyncFields()');
   }
 
-  // 1. Archivo local -> ArrayBuffer (requerido en React Native para no enviar 0 bytes)
-  const arrayBuffer = await fetch(photo.uri).then((res) => res.arrayBuffer());
+  // 1. Archivo local -> ArrayBuffer binario real
+  const arrayBuffer = await getPhotoBinary(photo.uri);
+
+  if (!arrayBuffer || arrayBuffer.byteLength < 50) {
+    throw new Error(
+      `El archivo local de la foto está vacío o dañado (${arrayBuffer?.byteLength ?? 0} bytes).`
+    );
+  }
 
   // 2. Ruta: <id del usuario>/<clientId>.jpg (exigido por las políticas RLS)
   const path = `${userId}/${photo.clientId}.jpg`;
@@ -171,4 +218,3 @@ export async function listCloudPhotos(): Promise<RemotePhoto[]> {
 
   return photosWithUrls;
 }
-
