@@ -71,3 +71,4 @@ using (
   bucket_id = 'geocam' 
   and (storage.foldername(name))[1] = (select auth.uid()::text)
 );
+

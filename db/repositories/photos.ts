@@ -89,3 +89,4 @@ export const photosRepo = {
     await db.delete(geoPhotos).where(eq(geoPhotos.id, id));
   },
 };
+

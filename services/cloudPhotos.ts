@@ -171,3 +171,4 @@ export async function listCloudPhotos(): Promise<RemotePhoto[]> {
 
   return photosWithUrls;
 }
+
