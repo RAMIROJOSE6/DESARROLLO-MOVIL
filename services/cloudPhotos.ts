@@ -1,7 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { photosRepo } from '@/db/repositories/photos';
 import type { Photo } from '@/db/schema';
-import { File } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 
 export const BUCKET = 'geocam';
 
@@ -22,43 +23,27 @@ export interface RemotePhoto {
 }
 
 /**
- * Lee el archivo local de forma nativa como ArrayBuffer para asegurar
- * que la imagen completa en binario se envíe a Supabase (y no texto ni 0 bytes).
+ * Lee el archivo de imagen local del dispositivo convirtiendo Base64 a ArrayBuffer binario real
+ * usando la librería oficial 'base64-arraybuffer' y 'expo-file-system/legacy'.
  */
 async function getPhotoBinary(uri: string): Promise<ArrayBuffer> {
-  // 1. Lectura directa mediante Expo File System (Next API)
-  try {
-    const file = new File(uri);
-    if (file.exists) {
-      const bytes = await file.bytes();
-      if (bytes && bytes.byteLength > 0) {
-        return bytes.buffer as ArrayBuffer;
-      }
-    }
-  } catch (err) {
-    console.warn('Fallo File.bytes(), usando fallback base64:', err);
+  const base64 = await FileSystem.readAsStringAsync(uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+
+  if (!base64 || base64.length === 0) {
+    throw new Error('No se pudo leer el archivo local: contenido base64 vacío.');
   }
 
-  // 2. Fallback de alta compatibilidad mediante lectura base64
-  try {
-    const FileSystem = await import('expo-file-system/legacy');
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: 'base64',
-    });
-    const binary = atob(base64);
-    const len = binary.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes.buffer;
-  } catch (err) {
-    console.warn('Fallo fallback base64, usando fetch:', err);
+  const arrayBuffer = decode(base64);
+
+  if (!arrayBuffer || arrayBuffer.byteLength < 500) {
+    throw new Error(
+      `El archivo de la imagen es demasiado pequeño o inválido (${arrayBuffer?.byteLength ?? 0} bytes).`
+    );
   }
 
-  // 3. Fallback estándar fetch (para URLs HTTP o blob)
-  const res = await fetch(uri);
-  return await res.arrayBuffer();
+  return arrayBuffer;
 }
 
 /**
@@ -70,14 +55,8 @@ export async function uploadPhoto(photo: Photo, userId: string): Promise<string>
     throw new Error('La foto no tiene clientId: ejecuta ensureSyncFields()');
   }
 
-  // 1. Archivo local -> ArrayBuffer binario real
+  // 1. Archivo local -> ArrayBuffer binario real mediante base64-arraybuffer
   const arrayBuffer = await getPhotoBinary(photo.uri);
-
-  if (!arrayBuffer || arrayBuffer.byteLength < 50) {
-    throw new Error(
-      `El archivo local de la foto está vacío o dañado (${arrayBuffer?.byteLength ?? 0} bytes).`
-    );
-  }
 
   // 2. Ruta: <id del usuario>/<clientId>.jpg (exigido por las políticas RLS)
   const path = `${userId}/${photo.clientId}.jpg`;
