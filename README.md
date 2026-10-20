@@ -55,3 +55,4 @@ Muro colaborativo en tiempo real donde los estudiantes se registran, publican me
 - Ambos proyectos tienen sus archivos `.env` ignorados en `.gitignore`.
 - Se versionan únicamente los archivos de plantilla `.env.example`.
 - **Verificación en el historial:** Ningún commit contiene llaves secretas (`service_role`) ni contraseñas de base de datos.
+
