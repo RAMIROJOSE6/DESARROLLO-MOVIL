@@ -1,7 +1,10 @@
 import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 const generateUUID = () => {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID();
   }
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -27,7 +30,9 @@ export const geoPhotos = sqliteTable("geo_photos", {
 
   // Columnas T4 Semana 8
   clientId: text("client_id").$defaultFn(generateUUID),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$defaultFn(
+    () => new Date(),
+  ),
   remotePath: text("remote_path"),
   syncedAt: integer("synced_at", { mode: "timestamp_ms" }),
 
