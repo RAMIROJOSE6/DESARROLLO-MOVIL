@@ -1,0 +1,14 @@
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+*.log
+.DS_Store
+/ios
+/android
+
+# Credenciales: NUNCA van a GitHub. Se versiona .env.example, no .env
+.env
+.env.*
+!.env.example

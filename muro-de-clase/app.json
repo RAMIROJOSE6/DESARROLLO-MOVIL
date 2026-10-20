@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Muro de Clase",
+    "slug": "muro-de-clase",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "muro",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "co.edu.uniguajira.muro"
+    },
+    "android": {
+      "package": "co.edu.uniguajira.muro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Muro de Clase usa la cámara para adjuntar fotos a tus publicaciones."
+        }
+      ]
+    ]
+  }
+}
