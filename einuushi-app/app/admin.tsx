@@ -1,0 +1,5392 @@
+import React, { useState } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Image,
+  Modal,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  useWindowDimensions,
+  KeyboardAvoidingView,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { WebView } from 'react-native-webview';
+import * as ImagePicker from 'expo-image-picker';
+import { useAdmin } from '../hooks/useAdmin';
+import { Order, Product, Category, CustomQuote, User, isSuperAdmin } from '../services/database';
+
+const SUPABASE_FALLBACK_IMAGES: Record<string, string> = {
+  mochila1: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/mochila1.jpg',
+  mochila2: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/mochila2.jpg',
+  manta1: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/manta1.jpg',
+  chinchorro1: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/chinchorro1.jpg',
+  sombrero1: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/sombrero1.jpg',
+};
+
+type AdminTab = 'analytics' | 'orders' | 'inventory' | 'quotes' | 'chat' | 'settings';
+
+export default function AdminScreen() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width > 768;
+
+  const {
+    adminUser,
+    isAuthenticated,
+    isSuperAdmin: isSuperAdminUser,
+    isLoading,
+    isRefreshing,
+    orders,
+    products,
+    categories,
+    quotes,
+    messages,
+    users,
+    adminUsers,
+    activityLogs,
+    analytics,
+    activeTrackingOrder,
+    setActiveTrackingOrder,
+    login,
+    logout,
+    refreshAll,
+    confirmPayment,
+    dispatchOrder,
+    markOrderDelivered,
+    updateStock,
+    toggleDiscount,
+    addProduct,
+    addCategory,
+    removeProduct,
+    toggleProductActive,
+    updateProductPhoto,
+    editProduct,
+    respondQuote,
+    sendMessage,
+    markChatRead,
+    updateAdminProfile,
+    createAdminUser,
+    changeAdminPassword,
+    requestAdminPasswordRecovery,
+    verifyAndResetAdminPassword,
+  } = useAdmin();
+
+  // Estados de Login Administrativo
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
+
+  // Tab activo persistente en sesión y almacenamiento local
+  const [activeTab, setActiveTabState] = useState<AdminTab>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem('einuushi_admin_active_tab') as AdminTab;
+        if (saved && ['analytics', 'orders', 'inventory', 'quotes', 'chat', 'settings'].includes(saved)) {
+          return saved;
+        }
+      } catch (_) {}
+    }
+    return 'analytics';
+  });
+
+  const setActiveTab = (tab: AdminTab) => {
+    setActiveTabState(tab);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem('einuushi_admin_active_tab', tab);
+      } catch (_) {}
+    }
+  };
+
+  // Filtro de Artículos en Inventario (Solo Admin)
+  const [inventoryFilter, setInventoryFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+
+  // Modal de Edición de Artículo
+  const [isEditProductModalVisible, setIsEditProductModalVisible] = useState(false);
+  const [productToEdit, setProductToEdit] = useState<Product | null>(null);
+  const [editProdName, setEditProdName] = useState('');
+  const [editProdCategory, setEditProdCategory] = useState('');
+  const [editProdPrice, setEditProdPrice] = useState('');
+  const [editProdStock, setEditProdStock] = useState('1');
+  const [editProdAncestral, setEditProdAncestral] = useState('');
+  const [editProdDiscount, setEditProdDiscount] = useState('0');
+  const [editProdIsDiscount, setEditProdIsDiscount] = useState(false);
+
+  // Filtro de Pedidos
+  const [orderStatusFilter, setOrderStatusFilter] = useState<string>('ALL');
+
+  // Modales
+  const [isNewProductModalVisible, setIsNewProductModalVisible] = useState(false);
+  const [isNewCategoryModalVisible, setIsNewCategoryModalVisible] = useState(false);
+  const [isQuoteModalVisible, setIsQuoteModalVisible] = useState(false);
+  const [selectedQuote, setSelectedQuote] = useState<CustomQuote | null>(null);
+  const [isMapModalVisible, setIsMapModalVisible] = useState(false);
+  const [isUsersModalVisible, setIsUsersModalVisible] = useState(false);
+  const [usersSearchQuery, setUsersSearchQuery] = useState('');
+  const [usersRoleFilter, setUsersRoleFilter] = useState<'all' | 'client' | 'admin'>('all');
+
+  // Formulario Mi Perfil Administrador
+  const [adminEditName, setAdminEditName] = useState('');
+  const [adminEditEmail, setAdminEditEmail] = useState('');
+  const [adminEditPhone, setAdminEditPhone] = useState('');
+  const [adminEditPassword, setAdminEditPassword] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [isSavingAdminProfile, setIsSavingAdminProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Formulario Nuevo Administrador
+  const [newAdminName, setNewAdminName] = useState('');
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newAdminPhone, setNewAdminPhone] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [newAdminCedula, setNewAdminCedula] = useState('');
+  const [showNewAdminPassword, setShowNewAdminPassword] = useState(false);
+  const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
+  const [createAdminMsg, setCreateAdminMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Filtros de Auditoría
+  const [auditFilterType, setAuditFilterType] = useState<'ALL' | 'PEDIDO' | 'PRODUCTO' | 'COTIZACION' | 'SEGURIDAD'>('ALL');
+  const [auditSearchQuery, setAuditSearchQuery] = useState('');
+
+  // Sincronizar datos del perfil admin actual
+  React.useEffect(() => {
+    if (adminUser) {
+      setAdminEditName(adminUser.fullName || '');
+      setAdminEditEmail(adminUser.email || '');
+      setAdminEditPhone(adminUser.phone || '');
+    }
+  }, [adminUser]);
+
+  const handleSaveAdminProfile = async () => {
+    setProfileMsg(null);
+    if (!adminEditName.trim()) {
+      setProfileMsg({ type: 'error', text: 'El nombre del administrador es obligatorio.' });
+      return;
+    }
+    if (!adminEditEmail.trim() || !adminEditEmail.includes('@')) {
+      setProfileMsg({ type: 'error', text: 'Ingresa un correo electrónico válido.' });
+      return;
+    }
+    if (adminEditPassword.trim() && adminEditPassword.trim().length < 6) {
+      setProfileMsg({ type: 'error', text: 'La nueva contraseña debe tener mínimo 6 caracteres.' });
+      return;
+    }
+
+    setIsSavingAdminProfile(true);
+    const res = await updateAdminProfile({
+      fullName: adminEditName.trim(),
+      email: adminEditEmail.trim(),
+      phone: adminEditPhone.trim(),
+      ...(adminEditPassword.trim() ? { password: adminEditPassword.trim() } : {}),
+    });
+    setIsSavingAdminProfile(false);
+
+    if (res.success) {
+      setProfileMsg({ type: 'success', text: '¡Datos y credenciales de administrador actualizados con éxito!' });
+      setAdminEditPassword('');
+    } else {
+      setProfileMsg({ type: 'error', text: res.message || 'Error al actualizar datos.' });
+    }
+  };
+
+  const handleCreateNewAdmin = async () => {
+    setCreateAdminMsg(null);
+    if (!newAdminName.trim()) {
+      setCreateAdminMsg({ type: 'error', text: 'El nombre del nuevo administrador es obligatorio.' });
+      return;
+    }
+    if (!newAdminEmail.trim() || !newAdminEmail.includes('@')) {
+      setCreateAdminMsg({ type: 'error', text: 'Ingresa un correo electrónico válido.' });
+      return;
+    }
+    if (!newAdminPassword.trim() || newAdminPassword.trim().length < 6) {
+      setCreateAdminMsg({ type: 'error', text: 'La contraseña inicial debe tener mínimo 6 caracteres.' });
+      return;
+    }
+
+    setIsCreatingAdmin(true);
+    const res = await createAdminUser({
+      fullName: newAdminName.trim(),
+      email: newAdminEmail.trim(),
+      phone: newAdminPhone.trim() || '3000000000',
+      cedula: newAdminCedula.trim() || '1124000000',
+      password: newAdminPassword.trim(),
+    });
+    setIsCreatingAdmin(false);
+
+    if (res.success) {
+      setCreateAdminMsg({ type: 'success', text: `¡Administrador ${newAdminName} creado exitosamente con plenos privilegios!` });
+      setNewAdminName('');
+      setNewAdminEmail('');
+      setNewAdminPhone('');
+      setNewAdminPassword('');
+      setNewAdminCedula('');
+    } else {
+      setCreateAdminMsg({ type: 'error', text: res.message || 'Error al crear el nuevo administrador.' });
+    }
+  };
+
+  // Modal Superadministrador: Cambiar contraseña de otro administrador
+  const [selectedAdminForPasswordModal, setSelectedAdminForPasswordModal] = useState<User | null>(null);
+  const [newPasswordForSelectedAdmin, setNewPasswordForSelectedAdmin] = useState('');
+  const [isChangingOtherAdminPassword, setIsChangingOtherAdminPassword] = useState(false);
+  const [changeOtherAdminPasswordMsg, setChangeOtherAdminPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Modal Recuperación de Contraseña Administrativa (con código por correo EmailJS)
+  const [isRecoveryModalVisible, setIsRecoveryModalVisible] = useState(false);
+  const [recoveryStep, setRecoveryStep] = useState<1 | 2 | 3>(1);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [recoveryGeneratedCode, setRecoveryGeneratedCode] = useState('');
+  const [recoveryNewPassword, setRecoveryNewPassword] = useState('');
+  const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState('');
+  const [recoveryTimeLeft, setRecoveryTimeLeft] = useState(60);
+  const [recoveryIsCodeExpired, setRecoveryIsCodeExpired] = useState(false);
+  const [isRecoveryLoading, setIsRecoveryLoading] = useState(false);
+  const [recoveryMsg, setRecoveryMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
+
+  // Temporizador regresivo de 60 segundos para la recuperación
+  React.useEffect(() => {
+    let timer: any = null;
+    if (isRecoveryModalVisible && recoveryStep === 2 && recoveryTimeLeft > 0) {
+      timer = setInterval(() => {
+        setRecoveryTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            setRecoveryIsCodeExpired(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isRecoveryModalVisible, recoveryStep, recoveryTimeLeft]);
+
+  const handleOpenRecoveryModal = () => {
+    setRecoveryStep(1);
+    setRecoveryEmail('');
+    setRecoveryCode('');
+    setRecoveryGeneratedCode('');
+    setRecoveryNewPassword('');
+    setRecoveryConfirmPassword('');
+    setRecoveryTimeLeft(60);
+    setRecoveryIsCodeExpired(false);
+    setRecoveryMsg(null);
+    setIsRecoveryModalVisible(true);
+  };
+
+  const handleSendRecoveryCode = async () => {
+    setRecoveryMsg(null);
+    if (!recoveryEmail.trim() || !recoveryEmail.includes('@')) {
+      setRecoveryMsg({ type: 'error', text: 'Por favor ingresa un correo electrónico administrativo válido.' });
+      return;
+    }
+    setIsRecoveryLoading(true);
+    const res = await requestAdminPasswordRecovery(recoveryEmail.trim());
+    setIsRecoveryLoading(false);
+
+    if (res.success && res.code) {
+      setRecoveryGeneratedCode(res.code);
+      setRecoveryTimeLeft(60);
+      setRecoveryIsCodeExpired(false);
+      setRecoveryStep(2);
+      setRecoveryMsg({ type: 'success', text: res.message || 'Código enviado con éxito.' });
+    } else {
+      setRecoveryMsg({ type: 'error', text: res.message || 'Error al enviar código.' });
+    }
+  };
+
+  const handleResendRecoveryCode = async () => {
+    if (!recoveryEmail.trim()) return;
+    setIsRecoveryLoading(true);
+    const res = await requestAdminPasswordRecovery(recoveryEmail.trim());
+    setIsRecoveryLoading(false);
+
+    if (res.success && res.code) {
+      setRecoveryGeneratedCode(res.code);
+      setRecoveryCode('');
+      setRecoveryTimeLeft(60);
+      setRecoveryIsCodeExpired(false);
+      setRecoveryMsg({ type: 'success', text: 'Se ha enviado un nuevo código a tu correo.' });
+    } else {
+      setRecoveryMsg({ type: 'error', text: res.message || 'Error al reenviar código.' });
+    }
+  };
+
+  const handleConfirmResetAdminPassword = async () => {
+    setRecoveryMsg(null);
+    if (recoveryIsCodeExpired || recoveryTimeLeft <= 0) {
+      setRecoveryMsg({ type: 'error', text: 'El código ha expirado. Pulsa "Reenviar código" para recibir uno nuevo.' });
+      return;
+    }
+    if (!recoveryCode.trim()) {
+      setRecoveryMsg({ type: 'error', text: 'Ingresa el código de 6 dígitos recibido en tu correo.' });
+      return;
+    }
+    if (recoveryCode.trim() !== recoveryGeneratedCode) {
+      setRecoveryMsg({ type: 'error', text: 'El código ingresado no coincide con el enviado a tu correo.' });
+      return;
+    }
+    if (!recoveryNewPassword.trim() || recoveryNewPassword.trim().length < 6) {
+      setRecoveryMsg({ type: 'error', text: 'La nueva contraseña debe tener mínimo 6 caracteres.' });
+      return;
+    }
+    if (recoveryNewPassword !== recoveryConfirmPassword) {
+      setRecoveryMsg({ type: 'error', text: 'La confirmación no coincide con la nueva contraseña.' });
+      return;
+    }
+
+    setIsRecoveryLoading(true);
+    const res = await verifyAndResetAdminPassword(recoveryEmail.trim(), recoveryNewPassword.trim());
+    setIsRecoveryLoading(false);
+
+    if (res.success) {
+      setRecoveryStep(3);
+    } else {
+      setRecoveryMsg({ type: 'error', text: res.message || 'Error al restablecer contraseña.' });
+    }
+  };
+
+  const handleConfirmChangeOtherAdminPassword = async () => {
+    if (!selectedAdminForPasswordModal) return;
+    setChangeOtherAdminPasswordMsg(null);
+    if (!newPasswordForSelectedAdmin.trim() || newPasswordForSelectedAdmin.trim().length < 6) {
+      setChangeOtherAdminPasswordMsg({ type: 'error', text: 'La nueva contraseña debe tener mínimo 6 caracteres.' });
+      return;
+    }
+
+    setIsChangingOtherAdminPassword(true);
+    const res = await changeAdminPassword(
+      selectedAdminForPasswordModal.id,
+      selectedAdminForPasswordModal.email,
+      newPasswordForSelectedAdmin.trim()
+    );
+    setIsChangingOtherAdminPassword(false);
+
+    if (res.success) {
+      setChangeOtherAdminPasswordMsg({ type: 'success', text: `¡Contraseña actualizada con éxito para ${selectedAdminForPasswordModal.fullName}!` });
+      setTimeout(() => {
+        setSelectedAdminForPasswordModal(null);
+        setNewPasswordForSelectedAdmin('');
+        setChangeOtherAdminPasswordMsg(null);
+      }, 1500);
+    } else {
+      setChangeOtherAdminPasswordMsg({ type: 'error', text: res.message || 'Error al actualizar contraseña.' });
+    }
+  };
+
+  // Estado para visualizador de foto a pantalla completa (Lightbox)
+  const [previewImage, setPreviewImage] = useState<{
+    source: any;
+    title: string;
+    price?: string;
+    description?: string;
+    category?: string;
+  } | null>(null);
+
+  const handleOpenImagePreview = (
+    source: any,
+    title: string,
+    price?: string,
+    description?: string,
+    category?: string
+  ) => {
+    if (!source) return;
+    setPreviewImage({ source, title, price, description, category });
+  };
+
+  const handleCloseImagePreview = () => {
+    setPreviewImage(null);
+  };
+
+  // Formulario Nuevo Producto
+  const [newProdName, setNewProdName] = useState('');
+  const [newProdCategory, setNewProdCategory] = useState(categories[0]?.id || 'Mochilas');
+  const [newProdPrice, setNewProdPrice] = useState('');
+  const [newProdStock, setNewProdStock] = useState('5');
+  const [newProdImageName, setNewProdImageName] = useState('');
+  const [newProdImagePath, setNewProdImagePath] = useState('');
+  const [isPickingImage, setIsPickingImage] = useState(false);
+  const [newProdAncestral, setNewProdAncestral] = useState('');
+  const [newProdDiscount, setNewProdDiscount] = useState('0');
+  const [newProdIsDiscount, setNewProdIsDiscount] = useState(false);
+
+  // Formulario Nueva Categoría
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatIcon, setNewCatIcon] = useState('sparkles-outline');
+  const [newCatDescription, setNewCatDescription] = useState('');
+
+  // Formulario Responder Cotización
+  const [quotePriceInput, setQuotePriceInput] = useState('');
+  const [quoteDaysInput, setQuoteDaysInput] = useState('7');
+  const [quoteNotesInput, setQuoteNotesInput] = useState('');
+
+  // Estado del Chat
+  const [selectedChatUserEmail, setSelectedChatUserEmail] = useState<string | null>(null);
+  const [replyMessageText, setReplyMessageText] = useState('');
+
+  // Manejador de Login
+  const handleAdminLogin = async () => {
+    setLoginError('');
+    if (!adminEmail.trim() || !adminPassword.trim()) {
+      setLoginError('Por favor ingresa tu correo y contraseña maestra.');
+      return;
+    }
+    setIsSubmittingLogin(true);
+    const res = await login(adminEmail.trim(), adminPassword);
+    setIsSubmittingLogin(false);
+    if (!res.success) {
+      setLoginError(res.message || 'Error al autenticar administrador.');
+    }
+  };
+
+  // Helper para convertir URI o Blob a Base64 permanente en Web
+  const ensureBase64DataUrl = async (uri: string, rawBase64?: string | null): Promise<string> => {
+    if (rawBase64) return `data:image/jpeg;base64,${rawBase64}`;
+    if (uri.startsWith('data:')) return uri;
+    try {
+      if (Platform.OS === 'web') {
+        const res = await fetch(uri);
+        const blob = await res.blob();
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(uri);
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch (e) {
+      console.warn('Error convirtiendo imagen:', e);
+    }
+    return uri;
+  };
+
+  // Adjuntar foto desde la galería o archivos
+  const handlePickProductImage = async () => {
+    try {
+      setIsPickingImage(true);
+
+      // En Web: Selector nativo de archivos HTML5
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (e: any) => {
+          const file = e.target?.files?.[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const base64Uri = event.target?.result as string;
+              setNewProdImagePath(base64Uri);
+              if (!newProdImageName) {
+                const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/\s+/g, '_').toLowerCase();
+                setNewProdImageName(cleanName);
+              }
+            };
+            reader.readAsDataURL(file);
+          }
+          setIsPickingImage(false);
+        };
+        input.oncancel = () => setIsPickingImage(false);
+        input.click();
+        return;
+      }
+
+      // En Móvil (Android / iOS):
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso Requerido', 'Se necesita autorización para acceder a tus fotos.');
+        setIsPickingImage(false);
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const persistentUri = await ensureBase64DataUrl(asset.uri, asset.base64);
+        setNewProdImagePath(persistentUri);
+
+        if (asset.fileName && !newProdImageName) {
+          const cleanName = asset.fileName.replace(/\.[^/.]+$/, '').replace(/\s+/g, '_').toLowerCase();
+          setNewProdImageName(cleanName);
+        } else if (!newProdImageName && newProdName) {
+          setNewProdImageName(newProdName.trim().toLowerCase().replace(/\s+/g, '_'));
+        }
+      }
+    } catch (err) {
+      console.warn('Error al seleccionar imagen:', err);
+      Alert.alert('Error', 'No se pudo abrir el selector de fotos.');
+    } finally {
+      setIsPickingImage(false);
+    }
+  };
+
+  // Tomar foto con la cámara
+  const handleTakePhoto = async () => {
+    try {
+      setIsPickingImage(true);
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permiso Requerido', 'Se necesita autorización para usar la cámara.');
+          setIsPickingImage(false);
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const persistentUri = await ensureBase64DataUrl(asset.uri, asset.base64);
+        setNewProdImagePath(persistentUri);
+        if (!newProdImageName) {
+          setNewProdImageName(`foto_${Date.now()}`);
+        }
+      }
+    } catch (err) {
+      console.warn('Error al capturar foto:', err);
+      Alert.alert('Error', 'No se pudo abrir la cámara.');
+    } finally {
+      setIsPickingImage(false);
+    }
+  };
+
+  // Confirmar eliminación permanente de un producto
+  const handleConfirmDelete = async () => {
+    if (productToDelete) {
+      const id = productToDelete.id;
+      setIsDeleteModalVisible(false);
+      setProductToDelete(null);
+      await removeProduct(id);
+    }
+  };
+
+  // Abrir modal de edición con los datos actuales del artículo
+  const handleOpenEditProduct = (prod: Product) => {
+    setProductToEdit(prod);
+    setEditProdName(prod.name);
+    setEditProdCategory(prod.categoryId || (categories[0]?.id || 'Mochilas'));
+    setEditProdPrice(String(prod.priceValue || ''));
+    setEditProdStock(String(prod.stock !== undefined ? prod.stock : '1'));
+    setEditProdAncestral(prod.ancestralRef || '');
+    setEditProdDiscount(String(prod.discountPercent || '0'));
+    setEditProdIsDiscount(Boolean(prod.isDiscountActive));
+    setIsEditProductModalVisible(true);
+  };
+
+  // Guardar cambios del artículo editado
+  const handleSaveEditedProduct = async () => {
+    if (!productToEdit) return;
+    if (!editProdName.trim() || !editProdPrice.trim()) {
+      Alert.alert('Campos requeridos', 'Por favor ingresa el nombre y el precio del artículo.');
+      return;
+    }
+
+    const priceNum = parseInt(editProdPrice.replace(/[^0-9]/g, ''), 10) || productToEdit.priceValue;
+    const stockNum = parseInt(editProdStock, 10);
+    const validStock = isNaN(stockNum) ? productToEdit.stock : Math.max(0, stockNum);
+    const discNum = parseInt(editProdDiscount, 10) || 0;
+
+    await editProduct(productToEdit.id, {
+      name: editProdName.trim(),
+      categoryId: editProdCategory,
+      priceValue: priceNum,
+      price: `$ ${priceNum.toLocaleString('es-CO')} COP`,
+      stock: validStock,
+      ancestralRef: editProdAncestral.trim(),
+      discountPercent: discNum,
+      isDiscountActive: editProdIsDiscount ? 1 : 0,
+    });
+
+    setIsEditProductModalVisible(false);
+    setProductToEdit(null);
+    Alert.alert('¡Artículo Actualizado!', 'El artículo y su categoría han sido modificados exitosamente en la base de datos.');
+  };
+
+  // Actualizar la foto de un producto existente
+  const handleUpdateProductPhoto = async (prod: Product) => {
+    try {
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (e: any) => {
+          const file = e.target?.files?.[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              const base64Uri = event.target?.result as string;
+              const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/\s+/g, '_').toLowerCase();
+              await updateProductPhoto(prod.id, base64Uri, cleanName);
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+        input.click();
+        return;
+      }
+
+      // En Entorno Móvil (Android / iOS):
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso Requerido', 'Se necesita autorización para acceder a tus fotos.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const persistentUri = await ensureBase64DataUrl(asset.uri, asset.base64);
+        const cleanName = asset.fileName
+          ? asset.fileName.replace(/\.[^/.]+$/, '').replace(/\s+/g, '_').toLowerCase()
+          : `foto_${Date.now()}`;
+        await updateProductPhoto(prod.id, persistentUri, cleanName);
+      }
+    } catch (err) {
+      console.warn('Error al actualizar foto:', err);
+      Alert.alert('Error', 'No se pudo actualizar la foto del producto.');
+    }
+  };
+
+  // Helper para resolver imagen de producto (100% URLs de Supabase)
+  const resolveProductImage = (path?: string | null) => {
+    if (!path) return null;
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+      return { uri: path };
+    }
+    if (SUPABASE_FALLBACK_IMAGES[path]) {
+      return { uri: SUPABASE_FALLBACK_IMAGES[path] };
+    }
+    return { uri: SUPABASE_FALLBACK_IMAGES.mochila1 };
+  };
+
+  // Abrir modal de nuevo producto completamente limpio y refrescado
+  const handleOpenNewProductModal = () => {
+    setNewProdName('');
+    setNewProdCategory(categories[0]?.id || 'Mochilas');
+    setNewProdPrice('');
+    setNewProdStock('5');
+    setNewProdImageName('');
+    setNewProdImagePath('');
+    setNewProdAncestral('');
+    setNewProdDiscount('0');
+    setNewProdIsDiscount(false);
+    setIsNewProductModalVisible(true);
+  };
+
+  // Guardar nuevo producto y limpiar/refrescar la ventana modal
+  const handleSaveProduct = async () => {
+    if (!newProdName.trim() || !newProdPrice.trim()) {
+      Alert.alert('Campos incompletos', 'Ingresa el nombre y precio del artículo.');
+      return;
+    }
+    const priceNum = parseInt(newProdPrice.replace(/[^0-9]/g, ''), 10) || 100000;
+    const stockNum = parseInt(newProdStock, 10) || 1;
+    const discNum = parseInt(newProdDiscount, 10) || 0;
+
+    await addProduct({
+      name: newProdName.trim(),
+      categoryId: newProdCategory,
+      priceValue: priceNum,
+      price: `$ ${priceNum.toLocaleString('es-CO')} COP`,
+      icon: 'sparkles-outline',
+      imagePath: newProdImagePath.trim() || 'mochila1',
+      imageName: newProdImageName.trim() || newProdName.trim(),
+      ancestralRef: newProdAncestral.trim() || 'Pieza sagrada elaborada a mano con técnicas tradicionales wayuu.',
+      stock: stockNum,
+      discountPercent: discNum,
+      isDiscountActive: newProdIsDiscount ? 1 : 0,
+    });
+
+    // Limpiar y refrescar la ventana modal de nuevo artículo por completo
+    setIsNewProductModalVisible(false);
+    setNewProdName('');
+    setNewProdCategory(categories[0]?.id || 'Mochilas');
+    setNewProdPrice('');
+    setNewProdStock('5');
+    setNewProdImageName('');
+    setNewProdImagePath('');
+    setNewProdAncestral('');
+    setNewProdDiscount('0');
+    setNewProdIsDiscount(false);
+    Alert.alert('¡Éxito!', 'Artículo agregado exitosamente al catálogo.');
+  };
+
+  // Guardar nueva categoría
+  const handleSaveCategory = async () => {
+    if (!newCatName.trim()) {
+      Alert.alert('Campo requerido', 'Ingresa el nombre de la nueva categoría.');
+      return;
+    }
+    await addCategory({
+      name: newCatName.trim(),
+      icon: newCatIcon.trim() || 'sparkles-outline',
+      description: newCatDescription.trim(),
+    });
+    setIsNewCategoryModalVisible(false);
+    setNewCatName('');
+    setNewCatDescription('');
+    Alert.alert('¡Categoría Creada!', 'La categoría ahora está disponible para clasificar productos.');
+  };
+
+  // Enviar cotización
+  const handleSendQuoteResponse = async () => {
+    if (!selectedQuote) return;
+    const priceNum = parseInt(quotePriceInput.replace(/[^0-9]/g, ''), 10) || 150000;
+    const daysNum = parseInt(quoteDaysInput, 10) || 7;
+
+    await respondQuote(
+      selectedQuote.id,
+      priceNum,
+      daysNum,
+      quoteNotesInput.trim() || 'Tejido en hilos de algodón con acabados de alta calidad.'
+    );
+
+    setIsQuoteModalVisible(false);
+    setSelectedQuote(null);
+    setQuotePriceInput('');
+    setQuoteNotesInput('');
+    Alert.alert('¡Cotización Enviada!', 'El cliente ha recibido la cotización formal en su chat.');
+  };
+
+  // Enviar mensaje en chat
+  const handleSendAdminReply = async () => {
+    if (!selectedChatUserEmail || !replyMessageText.trim()) return;
+    await sendMessage(
+      selectedChatUserEmail,
+      'Cliente Einuushi',
+      replyMessageText.trim()
+    );
+    setReplyMessageText('');
+  };
+
+  // Pedidos filtrados
+  const filteredOrders = orders.filter(o => {
+    if (orderStatusFilter === 'ALL') return true;
+    return o.statusCode === orderStatusFilter;
+  });
+
+  // Agrupar mensajes de chat por usuario
+  const chatUsersMap = new Map<string, { email: string; name: string; lastMessage: string; unreadCount: number }>();
+  messages.forEach(m => {
+    const existing = chatUsersMap.get(m.userEmail) || {
+      email: m.userEmail,
+      name: m.userName || m.userEmail,
+      lastMessage: m.message,
+      unreadCount: 0,
+    };
+    existing.lastMessage = m.message;
+    if (m.senderRole === 'client' && m.read === 0) {
+      existing.unreadCount += 1;
+    }
+    chatUsersMap.set(m.userEmail, existing);
+  });
+  const chatConversations = Array.from(chatUsersMap.values());
+
+  const activeConversationMessages = selectedChatUserEmail
+    ? messages.filter(m => m.userEmail.toLowerCase() === selectedChatUserEmail.toLowerCase())
+    : [];
+
+  // =========================================================================
+  // RENDER: PANTALLA DE ACCESO ADMINISTRATIVO (LOGIN PRIVADO)
+  // =========================================================================
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.authContainer}>
+        <View style={styles.authCard}>
+          <View style={styles.authHeader}>
+            <View style={styles.authIconCircle}>
+              <Ionicons name="shield-checkmark" size={36} color="#C5A880" />
+            </View>
+            <Text style={styles.authBadgeText}>PORTAL INTERNO EXCLUSIVO</Text>
+            <Text style={styles.authTitle}>Backoffice Einuushi</Text>
+            <Text style={styles.authSubtitle}>
+              Panel de Administración, Despacho y Gestión Comercial
+            </Text>
+          </View>
+
+          {loginError ? (
+            <View style={styles.authErrorBox}>
+              <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+              <Text style={styles.authErrorText}>{loginError}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.authInputGroup}>
+            <Text style={styles.authInputLabel}>Correo del Administrador</Text>
+            <View style={styles.authInputWrapper}>
+              <Ionicons name="mail-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.authTextInput}
+                placeholder="correo@ejemplo.com"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={adminEmail}
+                onChangeText={setAdminEmail}
+              />
+            </View>
+          </View>
+
+          <View style={styles.authInputGroup}>
+            <Text style={styles.authInputLabel}>Contraseña</Text>
+            <View style={styles.authInputWrapper}>
+              <Ionicons name="lock-closed-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.authTextInput}
+                placeholder="••••••••"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry
+                value={adminPassword}
+                onChangeText={setAdminPassword}
+              />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.authSubmitButton}
+            onPress={handleAdminLogin}
+            disabled={isSubmittingLogin}
+            activeOpacity={0.8}
+          >
+            {isSubmittingLogin ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Text style={styles.authSubmitButtonText}>Iniciar Sesión en Panel</Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* Enlace de recuperación de contraseña para administradores */}
+          <TouchableOpacity
+            style={styles.forgotAdminPasswordBtn}
+            onPress={handleOpenRecoveryModal}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="help-circle-outline" size={14} color="#C5A880" style={{ marginRight: 5 }} />
+            <Text style={styles.forgotAdminPasswordText}>¿Olvidaste tu contraseña? Recupérala con tu correo</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.backToStoreButton}
+            onPress={() => router.push({ pathname: '/home', params: { mode: 'admin_preview' } })}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={16} color="#64748B" style={{ marginRight: 6 }} />
+            <Text style={styles.backToStoreText}>Ver Catálogo de la Tienda</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* MODAL: RECUPERACIÓN DE CONTRASEÑA ADMINISTRATIVA (EMAILJS) */}
+        <Modal
+          visible={isRecoveryModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsRecoveryModalVisible(false)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalOverlay}
+          >
+            <View style={[styles.modalDialog, { maxWidth: 460, padding: 24 }]}>
+              {/* Header del Modal */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={[styles.settingsIconCircle, { backgroundColor: '#EFF6FF', width: 38, height: 38, borderRadius: 19 }]}>
+                    <Ionicons name="shield-checkmark" size={20} color="#1D4ED8" />
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1E2B58' }}>
+                      Recuperación de Contraseña
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#64748B' }}>
+                      {recoveryStep === 1 ? 'Paso 1: Verificación de Correo' : recoveryStep === 2 ? 'Paso 2: Código y Nueva Clave' : '¡Contraseña Actualizada!'}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setIsRecoveryModalVisible(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close-circle" size={24} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+
+              {recoveryMsg && (
+                <View style={[styles.feedbackMsgBox, recoveryMsg.type === 'success' ? styles.feedbackSuccess : styles.feedbackError]}>
+                  <Ionicons
+                    name={recoveryMsg.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
+                    size={18}
+                    color={recoveryMsg.type === 'success' ? '#166534' : '#DC2626'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.feedbackText, recoveryMsg.type === 'success' ? { color: '#166534' } : { color: '#DC2626' }]}>
+                    {recoveryMsg.text}
+                  </Text>
+                </View>
+              )}
+
+              {/* PASO 1: INGRESAR CORREO ADMINISTRATIVO */}
+              {recoveryStep === 1 && (
+                <View>
+                  <Text style={{ fontSize: 13, color: '#334155', marginBottom: 14, lineHeight: 18 }}>
+                    Ingresa el correo electrónico con el que está creada tu cuenta de administrador o superadministrador. Te enviaremos un código de seguridad de 6 dígitos con vigencia de 1 minuto.
+                  </Text>
+
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={styles.settingsLabel}>Correo Administrativo:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={recoveryEmail}
+                      onChangeText={setRecoveryEmail}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      placeholder="admin@einuushi.com"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.settingsPrimaryBtn, isRecoveryLoading && { opacity: 0.7 }]}
+                    onPress={handleSendRecoveryCode}
+                    disabled={isRecoveryLoading}
+                    activeOpacity={0.8}
+                  >
+                    {isRecoveryLoading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="mail-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.settingsPrimaryBtnText}>Enviar Código al Correo</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* PASO 2: CÓDIGO + NUEVA CLAVE */}
+              {recoveryStep === 2 && (
+                <View>
+                  {/* Temporizador de 1 minuto */}
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: recoveryIsCodeExpired ? '#FEE2E2' : '#FEF3C7',
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    marginBottom: 14,
+                  }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="time-outline" size={16} color={recoveryIsCodeExpired ? '#DC2626' : '#B45309'} />
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: recoveryIsCodeExpired ? '#DC2626' : '#B45309' }}>
+                        {recoveryIsCodeExpired ? 'Código Expirado' : `Vigencia: ${recoveryTimeLeft}s`}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={handleResendRecoveryCode}
+                      disabled={isRecoveryLoading}
+                      style={{ opacity: isRecoveryLoading ? 0.6 : 1 }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#1E2B58', textDecorationLine: 'underline' }}>
+                        Reenviar código
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={styles.settingsLabel}>Código de 6 dígitos recibido:</Text>
+                    <TextInput
+                      style={[styles.settingsInput, { letterSpacing: 4, fontWeight: 'bold', fontSize: 16, textAlign: 'center' }]}
+                      value={recoveryCode}
+                      onChangeText={setRecoveryCode}
+                      keyboardType="numeric"
+                      maxLength={6}
+                      placeholder="123456"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={styles.settingsLabel}>Nueva Contraseña:</Text>
+                    <View style={styles.passwordInputWrapper}>
+                      <TextInput
+                        style={styles.passwordTextInput}
+                        value={recoveryNewPassword}
+                        onChangeText={setRecoveryNewPassword}
+                        secureTextEntry={!showRecoveryPassword}
+                        placeholder="Mínimo 6 caracteres"
+                        placeholderTextColor="#94A3B8"
+                      />
+                      <TouchableOpacity onPress={() => setShowRecoveryPassword(!showRecoveryPassword)} style={styles.eyeBtn}>
+                        <Ionicons name={showRecoveryPassword ? 'eye-off' : 'eye'} size={18} color="#64748B" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={styles.settingsLabel}>Confirmar Nueva Contraseña:</Text>
+                    <View style={styles.passwordInputWrapper}>
+                      <TextInput
+                        style={styles.passwordTextInput}
+                        value={recoveryConfirmPassword}
+                        onChangeText={setRecoveryConfirmPassword}
+                        secureTextEntry={!showRecoveryPassword}
+                        placeholder="Repite la contraseña"
+                        placeholderTextColor="#94A3B8"
+                      />
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.settingsPrimaryBtn, isRecoveryLoading && { opacity: 0.7 }]}
+                    onPress={handleConfirmResetAdminPassword}
+                    disabled={isRecoveryLoading}
+                    activeOpacity={0.8}
+                  >
+                    {isRecoveryLoading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark-done" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.settingsPrimaryBtnText}>Restablecer Contraseña</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* PASO 3: CONFIRMACIÓN EXITOSA */}
+              {recoveryStep === 3 && (
+                <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+                  <View style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 30,
+                    backgroundColor: '#DCFCE7',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 14,
+                  }}>
+                    <Ionicons name="checkmark-circle" size={42} color="#166534" />
+                  </View>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E2B58', marginBottom: 6 }}>
+                    ¡Contraseña Restablecida!
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 20, lineHeight: 18 }}>
+                    Tu contraseña administrativa ha sido actualizada exitosamente. Ya puedes iniciar sesión en el panel con tu nueva clave.
+                  </Text>
+
+                  <TouchableOpacity
+                    style={[styles.settingsPrimaryBtn, { width: '100%' }]}
+                    onPress={() => {
+                      setAdminEmail(recoveryEmail.trim());
+                      setAdminPassword(recoveryNewPassword.trim());
+                      setIsRecoveryModalVisible(false);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.settingsPrimaryBtnText}>Iniciar Sesión Ahora</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+      </View>
+    );
+  }
+
+  // =========================================================================
+  // RENDER: DASHBOARD DE ADMINISTRACIÓN
+  // =========================================================================
+  return (
+    <View style={styles.dashboardContainer}>
+      {/* HEADER SUPERIOR */}
+      <View style={styles.topBar}>
+        <View style={styles.brandRow}>
+          <View style={styles.logoBadge}>
+            <Ionicons name="shield-checkmark" size={18} color="#C5A880" />
+          </View>
+          <View>
+            <Text style={styles.brandTitle}>EINUUSHI BACKOFFICE</Text>
+            <Text style={styles.adminStatusText}>
+              ● Sesión Activa: <Text style={{ fontWeight: 'bold' }}>{adminUser?.fullName}</Text>
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.topActionsRow}>
+          <TouchableOpacity
+            style={styles.refreshIconButton}
+            onPress={refreshAll}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={isRefreshing ? 'sync' : 'refresh-outline'}
+              size={18}
+              color="#1E2B58"
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.viewStoreButton}
+            onPress={() => router.push({ pathname: '/home', params: { mode: 'admin_preview' } })}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="storefront-outline" size={16} color="#1E2B58" style={{ marginRight: 4 }} />
+            <Text style={styles.viewStoreText}>Ver Tienda</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.logoutIconButton}
+            onPress={logout}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#DC2626" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* BARRA DE PESTAÑAS (TABS) */}
+      <View style={styles.tabsNavContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsNavScroll}>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'analytics' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('analytics')}
+          >
+            <Ionicons
+              name="stats-chart"
+              size={16}
+              color={activeTab === 'analytics' ? '#FFFFFF' : '#64748B'}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabButtonText, activeTab === 'analytics' && styles.tabButtonTextActive]}>
+              Consultas & Métricas
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'orders' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('orders')}
+          >
+            <Ionicons
+              name="cube"
+              size={16}
+              color={activeTab === 'orders' ? '#FFFFFF' : '#64748B'}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabButtonText, activeTab === 'orders' && styles.tabButtonTextActive]}>
+              Pedidos ({orders.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'inventory' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('inventory')}
+          >
+            <Ionicons
+              name="pricetags"
+              size={16}
+              color={activeTab === 'inventory' ? '#FFFFFF' : '#64748B'}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabButtonText, activeTab === 'inventory' && styles.tabButtonTextActive]}>
+              Catálogo & Descuentos ({products.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'quotes' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('quotes')}
+          >
+            <Ionicons
+              name="sparkles"
+              size={16}
+              color={activeTab === 'quotes' ? '#FFFFFF' : '#64748B'}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabButtonText, activeTab === 'quotes' && styles.tabButtonTextActive]}>
+              Diseños & Cotizaciones ({quotes.filter(q => q.status === 'PENDING_QUOTE').length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'chat' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('chat')}
+          >
+            <Ionicons
+              name="chatbubbles"
+              size={16}
+              color={activeTab === 'chat' ? '#FFFFFF' : '#64748B'}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabButtonText, activeTab === 'chat' && styles.tabButtonTextActive]}>
+              Mensajes & Soporte
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'settings' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('settings')}
+          >
+            <Ionicons
+              name="shield-checkmark"
+              size={16}
+              color={activeTab === 'settings' ? '#FFFFFF' : '#64748B'}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabButtonText, activeTab === 'settings' && styles.tabButtonTextActive]}>
+              Configuración & Trazabilidad
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+
+      {/* CONTENIDO PRINCIPAL SEGÚN TAB ACTIVO */}
+      <ScrollView contentContainerStyle={styles.mainScrollContent}>
+        {/* ================================================================= */}
+        {/* TAB 1: CONSULTAS Y ANALÍTICA COMERCIAL                           */}
+        {/* ================================================================= */}
+        {activeTab === 'analytics' && (
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionHeaderTitle}>Panel de Consultas y Rendimiento</Text>
+            <Text style={styles.sectionHeaderSubtitle}>
+              Datos agregados en tiempo real desde la base de datos SQLite con Drizzle ORM
+            </Text>
+
+            {/* KPIs CARDS */}
+            <View style={styles.kpiGrid}>
+              <View style={[styles.kpiCard, { borderColor: '#10B981' }]}>
+                <View style={styles.kpiIconWrapper}>
+                  <Ionicons name="cash-outline" size={24} color="#10B981" />
+                </View>
+                <Text style={styles.kpiValue}>
+                  $ {(analytics?.totalRevenue || 0).toLocaleString('es-CO')}
+                </Text>
+                <Text style={styles.kpiLabel}>Ventas Totales (COP)</Text>
+              </View>
+
+              <View style={[styles.kpiCard, { borderColor: '#3B82F6' }]}>
+                <View style={styles.kpiIconWrapper}>
+                  <Ionicons name="bag-check-outline" size={24} color="#3B82F6" />
+                </View>
+                <Text style={styles.kpiValue}>{analytics?.totalOrders || 0}</Text>
+                <Text style={styles.kpiLabel}>Total de Pedidos</Text>
+              </View>
+
+              <View style={[styles.kpiCard, { borderColor: '#F59E0B' }]}>
+                <View style={styles.kpiIconWrapper}>
+                  <Ionicons name="hourglass-outline" size={24} color="#F59E0B" />
+                </View>
+                <Text style={styles.kpiValue}>{analytics?.pendingOrders || 0}</Text>
+                <Text style={styles.kpiLabel}>Pendientes de Despacho</Text>
+              </View>
+
+              <TouchableOpacity 
+                style={[
+                  styles.kpiCard, 
+                  { 
+                    borderColor: '#8B5CF6', 
+                    backgroundColor: '#FAF5FF',
+                    cursor: Platform.OS === 'web' ? 'pointer' : undefined,
+                  } as any
+                ]}
+                onPress={() => {
+                  if (isSuperAdminUser) {
+                    setIsUsersModalVisible(true);
+                  } else {
+                    Alert.alert(
+                      'Acceso Restringido',
+                      'Por políticas de privacidad y protección de datos, los administradores operativos no tienen acceso a visualizar datos de otros usuarios. Únicamente tienes acceso a tus propios datos de cuenta.'
+                    );
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <View style={styles.kpiIconWrapper}>
+                    <Ionicons name="people-outline" size={24} color="#8B5CF6" />
+                  </View>
+                  <View style={{ 
+                    flexDirection: 'row', 
+                    alignItems: 'center', 
+                    backgroundColor: isSuperAdminUser ? '#8B5CF6' : '#94A3B8', 
+                    paddingHorizontal: 7, 
+                    paddingVertical: 2, 
+                    borderRadius: 10 
+                  }}>
+                    <Ionicons name={isSuperAdminUser ? "eye-outline" : "lock-closed-outline"} size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
+                    <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: 'bold' }}>{isSuperAdminUser ? 'Ver' : 'Privado'}</Text>
+                  </View>
+                </View>
+                <Text style={styles.kpiValue}>{analytics?.totalClients || (users?.filter(u => u.role !== 'admin').length || 0)}</Text>
+                <Text style={styles.kpiLabel}>Clientes Registrados</Text>
+                <Text style={{ fontSize: 10, color: isSuperAdminUser ? '#7C3AED' : '#64748B', marginTop: 4, fontWeight: '600' }}>
+                  {isSuperAdminUser ? 'Toca para ver lista ➔' : 'Solo Superadministrador'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* PRODUCTOS MÁS PEDIDOS */}
+            <View style={styles.analyticsCard}>
+              <View style={styles.cardHeaderRow}>
+                <Ionicons name="trophy-outline" size={20} color="#C5A880" style={{ marginRight: 6 }} />
+                <Text style={styles.cardHeaderTitle}>Productos Más Pedidos (Top Ventas)</Text>
+              </View>
+              {analytics?.topSellingProducts && analytics.topSellingProducts.length > 0 ? (
+                analytics.topSellingProducts.map((p, idx) => (
+                  <View key={idx} style={styles.rankRow}>
+                    <View style={styles.rankBadge}>
+                      <Text style={styles.rankBadgeText}>#{idx + 1}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rankNameText}>{p.name}</Text>
+                      <Text style={styles.rankSubText}>Categoría: {p.categoryId}</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.rankSoldNumber}>{p.totalSold} unid. vendidas</Text>
+                      <Text style={styles.rankRevenueNumber}>$ {p.revenue.toLocaleString('es-CO')}</Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>Aún no se han completado compras de productos.</Text>
+              )}
+            </View>
+
+            {/* CLIENTES QUE MÁS COMPRAN */}
+            <View style={styles.analyticsCard}>
+              <View style={styles.cardHeaderRow}>
+                <Ionicons name="star-outline" size={20} color="#C5A880" style={{ marginRight: 6 }} />
+                <Text style={styles.cardHeaderTitle}>Clientes Estrella (Mayor Volumen de Compra)</Text>
+              </View>
+              {analytics?.topSpendingClients && analytics.topSpendingClients.length > 0 ? (
+                analytics.topSpendingClients.map((c, idx) => (
+                  <View key={idx} style={styles.rankRow}>
+                    <View style={[styles.rankBadge, { backgroundColor: '#1E2B58' }]}>
+                      <Text style={[styles.rankBadgeText, { color: '#FFFFFF' }]}>#{idx + 1}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rankNameText}>{c.name}</Text>
+                      <Text style={styles.rankSubText}>
+                        {c.city} • {c.email} • Tel: {c.phone}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.rankSoldNumber}>{c.totalOrders} pedido(s)</Text>
+                      <Text style={styles.rankRevenueNumber}>$ {c.totalSpent.toLocaleString('es-CO')}</Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No hay registros de clientes frecuentes aún.</Text>
+              )}
+            </View>
+
+            {/* PEDIDOS MEJOR CALIFICADOS Y PRODUCTOS CON LIKES */}
+            <View style={styles.twoColumnGrid}>
+              <View style={[styles.analyticsCard, { flex: 1 }]}>
+                <View style={styles.cardHeaderRow}>
+                  <Ionicons name="heart-outline" size={18} color="#C5A880" style={{ marginRight: 6 }} />
+                  <Text style={styles.cardHeaderTitle}>Productos Más Gustados</Text>
+                </View>
+                {analytics?.topRatedProducts.map((p, idx) => (
+                  <View key={idx} style={styles.miniRankRow}>
+                    <Text style={styles.miniRankName} numberOfLines={1}>{p.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="heart" size={14} color="#C5A880" style={{ marginRight: 3 }} />
+                      <Text style={styles.miniRankValue}>{p.likes}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              <View style={[styles.analyticsCard, { flex: 1 }]}>
+                <View style={styles.cardHeaderRow}>
+                  <Ionicons name="star" size={18} color="#F59E0B" style={{ marginRight: 6 }} />
+                  <Text style={styles.cardHeaderTitle}>Pedidos Mejor Calificados</Text>
+                </View>
+                {analytics?.topRatedOrders && analytics.topRatedOrders.length > 0 ? (
+                  analytics.topRatedOrders.map((o, idx) => (
+                    <View key={idx} style={styles.miniRankRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.miniRankName}>{o.clientName}</Text>
+                        <Text style={styles.miniRankDate}>{o.id} • {o.date}</Text>
+                      </View>
+                      <Text style={styles.starText}>{'⭐'.repeat(Math.min(5, o.rating))}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.emptyText}>Aún no hay calificaciones registradas.</Text>
+                )}
+              </View>
+            </View>
+
+            {/* ARTÍCULOS EN DESCUENTO */}
+            <View style={styles.analyticsCard}>
+              <View style={styles.cardHeaderRow}>
+                <Ionicons name="pricetag-outline" size={20} color="#C5A880" style={{ marginRight: 6 }} />
+                <Text style={styles.cardHeaderTitle}>Promociones y Descuentos Activos</Text>
+              </View>
+              {analytics?.discountedProducts && analytics.discountedProducts.length > 0 ? (
+                analytics.discountedProducts.map((d, idx) => (
+                  <View key={idx} style={styles.rankRow}>
+                    <View style={styles.discountBadgeTag}>
+                      <Text style={styles.discountBadgeTagText}>-{d.discountPercent}% OFF</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rankNameText}>{d.name}</Text>
+                      <Text style={styles.rankSubText}>Precio original: $ {d.priceValue.toLocaleString('es-CO')}</Text>
+                    </View>
+                    <Text style={styles.finalDiscountPriceText}>
+                      $ {d.discountedPrice.toLocaleString('es-CO')} COP
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No hay artículos con descuento activo en este momento.</Text>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* ================================================================= */}
+        {/* TAB 2: PEDIDOS Y DESPACHO                                        */}
+        {/* ================================================================= */}
+        {activeTab === 'orders' && (
+          <View style={styles.sectionBlock}>
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.sectionHeaderTitle}>Despacho y Control de Pedidos</Text>
+                <Text style={styles.sectionHeaderSubtitle}>
+                  Confirma pagos, asigna repartidores y rastrea rutas de entrega en vivo
+                </Text>
+              </View>
+            </View>
+
+            {/* FILTROS DE ESTADO */}
+            <View style={styles.filterPillsRow}>
+              {[
+                { key: 'ALL', label: 'Todos' },
+                { key: 'PENDING', label: 'Pendientes' },
+                { key: 'DISPATCHED', label: 'En Ruta' },
+                { key: 'DELIVERED', label: 'Entregados' },
+              ].map(f => (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[styles.filterPill, orderStatusFilter === f.key && styles.filterPillActive]}
+                  onPress={() => setOrderStatusFilter(f.key)}
+                >
+                  <Text style={[styles.filterPillText, orderStatusFilter === f.key && styles.filterPillTextActive]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* LISTA DE PEDIDOS */}
+            {filteredOrders.length > 0 ? (
+              filteredOrders.map(order => (
+                <View key={order.id} style={styles.orderAdminCard}>
+                  <View style={styles.orderCardTop}>
+                    <View>
+                      <Text style={styles.orderIdBadge}>{order.id}</Text>
+                      <Text style={styles.orderDateText}>{order.date}</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <View
+                        style={[
+                          styles.statusBadgeBox,
+                          order.statusCode === 'DELIVERED'
+                            ? { backgroundColor: '#DCFCE7' }
+                            : order.statusCode === 'DISPATCHED'
+                            ? { backgroundColor: '#FEF3C7' }
+                            : { backgroundColor: '#FEE2E2' },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusBadgeBoxText,
+                            order.statusCode === 'DELIVERED'
+                              ? { color: '#166534' }
+                              : order.statusCode === 'DISPATCHED'
+                              ? { color: '#B45309' }
+                              : { color: '#991B1B' },
+                          ]}
+                        >
+                          {order.statusCode === 'DELIVERED'
+                            ? 'Entregado'
+                            : order.statusCode === 'DISPATCHED'
+                            ? 'En Reparto'
+                            : 'Pendiente Despacho'}
+                        </Text>
+                      </View>
+                      <Text style={styles.paymentStatusText}>
+                        Pago: <Text style={{ fontWeight: 'bold' }}>{order.paymentStatus === 'PAID' ? 'PAGADO ✅' : 'PENDIENTE ⏳'}</Text>
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* DATOS DEL CLIENTE Y DIRECCIÓN */}
+                  <View style={styles.orderClientInfoBox}>
+                    <Text style={styles.clientInfoName}>
+                      Cliente: <Text style={{ fontWeight: 'bold' }}>{order.client.name}</Text> (C.C. {order.client.cedula})
+                    </Text>
+                    <Text style={styles.clientInfoDetail}>
+                      📍 {order.client.address}, {order.city || 'Riohacha'} • Tel: {order.client.phone}
+                    </Text>
+                    <Text style={styles.clientInfoDetail}>
+                      💳 Método de pago: {order.client.payment}
+                    </Text>
+                    {/* TRAZABILIDAD DEL ADMINISTRADOR RESPONSABLE */}
+                    <View style={styles.orderTraceabilityBanner}>
+                      <Ionicons name="shield-checkmark" size={13} color="#1E2B58" style={{ marginRight: 5 }} />
+                      <Text style={styles.orderTraceabilityText}>
+                        {order.adminResponsible ? (
+                          <>Responsable del movimiento: <Text style={{ fontWeight: 'bold', color: '#1E2B58' }}>{order.adminResponsible}</Text></>
+                        ) : (
+                          <Text style={{ fontStyle: 'italic', color: '#64748B' }}>Pendiente de gestión administrativa</Text>
+                        )}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* DESGLOSE DE ARTÍCULOS */}
+                  <View style={styles.orderItemsList}>
+                    {order.items.map((it, i) => (
+                      <View key={i} style={styles.orderItemLine}>
+                        <Text style={styles.orderItemNameText}>
+                          • {it.cartQuantity}x {it.name}
+                        </Text>
+                        <Text style={styles.orderItemPriceText}>
+                          $ {(it.priceValue * it.cartQuantity).toLocaleString('es-CO')}
+                        </Text>
+                      </View>
+                    ))}
+                    <View style={styles.orderTotalLine}>
+                      <Text style={styles.orderTotalLabel}>Total a Cobrar:</Text>
+                      <Text style={styles.orderTotalValue}>$ {order.total.toLocaleString('es-CO')} COP</Text>
+                    </View>
+                  </View>
+
+                  {/* BOTONES DE ACCIÓN PARA EL ADMIN */}
+                  <View style={styles.adminOrderActionsRow}>
+                    {order.paymentStatus !== 'PAID' && (
+                      <TouchableOpacity
+                        style={styles.confirmPayButton}
+                        onPress={() => confirmPayment(order.id)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="checkmark-done" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.actionBtnText}>Confirmar Pago</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {order.statusCode === 'PENDING' && (
+                      <TouchableOpacity
+                        style={styles.dispatchButton}
+                        onPress={() => dispatchOrder(order.id)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="bicycle" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.actionBtnText}>Despachar a Ruta</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {order.statusCode === 'DISPATCHED' && (
+                      <TouchableOpacity
+                        style={styles.deliverButton}
+                        onPress={() => markOrderDelivered(order.id)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="flag" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.actionBtnText}>Marcar Entregado</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                      style={styles.mapRouteButton}
+                      onPress={() => {
+                        setActiveTrackingOrder(order);
+                        setIsMapModalVisible(true);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="map-outline" size={15} color="#1E2B58" style={{ marginRight: 4 }} />
+                      <Text style={[styles.actionBtnText, { color: '#1E2B58' }]}>Ver Mapa Ruta</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="cube-outline" size={48} color="#94A3B8" />
+                <Text style={styles.emptyContainerText}>No hay pedidos bajo este filtro de búsqueda.</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ================================================================= */}
+        {/* TAB 3: CATÁLOGO, INVENTARIO Y DESCUENTOS                          */}
+        {/* ================================================================= */}
+        {activeTab === 'inventory' && (
+          <View style={styles.sectionBlock}>
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.sectionHeaderTitle}>Catálogo & Gestión de Descuentos</Text>
+                <Text style={styles.sectionHeaderSubtitle}>
+                  Carga nuevos artículos con fotos, crea categorías y activa promociones en tiempo real
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={styles.createCategoryBtn}
+                  onPress={() => setIsNewCategoryModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add-circle-outline" size={16} color="#1E2B58" style={{ marginRight: 4 }} />
+                  <Text style={styles.createCategoryBtnText}>+ Nueva Categoría</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.addProductMainBtn}
+                  onPress={handleOpenNewProductModal}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add" size={18} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.addProductMainBtnText}>+ Nuevo Artículo</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* FILTROS DE ARTÍCULOS EXCLUSIVOS DE ADMINISTRADOR */}
+            <View style={styles.inventoryFilterBar}>
+              <TouchableOpacity
+                style={[styles.invFilterChip, inventoryFilter === 'ALL' && styles.invFilterChipActive]}
+                onPress={() => setInventoryFilter('ALL')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.invFilterChipText, inventoryFilter === 'ALL' && styles.invFilterChipTextActive]}>
+                  Todos ({products.length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.invFilterChip, inventoryFilter === 'ACTIVE' && styles.invFilterChipActive]}
+                onPress={() => setInventoryFilter('ACTIVE')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.statusDotSmall, { backgroundColor: '#10B981' }]} />
+                <Text style={[styles.invFilterChipText, inventoryFilter === 'ACTIVE' && styles.invFilterChipTextActive]}>
+                  Activos ({products.filter(p => p.isActive !== 0).length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.invFilterChip, inventoryFilter === 'INACTIVE' && styles.invFilterChipActive]}
+                onPress={() => setInventoryFilter('INACTIVE')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.statusDotSmall, { backgroundColor: '#F59E0B' }]} />
+                <Text style={[styles.invFilterChipText, inventoryFilter === 'INACTIVE' && styles.invFilterChipTextActive]}>
+                  Inactivos ({products.filter(p => p.isActive === 0).length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* LISTA DE ARTÍCULOS EN INVENTARIO */}
+            <View style={styles.inventoryGrid}>
+              {products
+                .filter(p => {
+                  if (inventoryFilter === 'ACTIVE') return p.isActive !== 0;
+                  if (inventoryFilter === 'INACTIVE') return p.isActive === 0;
+                  return true;
+                })
+                .map(prod => {
+                  const imgSource = resolveProductImage(prod.imagePath);
+                  const hasDiscount = Boolean(prod.isDiscountActive === 1 && prod.discountPercent && prod.discountPercent > 0);
+                  const isItemInactive = prod.isActive === 0;
+                  const discountedPrice = hasDiscount
+                    ? Math.round(prod.priceValue * (1 - prod.discountPercent! / 100))
+                    : prod.priceValue;
+
+                  return (
+                    <View
+                      key={prod.id}
+                      style={[
+                        styles.inventoryCard,
+                        isItemInactive && { opacity: 0.82, borderColor: '#FDE68A', backgroundColor: '#FFFEFA' }
+                      ]}
+                    >
+                      <View style={styles.inventoryImgWrapper}>
+                        {imgSource ? (
+                          <TouchableOpacity
+                            activeOpacity={0.9}
+                            style={styles.adminImgTouchWrapper}
+                            onPress={() => handleOpenImagePreview(
+                              imgSource,
+                              prod.name,
+                              `$ ${prod.priceValue.toLocaleString('es-CO')} COP`,
+                              prod.ancestralRef,
+                              (prod as any).category || prod.categoryId
+                            )}
+                          >
+                            <Image source={imgSource} style={styles.inventoryImg} resizeMode="contain" />
+                            <View style={styles.imageZoomBadge}>
+                              <Ionicons name="expand-outline" size={11} color="#FFFFFF" />
+                              <Text style={styles.imageZoomBadgeText}>Ampliar</Text>
+                            </View>
+                          </TouchableOpacity>
+                        ) : (
+                          <Ionicons name={prod.icon as any || 'sparkles'} size={40} color="#1E2B58" />
+                        )}
+                        {hasDiscount && (
+                          <View style={styles.discountFloatingTag}>
+                            <Text style={styles.discountFloatingTagText}>-{prod.discountPercent}% OFF</Text>
+                          </View>
+                        )}
+                        {/* Botón para cambiar foto de este artículo */}
+                        <TouchableOpacity
+                          style={styles.changePhotoBtn}
+                          onPress={() => handleUpdateProductPhoto(prod)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="camera" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                          <Text style={styles.changePhotoBtnText}>Cambiar Foto</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={styles.inventoryDetailsBox}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <Text style={styles.inventoryCategoryBadge}>{prod.categoryId}</Text>
+                          {isItemInactive ? (
+                            <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, flexDirection: 'row', alignItems: 'center' }}>
+                              <Ionicons name="pause-circle" size={12} color="#D97706" style={{ marginRight: 3 }} />
+                              <Text style={{ fontSize: 10, color: '#D97706', fontWeight: 'bold' }}>Inactivo</Text>
+                            </View>
+                          ) : (
+                            <View style={{ backgroundColor: '#D1FAE5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, flexDirection: 'row', alignItems: 'center' }}>
+                              <Ionicons name="checkmark-circle" size={12} color="#059669" style={{ marginRight: 3 }} />
+                              <Text style={{ fontSize: 10, color: '#059669', fontWeight: 'bold' }}>Activo</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <Text style={styles.inventoryItemName} numberOfLines={1}>{prod.name}</Text>
+                        {prod.imageName && (
+                          <Text style={styles.inventoryImageNameTag}>📷 {prod.imageName}</Text>
+                        )}
+
+                        <View style={styles.priceRowAdmin}>
+                          {hasDiscount ? (
+                            <View>
+                              <Text style={styles.crossedPrice}>$ {prod.priceValue.toLocaleString('es-CO')}</Text>
+                              <Text style={styles.discountPriceHighlight}>
+                                $ {discountedPrice.toLocaleString('es-CO')} COP
+                              </Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.regularPriceText}>{prod.price}</Text>
+                          )}
+                        </View>
+
+                        {/* CONTROL DE STOCK */}
+                        <View style={styles.stockControlRow}>
+                          <Text style={styles.stockControlLabel}>Stock:</Text>
+                          <TouchableOpacity
+                            style={styles.stockAdjustBtn}
+                            onPress={() => updateStock(prod.id, Math.max(0, prod.stock - 1))}
+                          >
+                            <Ionicons name="remove" size={14} color="#1E2B58" />
+                          </TouchableOpacity>
+                          <Text style={styles.stockDisplayNumber}>{prod.stock}</Text>
+                          <TouchableOpacity
+                            style={styles.stockAdjustBtn}
+                            onPress={() => updateStock(prod.id, prod.stock + 1)}
+                          >
+                            <Ionicons name="add" size={14} color="#1E2B58" />
+                          </TouchableOpacity>
+                        </View>
+
+                        {/* CONFIGURACIÓN RÁPIDA DE DESCUENTO */}
+                        <View style={styles.discountConfigRow}>
+                          <Text style={styles.discountRowLabel}>Descuento:</Text>
+                          <TouchableOpacity
+                            style={[
+                              styles.discountQuickPill,
+                              hasDiscount && prod.discountPercent === 10 && styles.discountQuickPillActive,
+                            ]}
+                            onPress={() => toggleDiscount(prod.id, 10, !hasDiscount || prod.discountPercent !== 10)}
+                          >
+                            <Text style={styles.discountQuickPillText}>10%</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.discountQuickPill,
+                              hasDiscount && prod.discountPercent === 15 && styles.discountQuickPillActive,
+                            ]}
+                            onPress={() => toggleDiscount(prod.id, 15, !hasDiscount || prod.discountPercent !== 15)}
+                          >
+                            <Text style={styles.discountQuickPillText}>15%</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.discountQuickPill,
+                              hasDiscount && prod.discountPercent === 20 && styles.discountQuickPillActive,
+                            ]}
+                            onPress={() => toggleDiscount(prod.id, 20, !hasDiscount || prod.discountPercent !== 20)}
+                          >
+                            <Text style={styles.discountQuickPillText}>20%</Text>
+                          </TouchableOpacity>
+
+                          {hasDiscount && (
+                            <TouchableOpacity
+                              style={styles.removeDiscountBtn}
+                              onPress={() => toggleDiscount(prod.id, 0, false)}
+                            >
+                              <Ionicons name="close-circle" size={18} color="#EF4444" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+
+                        {/* ACCIONES: EDITAR, INACTIVAR / ACTIVAR Y ELIMINAR */}
+                        <View style={styles.cardActionsFooter}>
+                          <TouchableOpacity
+                            style={styles.editProdBtn}
+                            onPress={() => handleOpenEditProduct(prod)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="create-outline" size={13} color="#1E2B58" style={{ marginRight: 4 }} />
+                            <Text style={styles.editProdBtnText}>Editar</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.toggleActiveBtn,
+                              isItemInactive ? styles.toggleActiveBtnActivate : styles.toggleActiveBtnPause,
+                            ]}
+                            onPress={() => toggleProductActive(prod.id, isItemInactive ? 1 : 0)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons
+                              name={isItemInactive ? "play" : "pause"}
+                              size={13}
+                              color={isItemInactive ? "#059669" : "#D97706"}
+                              style={{ marginRight: 4 }}
+                            />
+                            <Text style={[
+                              styles.toggleActiveBtnText,
+                              { color: isItemInactive ? "#059669" : "#D97706" }
+                            ]}>
+                              {isItemInactive ? "Reactivar" : "Inactivar"}
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.deleteProdBtn}
+                            onPress={() => {
+                              setProductToDelete(prod);
+                              setIsDeleteModalVisible(true);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="trash-outline" size={14} color="#DC2626" style={{ marginRight: 4 }} />
+                            <Text style={styles.deleteProdBtnText}>Eliminar</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+            </View>
+          </View>
+        )}
+
+        {/* ================================================================= */}
+        {/* TAB 4: DISEÑOS SUGERIDOS Y COTIZACIONES                          */}
+        {/* ================================================================= */}
+        {activeTab === 'quotes' && (
+          <View style={styles.sectionBlock}>
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.sectionHeaderTitle}>Diseños Sugeridos por Clientes</Text>
+                <Text style={styles.sectionHeaderSubtitle}>
+                  Revisa las propuestas generadas por IA, establece el valor en COP y envía cotizaciones
+                </Text>
+              </View>
+            </View>
+
+            {quotes.length > 0 ? (
+              quotes.map(quote => (
+                <View key={quote.id} style={styles.quoteAdminCard}>
+                  <View style={styles.quoteCardHeader}>
+                    <View>
+                      <Text style={styles.quoteIdText}>{quote.id} • {quote.designType}</Text>
+                      <Text style={styles.quoteClientText}>
+                        Cliente: <Text style={{ fontWeight: 'bold' }}>{quote.userName}</Text> ({quote.userEmail})
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.quoteStatusBadge,
+                        quote.status === 'QUOTED' ? { backgroundColor: '#DCFCE7' } : { backgroundColor: '#FEF3C7' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.quoteStatusBadgeText,
+                          quote.status === 'QUOTED' ? { color: '#166534' } : { color: '#B45309' },
+                        ]}
+                      >
+                        {quote.status === 'QUOTED' ? 'Cotizado' : 'Pendiente Cotizar'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.quoteBodyRow}>
+                    {quote.imageUrl ? (
+                      <TouchableOpacity
+                        activeOpacity={0.88}
+                        style={styles.quoteThumbnailTouch}
+                        onPress={() => handleOpenImagePreview(
+                          { uri: quote.imageUrl },
+                          `Diseño Kanaas: ${quote.pattern || 'Personalizado'}`,
+                          quote.quotedPrice ? `$ ${(quote.quotedPrice || 0).toLocaleString('es-CO')} COP` : undefined,
+                          quote.prompt,
+                          'Cotización de Cliente'
+                        )}
+                      >
+                        <Image source={{ uri: quote.imageUrl }} style={styles.quoteThumbnail} resizeMode="contain" />
+                        <View style={styles.imageZoomBadgeSmall}>
+                          <Ionicons name="expand-outline" size={10} color="#FFFFFF" />
+                        </View>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.quoteNoThumbnail}>
+                        <Ionicons name="image-outline" size={32} color="#94A3B8" />
+                      </View>
+                    )}
+
+                    <View style={{ flex: 1, paddingLeft: 12 }}>
+                      <Text style={styles.quotePromptTitle}>Requerimiento del Cliente:</Text>
+                      <Text style={styles.quotePromptText}>"{quote.prompt}"</Text>
+                      {quote.pattern && <Text style={styles.quotePatternText}>Patrón Kanaas: {quote.pattern}</Text>}
+                      <Text style={styles.quoteDateText}>Recibido: {new Date(quote.createdAt).toLocaleDateString()}</Text>
+
+                      {quote.status === 'QUOTED' ? (
+                        <View style={styles.quoteAnswerBox}>
+                          <Text style={styles.quoteAnswerPrice}>
+                            Valor Cotizado: $ {(quote.quotedPrice || 0).toLocaleString('es-CO')} COP
+                          </Text>
+                          <Text style={styles.quoteAnswerDays}>
+                            Tiempo de tejido: {quote.quotedDeliveryDays} días
+                          </Text>
+                          {quote.adminNotes && (
+                            <Text style={styles.quoteAnswerNotes}>Nota: "{quote.adminNotes}"</Text>
+                          )}
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  <View style={styles.quoteCardFooter}>
+                    <TouchableOpacity
+                      style={styles.openQuoteActionBtn}
+                      onPress={() => {
+                        setSelectedQuote(quote);
+                        setQuotePriceInput(quote.quotedPrice ? String(quote.quotedPrice) : '220000');
+                        setQuoteDaysInput(quote.quotedDeliveryDays ? String(quote.quotedDeliveryDays) : '8');
+                        setQuoteNotesInput(quote.adminNotes || '');
+                        setIsQuoteModalVisible(true);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="calculator-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.openQuoteActionBtnText}>
+                        {quote.status === 'QUOTED' ? 'Modificar Cotización' : 'Cotizar Este Diseño'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.quoteChatShortcutBtn}
+                      onPress={() => {
+                        setSelectedChatUserEmail(quote.userEmail);
+                        setActiveTab('chat');
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="chatbubble-ellipses-outline" size={16} color="#1E2B58" style={{ marginRight: 6 }} />
+                      <Text style={styles.quoteChatShortcutBtnText}>Chatear con Cliente</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="sparkles-outline" size={48} color="#94A3B8" />
+                <Text style={styles.emptyContainerText}>No hay solicitudes de cotización pendientes de revisión.</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ================================================================= */}
+        {/* TAB 5: MENSAJES Y SUGERENCIAS DIRECTAS                           */}
+        {/* ================================================================= */}
+        {activeTab === 'chat' && (
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionHeaderTitle}>Bandeja de Mensajes y Asesoría</Text>
+            <Text style={styles.sectionHeaderSubtitle}>
+              Interactúa con los clientes, responde dudas de tejido y brinda acompañamiento en vivo
+            </Text>
+
+            <View style={styles.chatModuleContainer}>
+              {/* LISTA DE CONVERSACIONES */}
+              <View style={styles.chatConversationsList}>
+                <Text style={styles.chatListHeader}>Conversaciones Activas</Text>
+                {chatConversations.length > 0 ? (
+                  chatConversations.map(conv => (
+                    <TouchableOpacity
+                      key={conv.email}
+                      style={[
+                        styles.convItem,
+                        selectedChatUserEmail?.toLowerCase() === conv.email.toLowerCase() && styles.convItemActive,
+                      ]}
+                      onPress={() => {
+                        setSelectedChatUserEmail(conv.email);
+                        markChatRead(conv.email);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.convAvatar}>
+                        <Ionicons name="person" size={16} color="#1E2B58" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.convNameText} numberOfLines={1}>{conv.name}</Text>
+                        <Text style={styles.convLastMsgText} numberOfLines={1}>{conv.lastMessage}</Text>
+                      </View>
+                      {conv.unreadCount > 0 && (
+                        <View style={styles.convBadge}>
+                          <Text style={styles.convBadgeText}>{conv.unreadCount}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <Text style={styles.emptyText}>No hay mensajes registrados aún.</Text>
+                )}
+              </View>
+
+              {/* VENTANA DE CONVERSACIÓN */}
+              <View style={styles.chatWindow}>
+                {selectedChatUserEmail ? (
+                  <>
+                    <View style={styles.chatWindowHeader}>
+                      <Ionicons name="chatbubble-ellipses" size={18} color="#C5A880" style={{ marginRight: 6 }} />
+                      <Text style={styles.chatWindowHeaderText}>Chat con {selectedChatUserEmail}</Text>
+                    </View>
+
+                    <ScrollView style={styles.chatMessagesArea} contentContainerStyle={{ padding: 12 }}>
+                      {activeConversationMessages.map(msg => {
+                        const isAdmin = msg.senderRole === 'admin';
+                        return (
+                          <View
+                            key={msg.id}
+                            style={[
+                              styles.chatBubble,
+                              isAdmin ? styles.chatBubbleAdmin : styles.chatBubbleClient,
+                            ]}
+                          >
+                            <Text style={[styles.chatSenderName, isAdmin && { color: '#C5A880' }]}>
+                              {isAdmin ? 'Taller Einuushi' : msg.userName}
+                            </Text>
+                            <Text style={[styles.chatBubbleText, isAdmin && { color: '#FFFFFF' }]}>
+                              {msg.message}
+                            </Text>
+                            <Text style={styles.chatBubbleTime}>
+                              {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </ScrollView>
+
+                    <View style={styles.chatInputBar}>
+                      <TextInput
+                        style={styles.chatTextInput}
+                        placeholder="Escribe una respuesta para el cliente..."
+                        placeholderTextColor="#94A3B8"
+                        value={replyMessageText}
+                        onChangeText={setReplyMessageText}
+                      />
+                      <TouchableOpacity
+                        style={styles.chatSendBtn}
+                        onPress={handleSendAdminReply}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="send" size={18} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : (
+                  <View style={styles.chatPlaceholderBox}>
+                    <Ionicons name="chatbubbles-outline" size={48} color="#94A3B8" />
+                    <Text style={styles.chatPlaceholderText}>
+                      Selecciona una conversación a la izquierda para ver los mensajes y responder.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* ================================================================= */}
+        {/* TAB 6: CONFIGURACIÓN, PERFILES Y TRAZABILIDAD (AUDITORÍA)         */}
+        {/* ================================================================= */}
+        {activeTab === 'settings' && (
+          <View style={styles.sectionBlock}>
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.sectionHeaderTitle}>Configuración, Seguridad y Trazabilidad</Text>
+                <Text style={styles.sectionHeaderSubtitle}>
+                  Administra tus credenciales, autoriza nuevos administradores e inspecciona la bitácora de movimientos
+                </Text>
+              </View>
+            </View>
+
+            {/* SECCIÓN 1: MI PERFIL Y CREDENCIALES */}
+            <View style={styles.settingsCard}>
+              <View style={styles.settingsCardHeader}>
+                <View style={styles.settingsIconCircle}>
+                  <Ionicons name="person-circle" size={24} color="#1E2B58" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsCardTitle}>Mi Perfil Administrativo</Text>
+                  <Text style={styles.settingsCardSubtitle}>
+                    Edita tu nombre, teléfono, usuario de acceso (correo) y clave de administrador
+                  </Text>
+                </View>
+              </View>
+
+              {profileMsg && (
+                <View style={[styles.feedbackMsgBox, profileMsg.type === 'success' ? styles.feedbackSuccess : styles.feedbackError]}>
+                  <Ionicons
+                    name={profileMsg.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
+                    size={18}
+                    color={profileMsg.type === 'success' ? '#166534' : '#DC2626'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.feedbackText, profileMsg.type === 'success' ? { color: '#166534' } : { color: '#DC2626' }]}>
+                    {profileMsg.text}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.settingsFormGrid}>
+                <View style={styles.settingsFormGroup}>
+                  <Text style={styles.settingsLabel}>Nombre Completo:</Text>
+                  <TextInput
+                    style={styles.settingsInput}
+                    value={adminEditName}
+                    onChangeText={setAdminEditName}
+                    placeholder="Ej. Ramiro Gómez"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                <View style={styles.settingsFormGroup}>
+                  <Text style={styles.settingsLabel}>Correo / Usuario de Acceso:</Text>
+                  <TextInput
+                    style={styles.settingsInput}
+                    value={adminEditEmail}
+                    onChangeText={setAdminEditEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    placeholder="admin@einuushi.com"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                <View style={styles.settingsFormGroup}>
+                  <Text style={styles.settingsLabel}>Teléfono de Contacto:</Text>
+                  <TextInput
+                    style={styles.settingsInput}
+                    value={adminEditPhone}
+                    onChangeText={setAdminEditPhone}
+                    keyboardType="phone-pad"
+                    placeholder="300 123 4567"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                <View style={styles.settingsFormGroup}>
+                  <Text style={styles.settingsLabel}>Nueva Contraseña (dejar en blanco para no cambiarla):</Text>
+                  <View style={styles.passwordInputWrapper}>
+                    <TextInput
+                      style={styles.passwordTextInput}
+                      value={adminEditPassword}
+                      onChangeText={setAdminEditPassword}
+                      secureTextEntry={!showAdminPassword}
+                      placeholder="Mínimo 6 caracteres"
+                      placeholderTextColor="#94A3B8"
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowAdminPassword(!showAdminPassword)}
+                      style={styles.eyeBtn}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name={showAdminPassword ? 'eye-off' : 'eye'} size={18} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.settingsPrimaryBtn, isSavingAdminProfile && { opacity: 0.7 }]}
+                onPress={handleSaveAdminProfile}
+                disabled={isSavingAdminProfile}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="save-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.settingsPrimaryBtnText}>
+                  {isSavingAdminProfile ? 'Guardando Cambios...' : 'Guardar Mis Datos y Clave'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* SECCIÓN 2: CREAR NUEVO USUARIO ADMINISTRADOR (EXCLUSIVO SUPERADMIN) */}
+            <View style={styles.settingsCard}>
+              <View style={styles.settingsCardHeader}>
+                <View style={[styles.settingsIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                  <Ionicons name="person-add" size={22} color="#B45309" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsCardTitle}>Crear Nuevo Administrador</Text>
+                  <Text style={styles.settingsCardSubtitle}>
+                    {isSuperAdminUser
+                      ? 'Otorga acceso y privilegios de administración a otro colaborador del equipo'
+                      : 'Privilegio reservado exclusivamente para la cuenta Superadministrador'}
+                  </Text>
+                </View>
+                <View style={isSuperAdminUser ? styles.superRoleBadge : styles.roleBadge}>
+                  <Text style={isSuperAdminUser ? styles.superRoleBadgeText : styles.roleBadgeText}>
+                    {isSuperAdminUser ? 'SUPERADMIN' : 'RESTRINGIDO'}
+                  </Text>
+                </View>
+              </View>
+
+              {!isSuperAdminUser ? (
+                <View style={{
+                  backgroundColor: '#FFFBEB',
+                  borderColor: '#FDE68A',
+                  borderWidth: 1,
+                  borderRadius: 12,
+                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                }}>
+                  <Ionicons name="lock-closed" size={26} color="#D97706" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#92400E', marginBottom: 4 }}>
+                      Nivel de Acceso: Administrador Operativo
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#B45309', lineHeight: 18 }}>
+                      Por políticas de seguridad, únicamente el <Text style={{ fontWeight: 'bold' }}>Superadministrador Principal</Text> tiene autorización para crear y registrar nuevos administradores o reasignar contraseñas. Puedes modificar tus propios datos de acceso en la sección superior.
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <>
+                  {createAdminMsg && (
+                    <View style={[styles.feedbackMsgBox, createAdminMsg.type === 'success' ? styles.feedbackSuccess : styles.feedbackError]}>
+                      <Ionicons
+                        name={createAdminMsg.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
+                        size={18}
+                        color={createAdminMsg.type === 'success' ? '#166534' : '#DC2626'}
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={[styles.feedbackText, createAdminMsg.type === 'success' ? { color: '#166534' } : { color: '#DC2626' }]}>
+                        {createAdminMsg.text}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.settingsFormGrid}>
+                    <View style={styles.settingsFormGroup}>
+                      <Text style={styles.settingsLabel}>Nombre del Nuevo Administrador:</Text>
+                      <TextInput
+                        style={styles.settingsInput}
+                        value={newAdminName}
+                        onChangeText={setNewAdminName}
+                        placeholder="Ej. María Pérez"
+                        placeholderTextColor="#94A3B8"
+                      />
+                    </View>
+
+                    <View style={styles.settingsFormGroup}>
+                      <Text style={styles.settingsLabel}>Documento / Cédula:</Text>
+                      <TextInput
+                        style={styles.settingsInput}
+                        value={newAdminCedula}
+                        onChangeText={setNewAdminCedula}
+                        keyboardType="numeric"
+                        placeholder="1124..."
+                        placeholderTextColor="#94A3B8"
+                      />
+                    </View>
+
+                    <View style={styles.settingsFormGroup}>
+                      <Text style={styles.settingsLabel}>Correo Electrónico (será su usuario de acceso):</Text>
+                      <TextInput
+                        style={styles.settingsInput}
+                        value={newAdminEmail}
+                        onChangeText={setNewAdminEmail}
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                        placeholder="maria@einuushi.com"
+                        placeholderTextColor="#94A3B8"
+                      />
+                    </View>
+
+                    <View style={styles.settingsFormGroup}>
+                      <Text style={styles.settingsLabel}>Teléfono Celular:</Text>
+                      <TextInput
+                        style={styles.settingsInput}
+                        value={newAdminPhone}
+                        onChangeText={setNewAdminPhone}
+                        keyboardType="phone-pad"
+                        placeholder="300 987 6543"
+                        placeholderTextColor="#94A3B8"
+                      />
+                    </View>
+
+                    <View style={styles.settingsFormGroup}>
+                      <Text style={styles.settingsLabel}>Contraseña de Acceso:</Text>
+                      <View style={styles.passwordInputWrapper}>
+                        <TextInput
+                          style={styles.passwordTextInput}
+                          value={newAdminPassword}
+                          onChangeText={setNewAdminPassword}
+                          secureTextEntry={!showNewAdminPassword}
+                          placeholder="Mínimo 6 caracteres"
+                          placeholderTextColor="#94A3B8"
+                        />
+                        <TouchableOpacity
+                          onPress={() => setShowNewAdminPassword(!showNewAdminPassword)}
+                          style={styles.eyeBtn}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name={showNewAdminPassword ? 'eye-off' : 'eye'} size={18} color="#64748B" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.settingsAccentBtn, isCreatingAdmin && { opacity: 0.7 }]}
+                    onPress={handleCreateNewAdmin}
+                    disabled={isCreatingAdmin}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="shield-checkmark-outline" size={18} color="#1E2B58" style={{ marginRight: 6 }} />
+                    <Text style={styles.settingsAccentBtnText}>
+                      {isCreatingAdmin ? 'Registrando en Supabase...' : 'Registrar Nuevo Administrador'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+
+            {/* SECCIÓN 3: ADMINISTRADORES ACTIVOS EN SUPABASE */}
+            <View style={styles.settingsCard}>
+              <View style={styles.settingsCardHeader}>
+                <View style={[styles.settingsIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="people" size={22} color="#1D4ED8" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsCardTitle}>
+                    {isSuperAdminUser ? 'Equipo de Administradores Registrados' : 'Datos de Mi Cuenta de Administrador'}
+                  </Text>
+                  <Text style={styles.settingsCardSubtitle}>
+                    {isSuperAdminUser
+                      ? `${adminUsers.length} administradores autorizados en el sistema (gestión exclusiva de Superadministrador)`
+                      : 'Por políticas de privacidad, solo tienes acceso a visualizar tus propios datos de cuenta'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.adminListContainer}>
+                {(isSuperAdminUser
+                  ? adminUsers
+                  : adminUsers.filter(adm => adminUser && (adm.id === adminUser.id || adm.email.toLowerCase() === adminUser.email.toLowerCase()) && !isSuperAdmin(adm))
+                ).map(adm => {
+                  const isCurrent = adminUser && (adm.id === adminUser.id || adm.email.toLowerCase() === adminUser.email.toLowerCase());
+                  const isAdmSuper = adm.role === 'superadmin' || adm.id === 'USR-ADMIN-01' || adm.email.toLowerCase() === 'admin@einuushi.com';
+                  return (
+                    <View key={adm.id} style={[styles.adminUserCard, isCurrent && styles.adminUserCardCurrent]}>
+                      <View style={[styles.adminAvatarBox, isAdmSuper && { backgroundColor: '#FEF3C7' }]}>
+                        <Ionicons name={isAdmSuper ? "shield" : "shield-half"} size={20} color={isAdmSuper ? "#D97706" : "#1E2B58"} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={styles.adminCardName}>{adm.fullName}</Text>
+                          {isCurrent && (
+                            <View style={styles.currentAdminPill}>
+                              <Text style={styles.currentAdminPillText}>Tú (Sesión Actual)</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.adminCardEmail}>{adm.email} • Tel: {adm.phone || 'N/A'}</Text>
+                        <Text style={styles.adminCardDate}>
+                          Registrado: {new Date(adm.createdAt).toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <View style={isAdmSuper ? styles.superRoleBadge : styles.roleBadge}>
+                          <Text style={isAdmSuper ? styles.superRoleBadgeText : styles.roleBadgeText}>
+                            {isAdmSuper ? 'SUPERADMIN' : 'ADMIN'}
+                          </Text>
+                        </View>
+                        {isSuperAdminUser && !isAdmSuper && (
+                          <TouchableOpacity
+                            style={styles.assignPasswordBtn}
+                            onPress={() => {
+                              setSelectedAdminForPasswordModal(adm);
+                              setNewPasswordForSelectedAdmin('');
+                              setChangeOtherAdminPasswordMsg(null);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="key-outline" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                            <Text style={styles.assignPasswordBtnText}>Asignar Clave</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* SECCIÓN 4: BITÁCORA DE TRAZABILIDAD Y AUDITORÍA EN VIVO */}
+            <View style={styles.settingsCard}>
+              <View style={styles.settingsCardHeader}>
+                <View style={[styles.settingsIconCircle, { backgroundColor: '#F0FDF4' }]}>
+                  <Ionicons name="finger-print" size={22} color="#15803D" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsCardTitle}>Trazabilidad y Bitácora de Auditoría</Text>
+                  <Text style={styles.settingsCardSubtitle}>
+                    Registro cronológico inmutable de todos los movimientos y del administrador responsable de cada acción
+                  </Text>
+                </View>
+              </View>
+
+              {/* FILTROS DE AUDITORÍA */}
+              <View style={styles.auditFiltersRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                  {(['ALL', 'PEDIDO', 'PRODUCTO', 'COTIZACION', 'SEGURIDAD'] as const).map(filterCat => (
+                    <TouchableOpacity
+                      key={filterCat}
+                      style={[styles.auditFilterChip, auditFilterType === filterCat && styles.auditFilterChipActive]}
+                      onPress={() => setAuditFilterType(filterCat)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.auditFilterChipText, auditFilterType === filterCat && styles.auditFilterChipTextActive]}>
+                        {filterCat === 'ALL' ? 'Todos los Movimientos' : filterCat === 'PEDIDO' ? 'Pedidos' : filterCat === 'PRODUCTO' ? 'Inventario' : filterCat === 'COTIZACION' ? 'Cotizaciones' : 'Seguridad'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* BUSCADOR DE AUDITORÍA */}
+              <View style={styles.auditSearchBar}>
+                <Ionicons name="search" size={16} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.auditSearchInput}
+                  value={auditSearchQuery}
+                  onChangeText={setAuditSearchQuery}
+                  placeholder="Buscar por nombre de administrador, detalle o ID..."
+                  placeholderTextColor="#94A3B8"
+                />
+                {auditSearchQuery ? (
+                  <TouchableOpacity onPress={() => setAuditSearchQuery('')}>
+                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {/* LISTA DE REGISTROS DE TRAZABILIDAD */}
+              {(() => {
+                const filteredLogs = activityLogs.filter(item => {
+                  // Si no es Superadministrador, no puede ver registros ni movimientos del Superadministrador
+                  if (!isSuperAdminUser) {
+                    const isMyOwnLog = adminUser && (item.adminId === adminUser.id || item.adminEmail.toLowerCase() === adminUser.email.toLowerCase());
+                    if (!isMyOwnLog) return false;
+                  }
+                  const matchCat = auditFilterType === 'ALL' || item.entityType === auditFilterType;
+                  const query = auditSearchQuery.toLowerCase().trim();
+                  const matchQuery = !query ||
+                    item.adminName.toLowerCase().includes(query) ||
+                    item.adminEmail.toLowerCase().includes(query) ||
+                    item.details.toLowerCase().includes(query) ||
+                    (item.entityId && item.entityId.toLowerCase().includes(query));
+                  return matchCat && matchQuery;
+                });
+
+                if (filteredLogs.length === 0) {
+                  return (
+                    <View style={styles.emptyAuditBox}>
+                      <Ionicons name="document-text-outline" size={36} color="#94A3B8" />
+                      <Text style={styles.emptyAuditText}>No se encontraron movimientos registrados con este criterio.</Text>
+                    </View>
+                  );
+                }
+
+                return (
+                  <View style={styles.auditTimeline}>
+                    {filteredLogs.map((logItem, index) => {
+                      const iconName =
+                        logItem.entityType === 'PEDIDO'
+                          ? 'cube-outline'
+                          : logItem.entityType === 'PRODUCTO'
+                          ? 'pricetag-outline'
+                          : logItem.entityType === 'COTIZACION'
+                          ? 'sparkles-outline'
+                          : logItem.entityType === 'CHAT'
+                          ? 'chatbubble-outline'
+                          : 'shield-outline';
+
+                      const badgeColor =
+                        logItem.entityType === 'PEDIDO'
+                          ? '#10B981'
+                          : logItem.entityType === 'PRODUCTO'
+                          ? '#F59E0B'
+                          : logItem.entityType === 'COTIZACION'
+                          ? '#8B5CF6'
+                          : logItem.entityType === 'CHAT'
+                          ? '#3B82F6'
+                          : '#EC4899';
+
+                      return (
+                        <View key={logItem.id || index} style={styles.auditTimelineItem}>
+                          <View style={[styles.auditTimelineIcon, { backgroundColor: badgeColor + '18', borderColor: badgeColor }]}>
+                            <Ionicons name={iconName as any} size={16} color={badgeColor} />
+                          </View>
+                          <View style={styles.auditTimelineContent}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                              <View style={styles.adminResponsiblePill}>
+                                <Ionicons name="person-circle" size={12} color="#1E2B58" style={{ marginRight: 4 }} />
+                                <Text style={styles.adminResponsiblePillText}>{logItem.adminName} ({logItem.adminEmail})</Text>
+                              </View>
+                              <Text style={styles.auditTimelineTime}>
+                                {new Date(logItem.createdAt).toLocaleString('es-CO', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </Text>
+                            </View>
+                            <Text style={styles.auditTimelineDetails}>{logItem.details}</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })()}
+
+            </View>
+
+          </View>
+        )}
+      </ScrollView>
+
+      {/* ================================================================= */}
+      {/* MODAL: CONFIRMACIÓN PARA ELIMINAR ARTÍCULO                      */}
+      {/* ================================================================= */}
+      <Modal visible={isDeleteModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 420, padding: 24 }]}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: '#FEE2E2',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+                <Ionicons name="trash" size={28} color="#DC2626" />
+              </View>
+              <Text style={[styles.modalDialogTitle, { fontSize: 18, textAlign: 'center' }]}>
+                ¿Eliminar artículo del catálogo?
+              </Text>
+              <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginTop: 8, lineHeight: 18 }}>
+                ¿Estás seguro de que deseas eliminar permanentemente{' '}
+                <Text style={{ fontWeight: 'bold', color: '#1E2B58' }}>"{productToDelete?.name}"</Text>?
+                {'\n'}Esta acción borrará el artículo de la base de datos y de la vista de todos los clientes.
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: '#F1F5F9',
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                }}
+                onPress={() => {
+                  setIsDeleteModalVisible(false);
+                  setProductToDelete(null);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#64748B' }}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: '#DC2626',
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                }}
+                onPress={handleConfirmDelete}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="trash-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>Sí, Eliminar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL: EDITAR ARTÍCULO DEL CATÁLOGO                               */}
+      {/* ================================================================= */}
+      <Modal visible={isEditProductModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalDialog}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalDialogTitle}>Modificar Artículo del Catálogo</Text>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>
+                  ID: {productToEdit?.id}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsEditProductModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#1E2B58" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 480 }}>
+              <Text style={styles.formInputLabel}>Nombre del Artículo *</Text>
+              <TextInput
+                style={styles.formTextInput}
+                placeholder="Nombre del artículo"
+                value={editProdName}
+                onChangeText={setEditProdName}
+              />
+
+              <Text style={styles.formInputLabel}>Categoría *</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                {categories.map(cat => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.categoryChoiceChip,
+                      editProdCategory === cat.id && styles.categoryChoiceChipActive,
+                    ]}
+                    onPress={() => setEditProdCategory(cat.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryChoiceChipText,
+                        editProdCategory === cat.id && styles.categoryChoiceChipTextActive,
+                      ]}
+                    >
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.formInputLabel}>Precio ($ COP) *</Text>
+                  <TextInput
+                    style={styles.formTextInput}
+                    placeholder="150000"
+                    keyboardType="numeric"
+                    value={editProdPrice}
+                    onChangeText={setEditProdPrice}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.formInputLabel}>Stock Disponible *</Text>
+                  <TextInput
+                    style={styles.formTextInput}
+                    placeholder="5"
+                    keyboardType="numeric"
+                    value={editProdStock}
+                    onChangeText={setEditProdStock}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.formInputLabel}>Referencia e Historia Ancestral</Text>
+              <TextInput
+                style={[styles.formTextInput, { height: 75, textAlignVertical: 'top' }]}
+                placeholder="Descripción cultural wayuu..."
+                multiline
+                value={editProdAncestral}
+                onChangeText={setEditProdAncestral}
+              />
+
+              {/* Configuración de Descuento Promocional */}
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: '#F8FAFC',
+                padding: 10,
+                borderRadius: 8,
+                marginBottom: 10,
+              }}>
+                <View>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58' }}>¿Activar Descuento?</Text>
+                  <Text style={{ fontSize: 10, color: '#64748B' }}>Aplica descuento promocional directo</Text>
+                </View>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: editProdIsDiscount ? '#059669' : '#CBD5E1',
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 6,
+                  }}
+                  onPress={() => setEditProdIsDiscount(!editProdIsDiscount)}
+                >
+                  <Text style={{ color: '#FFF', fontSize: 11, fontWeight: 'bold' }}>
+                    {editProdIsDiscount ? 'ACTIVO' : 'INACTIVO'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {editProdIsDiscount ? (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={styles.formInputLabel}>Porcentaje de Descuento (%)</Text>
+                  <TextInput
+                    style={styles.formTextInput}
+                    placeholder="Ej. 15"
+                    keyboardType="numeric"
+                    value={editProdDiscount}
+                    onChangeText={setEditProdDiscount}
+                  />
+                </View>
+              ) : null}
+
+              <TouchableOpacity style={styles.saveModalBtn} onPress={handleSaveEditedProduct}>
+                <Text style={styles.saveModalBtnText}>Guardar Cambios del Artículo</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL: NUEVO PRODUCTO                                            */}
+      {/* ================================================================= */}
+      <Modal visible={isNewProductModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalDialog}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalDialogTitle}>Cargar Nuevo Artículo a la Tienda</Text>
+              <TouchableOpacity onPress={() => setIsNewProductModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#1E2B58" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 480 }}>
+              <Text style={styles.formInputLabel}>Nombre del Artículo *</Text>
+              <TextInput
+                style={styles.formTextInput}
+                placeholder="Ej. Mochila Wayuu Kanaas Sol Naciente"
+                value={newProdName}
+                onChangeText={setNewProdName}
+              />
+
+              {/* Sección de Adjuntar Foto */}
+              <Text style={styles.formInputLabel}>Foto del Artículo *</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#1E2B58',
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    borderRadius: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  onPress={handlePickProductImage}
+                  disabled={isPickingImage}
+                >
+                  <Ionicons name="images-outline" size={18} color="#C5A880" style={{ marginRight: 8 }} />
+                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
+                    {isPickingImage ? 'Procesando...' : 'Adjuntar Foto / Archivo'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#C5A880',
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    borderRadius: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  onPress={handleTakePhoto}
+                  disabled={isPickingImage}
+                >
+                  <Ionicons name="camera-outline" size={18} color="#1E2B58" style={{ marginRight: 6 }} />
+                  <Text style={{ color: '#1E2B58', fontWeight: 'bold', fontSize: 13 }}>Cámara</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Vista previa de la foto adjuntada */}
+              {newProdImagePath ? (
+                <View style={{
+                  marginBottom: 16,
+                  backgroundColor: '#F8FAFC',
+                  borderRadius: 12,
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  alignItems: 'center',
+                  position: 'relative'
+                }}>
+                  <Image
+                    source={resolveProductImage(newProdImagePath) || { uri: SUPABASE_FALLBACK_IMAGES.mochila1 }}
+                    style={{ width: 140, height: 140, borderRadius: 10 }}
+                    resizeMode="cover"
+                  />
+                  <View style={{
+                    marginTop: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#E6F4EA',
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 6
+                  }}>
+                    <Ionicons name="checkmark-circle" size={15} color="#1E7E34" style={{ marginRight: 4 }} />
+                    <Text style={{ color: '#1E7E34', fontSize: 11, fontWeight: 'bold' }}>
+                      Foto adjunta lista para guardar en la BD
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      backgroundColor: 'rgba(0,0,0,0.6)',
+                      borderRadius: 12,
+                      padding: 4,
+                    }}
+                    onPress={() => setNewProdImagePath('')}
+                  >
+                    <Ionicons name="close" size={16} color="#FFF" />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              <Text style={styles.formInputLabel}>Nombre Personalizado de la Imagen en BD</Text>
+              <TextInput
+                style={styles.formTextInput}
+                placeholder="Ej. mochila_sol_guajiro_2026"
+                value={newProdImageName}
+                onChangeText={setNewProdImageName}
+              />
+
+              <Text style={styles.formInputLabel}>Categoría *</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                {categories.map(cat => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.categoryChoiceChip,
+                      newProdCategory === cat.id && styles.categoryChoiceChipActive,
+                    ]}
+                    onPress={() => setNewProdCategory(cat.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryChoiceChipText,
+                        newProdCategory === cat.id && styles.categoryChoiceChipTextActive,
+                      ]}
+                    >
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <Text style={styles.formInputLabel}>Precio en Pesos Colombianos (COP) *</Text>
+              <TextInput
+                style={styles.formTextInput}
+                placeholder="Ej. 180000"
+                keyboardType="numeric"
+                value={newProdPrice}
+                onChangeText={setNewProdPrice}
+              />
+
+              <Text style={styles.formInputLabel}>Stock Inicial Disponible *</Text>
+              <TextInput
+                style={styles.formTextInput}
+                placeholder="5"
+                keyboardType="numeric"
+                value={newProdStock}
+                onChangeText={setNewProdStock}
+              />
+
+              {/* Opcional: enlace manual si no adjunta foto */}
+              {!newProdImagePath ? (
+                <>
+                  <Text style={styles.formInputLabel}>Opcional: Identificador de Asset o URL web</Text>
+                  <TextInput
+                    style={styles.formTextInput}
+                    placeholder="mochila1, mochila2, manta1 o https://..."
+                    value={newProdImagePath}
+                    onChangeText={setNewProdImagePath}
+                  />
+                </>
+              ) : null}
+
+              <Text style={styles.formInputLabel}>Referencia e Historia Ancestral</Text>
+              <TextInput
+                style={[styles.formTextInput, { height: 70 }]}
+                placeholder="Describe el significado del tejido, el simbolismo de los colores..."
+                multiline
+                value={newProdAncestral}
+                onChangeText={setNewProdAncestral}
+              />
+            </ScrollView>
+
+            <TouchableOpacity style={styles.saveModalBtn} onPress={handleSaveProduct} activeOpacity={0.8}>
+              <Text style={styles.saveModalBtnText}>Guardar y Publicar en Tienda</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL: NUEVA CATEGORÍA                                           */}
+      {/* ================================================================= */}
+      <Modal visible={isNewCategoryModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 440 }]}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalDialogTitle}>Crear Nueva Categoría</Text>
+              <TouchableOpacity onPress={() => setIsNewCategoryModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#1E2B58" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.formInputLabel}>Nombre de la Categoría *</Text>
+            <TextInput
+              style={styles.formTextInput}
+              placeholder="Ej. Calzado Wayuu, Joyería, Fajones"
+              value={newCatName}
+              onChangeText={setNewCatName}
+            />
+
+            <Text style={styles.formInputLabel}>Ícono (Nombre Ionicons)</Text>
+            <TextInput
+              style={styles.formTextInput}
+              placeholder="Ej. sparkles-outline, shirt-outline, ribbon-outline"
+              value={newCatIcon}
+              onChangeText={setNewCatIcon}
+            />
+
+            <Text style={styles.formInputLabel}>Descripción</Text>
+            <TextInput
+              style={[styles.formTextInput, { height: 60 }]}
+              placeholder="Breve reseña de la categoría..."
+              multiline
+              value={newCatDescription}
+              onChangeText={setNewCatDescription}
+            />
+
+            <TouchableOpacity style={styles.saveModalBtn} onPress={handleSaveCategory} activeOpacity={0.8}>
+              <Text style={styles.saveModalBtnText}>Registrar Categoría</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL: RESPONDER COTIZACIÓN                                      */}
+      {/* ================================================================= */}
+      <Modal visible={isQuoteModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalDialog}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalDialogTitle}>Cotizar Diseño para {selectedQuote?.userName}</Text>
+              <TouchableOpacity onPress={() => setIsQuoteModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#1E2B58" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.quoteModalPromptLabel}>Diseño Solicitado:</Text>
+            <Text style={styles.quoteModalPromptText}>"{selectedQuote?.prompt}"</Text>
+
+            <Text style={styles.formInputLabel}>Valor Cotizado Oficial ($ COP) *</Text>
+            <TextInput
+              style={styles.formTextInput}
+              placeholder="Ej. 220000"
+              keyboardType="numeric"
+              value={quotePriceInput}
+              onChangeText={setQuotePriceInput}
+            />
+
+            <Text style={styles.formInputLabel}>Tiempo Estimado de Tejido (Días) *</Text>
+            <TextInput
+              style={styles.formTextInput}
+              placeholder="Ej. 8"
+              keyboardType="numeric"
+              value={quoteDaysInput}
+              onChangeText={setQuoteDaysInput}
+            />
+
+            <Text style={styles.formInputLabel}>Notas y Recomendaciones del Artesano</Text>
+            <TextInput
+              style={[styles.formTextInput, { height: 70 }]}
+              placeholder="Detalles sobre el hilo, las gazas o la técnica wayuu..."
+              multiline
+              value={quoteNotesInput}
+              onChangeText={setQuoteNotesInput}
+            />
+
+            <TouchableOpacity style={styles.saveModalBtn} onPress={handleSendQuoteResponse} activeOpacity={0.8}>
+              <Text style={styles.saveModalBtnText}>Enviar Cotización Formal al Cliente</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL: SEGUIMIENTO DE RUTA EN MAPA                              */}
+      {/* ================================================================= */}
+      <Modal visible={isMapModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { height: '80%', padding: 0, overflow: 'hidden' }]}>
+            <View style={[styles.modalHeaderRow, { padding: 16, backgroundColor: '#1E2B58' }]}>
+              <View>
+                <Text style={[styles.modalDialogTitle, { color: '#FFFFFF' }]}>
+                  Ruta de Despacho: {activeTrackingOrder?.id}
+                </Text>
+                <Text style={{ color: '#C5A880', fontSize: 11 }}>
+                  📍 {activeTrackingOrder?.client.address}, {activeTrackingOrder?.city || 'Riohacha'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsMapModalVisible(false)}>
+                <Ionicons name="close-circle" size={26} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            {Platform.OS === 'web' ? (
+              <iframe
+                title="Mapa de Ruta"
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                  `${activeTrackingOrder?.client?.address || 'Riohacha'}, La Guajira, Colombia`
+                )}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            ) : (
+              <WebView
+                source={{
+                  uri: `https://maps.google.com/maps?q=${encodeURIComponent(
+                    `${activeTrackingOrder?.client?.address || 'Riohacha'}, La Guajira, Colombia`
+                  )}&t=&z=15&ie=UTF8&iwloc=&output=embed`,
+                }}
+                style={{ flex: 1 }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL DE DIRECTORIO DE CLIENTES REGISTRADOS (SOLO CLIENTES, ADMINISTRADORES SE GESTIONAN EN CONFIGURACIÓN) */}
+      <Modal 
+        visible={isUsersModalVisible} 
+        transparent 
+        animationType="slide" 
+        onRequestClose={() => setIsUsersModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 680, maxHeight: '90%', padding: 0, overflow: 'hidden' }]}>
+            
+            {/* Encabezado del Modal */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#1E2B58',
+              paddingHorizontal: 20,
+              paddingVertical: 16,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: '#C5A880',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: 12,
+                }}>
+                  <Ionicons name="people" size={22} color="#1E2B58" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF' }}>
+                    Directorio de Clientes Registrados
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#C5A880' }}>
+                    Base de Datos en Supabase • Solo Clientes ({(users || []).filter(u => u.role !== 'admin' && u.role !== 'superadmin' && u.id !== 'USR-ADMIN-01' && u.email?.toLowerCase() !== 'admin@einuushi.com').length} registrados)
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                onPress={() => setIsUsersModalVisible(false)}
+                style={{ padding: 4 }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close-circle" size={26} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Barra de Búsqueda */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#FFFFFF',
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+                paddingHorizontal: 12,
+                height: 42,
+              }}>
+                <Ionicons name="search-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  placeholder="Buscar cliente por nombre, cédula, correo o ciudad..."
+                  placeholderTextColor="#94A3B8"
+                  value={usersSearchQuery}
+                  onChangeText={setUsersSearchQuery}
+                  style={[{ flex: 1, fontSize: 13, color: '#1E293B' }, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+                />
+                {usersSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setUsersSearchQuery('')}>
+                    <Ionicons name="close-circle-outline" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Lista de Usuarios con Scroll (Solo Clientes) */}
+            <ScrollView style={{ flex: 1, padding: 16, backgroundColor: '#F1F5F9' }}>
+              {(() => {
+                const query = usersSearchQuery.trim().toLowerCase();
+                const clientUsers = (users || []).filter(u => u.role !== 'admin' && u.role !== 'superadmin' && u.id !== 'USR-ADMIN-01' && u.email?.toLowerCase() !== 'admin@einuushi.com');
+                const filtered = clientUsers.filter(u => {
+                  if (!query) return true;
+                  return (
+                    (u.fullName || '').toLowerCase().includes(query) ||
+                    (u.email || '').toLowerCase().includes(query) ||
+                    (u.cedula || '').toLowerCase().includes(query) ||
+                    (u.phone || '').toLowerCase().includes(query) ||
+                    (u.city || '').toLowerCase().includes(query)
+                  );
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+                      <Ionicons name="people-outline" size={44} color="#94A3B8" style={{ marginBottom: 10 }} />
+                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#64748B' }}>
+                        No se encontraron clientes
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>
+                        Prueba ajustando el término de búsqueda.
+                      </Text>
+                    </View>
+                  );
+                }
+
+                return filtered.map((u, idx) => {
+                  const initials = u.fullName
+                    ? u.fullName.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
+                    : 'C';
+                  
+                  return (
+                    <View 
+                      key={u.id || idx}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 12,
+                        padding: 14,
+                        marginBottom: 12,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 2,
+                        elevation: 1,
+                      }}
+                    >
+                      {/* Cabecera del usuario */}
+                      <View style={{ 
+                        flexDirection: 'row', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between', 
+                        marginBottom: 12, 
+                        borderBottomWidth: 1, 
+                        borderColor: '#F1F5F9', 
+                        paddingBottom: 10 
+                      }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                          {u.avatar && u.avatar.startsWith('http') ? (
+                            <Image 
+                              source={{ uri: u.avatar }} 
+                              style={{ width: 44, height: 44, borderRadius: 22, marginRight: 12 }} 
+                            />
+                          ) : (
+                            <View style={{
+                              width: 44,
+                              height: 44,
+                              borderRadius: 22,
+                              backgroundColor: '#1E2B58',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              marginRight: 12,
+                            }}>
+                              <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>
+                                {initials}
+                              </Text>
+                            </View>
+                          )}
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1E293B' }}>
+                              {u.fullName || 'Cliente Sin Nombre'}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#64748B' }}>
+                              ID: {u.id}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={{
+                          backgroundColor: '#EFF6FF',
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: '#BFDBFE',
+                        }}>
+                          <Text style={{
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                            color: '#1D4ED8',
+                          }}>
+                            👤 Cliente
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Cuadrícula de Datos Personales (Solo Lectura) */}
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                        <View style={{ width: '48%', backgroundColor: '#F8FAFC', padding: 8, borderRadius: 8 }}>
+                          <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '600' }}>CÉDULA / NIT</Text>
+                          <Text style={{ fontSize: 12, color: '#1E293B', fontWeight: 'bold', marginTop: 2 }}>
+                            {u.cedula || 'No registrada'}
+                          </Text>
+                        </View>
+
+                        <View style={{ width: '48%', backgroundColor: '#F8FAFC', padding: 8, borderRadius: 8 }}>
+                          <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '600' }}>TELÉFONO</Text>
+                          <Text style={{ fontSize: 12, color: '#1E293B', fontWeight: 'bold', marginTop: 2 }}>
+                            {u.phone || 'No registrado'}
+                          </Text>
+                        </View>
+
+                        <View style={{ width: '48%', backgroundColor: '#F8FAFC', padding: 8, borderRadius: 8 }}>
+                          <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '600' }}>CORREO ELECTRÓNICO</Text>
+                          <Text style={{ fontSize: 12, color: '#1E293B', fontWeight: 'bold', marginTop: 2 }} numberOfLines={1}>
+                            {u.email}
+                          </Text>
+                        </View>
+
+                        <View style={{ width: '48%', backgroundColor: '#F8FAFC', padding: 8, borderRadius: 8 }}>
+                          <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '600' }}>CIUDAD</Text>
+                          <Text style={{ fontSize: 12, color: '#1E293B', fontWeight: 'bold', marginTop: 2 }}>
+                            {u.city || 'Riohacha'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Pie de la tarjeta */}
+                      <View style={{ 
+                        flexDirection: 'row', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        marginTop: 10, 
+                        paddingTop: 8, 
+                        borderTopWidth: 1, 
+                        borderColor: '#F1F5F9' 
+                      }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons name="calendar-outline" size={12} color="#94A3B8" style={{ marginRight: 4 }} />
+                          <Text style={{ fontSize: 10, color: '#94A3B8' }}>
+                            Registrado: {u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Reciente'}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons name="lock-closed" size={11} color="#10B981" style={{ marginRight: 3 }} />
+                          <Text style={{ fontSize: 10, color: '#059669', fontWeight: '600' }}>
+                            Protegido • Solo lectura
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                });
+              })()}
+            </ScrollView>
+
+            {/* Pie del Modal con botón de cerrar */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingHorizontal: 20,
+              paddingVertical: 12,
+              backgroundColor: '#FFFFFF',
+              borderTopWidth: 1,
+              borderColor: '#E2E8F0',
+            }}>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>
+                Total: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{(users || []).filter(u => u.role !== 'admin' && u.role !== 'superadmin' && u.id !== 'USR-ADMIN-01' && u.email?.toLowerCase() !== 'admin@einuushi.com').length}</Text> clientes en Supabase
+              </Text>
+              <TouchableOpacity
+                onPress={() => setIsUsersModalVisible(false)}
+                style={{
+                  backgroundColor: '#1E2B58',
+                  paddingHorizontal: 22,
+                  paddingVertical: 9,
+                  borderRadius: 8,
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 'bold' }}>
+                  Cerrar
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL: SUPERADMIN ASIGNA / CAMBIA CONTRASEÑA A OTRO ADMINISTRADOR */}
+      <Modal
+        visible={!!selectedAdminForPasswordModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setSelectedAdminForPasswordModal(null);
+          setNewPasswordForSelectedAdmin('');
+          setChangeOtherAdminPasswordMsg(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 440, padding: 24 }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.settingsIconCircle, { backgroundColor: '#FEF3C7', width: 36, height: 36 }]}>
+                  <Ionicons name="key" size={18} color="#B45309" />
+                </View>
+                <View>
+                  <Text style={styles.modalDialogTitle}>Asignar Nueva Clave</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>Gestión de Superadministrador</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedAdminForPasswordModal(null);
+                  setNewPasswordForSelectedAdmin('');
+                  setChangeOtherAdminPasswordMsg(null);
+                }}
+              >
+                <Ionicons name="close" size={24} color="#1E2B58" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ marginVertical: 14, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+              <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 2 }}>Administrador a modificar:</Text>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1E2B58' }}>{selectedAdminForPasswordModal?.fullName}</Text>
+              <Text style={{ fontSize: 12, color: '#0284C7' }}>{selectedAdminForPasswordModal?.email}</Text>
+            </View>
+
+            {changeOtherAdminPasswordMsg && (
+              <View style={[styles.feedbackMsgBox, changeOtherAdminPasswordMsg.type === 'success' ? styles.feedbackSuccess : styles.feedbackError, { marginBottom: 14 }]}>
+                <Ionicons
+                  name={changeOtherAdminPasswordMsg.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
+                  size={16}
+                  color={changeOtherAdminPasswordMsg.type === 'success' ? '#166534' : '#DC2626'}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[styles.feedbackText, changeOtherAdminPasswordMsg.type === 'success' ? { color: '#166534' } : { color: '#DC2626' }]}>
+                  {changeOtherAdminPasswordMsg.text}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.settingsFormGroup}>
+              <Text style={styles.settingsLabel}>Nueva Contraseña:</Text>
+              <TextInput
+                style={styles.settingsInput}
+                value={newPasswordForSelectedAdmin}
+                onChangeText={setNewPasswordForSelectedAdmin}
+                placeholder="Mínimo 6 caracteres"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry
+              />
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: '#E2E8F0',
+                  paddingVertical: 12,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                }}
+                onPress={() => {
+                  setSelectedAdminForPasswordModal(null);
+                  setNewPasswordForSelectedAdmin('');
+                  setChangeOtherAdminPasswordMsg(null);
+                }}
+              >
+                <Text style={{ color: '#475569', fontWeight: 'bold', fontSize: 13 }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.settingsPrimaryBtn,
+                  { flex: 2 },
+                  isChangingOtherAdminPassword && { opacity: 0.7 }
+                ]}
+                onPress={handleConfirmChangeOtherAdminPassword}
+                disabled={isChangingOtherAdminPassword}
+              >
+                <Ionicons name="checkmark-sharp" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={styles.settingsPrimaryBtnText}>
+                  {isChangingOtherAdminPassword ? 'Actualizando...' : 'Confirmar y Guardar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      {/* Visualizador de Foto a Pantalla Completa (Lightbox Profesional) */}
+      <Modal
+        visible={!!previewImage}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={handleCloseImagePreview}
+      >
+        <View style={styles.fullImageModalOverlay}>
+          {/* Header Superior */}
+          <SafeAreaView style={styles.fullImageHeaderSafeArea}>
+            <View style={styles.fullImageHeader}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                {previewImage?.category ? (
+                  <View style={styles.fullImageCategoryBadge}>
+                    <Text style={styles.fullImageCategoryText}>{previewImage.category}</Text>
+                  </View>
+                ) : null}
+                <Text style={styles.fullImageTitle} numberOfLines={1}>
+                  {previewImage?.title}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={handleCloseImagePreview}
+                style={styles.fullImageCloseBtn}
+                activeOpacity={0.8}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
+
+          {/* Cuerpo Central con la Imagen */}
+          <TouchableOpacity
+            style={styles.fullImageBody}
+            activeOpacity={1}
+            onPress={handleCloseImagePreview}
+          >
+            {previewImage?.source && (
+              <Image
+                source={previewImage.source}
+                style={styles.fullImageLarge}
+                resizeMode="contain"
+              />
+            )}
+          </TouchableOpacity>
+
+          {/* Footer Inferior con Detalles y Precio */}
+          {(previewImage?.price || previewImage?.description) ? (
+            <SafeAreaView style={styles.fullImageFooterSafeArea}>
+              <View style={styles.fullImageFooter}>
+                {previewImage.price ? (
+                  <View style={styles.fullImagePriceRow}>
+                    <Text style={styles.fullImagePriceLabel}>Valor del artículo:</Text>
+                    <Text style={styles.fullImagePrice}>{previewImage.price}</Text>
+                  </View>
+                ) : null}
+                {previewImage.description ? (
+                  <Text style={styles.fullImageDescription} numberOfLines={3}>
+                    {previewImage.description}
+                  </Text>
+                ) : null}
+                <Text style={styles.fullImageHint}>
+                  Toca en cualquier parte para cerrar
+                </Text>
+              </View>
+            </SafeAreaView>
+          ) : null}
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+// =========================================================================
+// ESTILOS DE ALTA GAMA (PALETA ANCESTRAL: #1E2B58, #C5A880, #F8FAFC)
+// =========================================================================
+const styles = StyleSheet.create({
+  // AUTH
+  authContainer: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  authCard: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  authHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  authIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#1E2B58',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  authBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#C5A880',
+    letterSpacing: 1.2,
+    marginBottom: 4,
+  },
+  authTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+    marginBottom: 4,
+  },
+  authSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  authErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  authErrorText: {
+    fontSize: 12,
+    color: '#DC2626',
+    flex: 1,
+  },
+  authInputGroup: {
+    marginBottom: 14,
+  },
+  authInputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1E2B58',
+    marginBottom: 6,
+  },
+  authInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 46,
+  },
+  authTextInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1E2B58',
+  },
+  authSubmitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E2B58',
+    height: 48,
+    borderRadius: 14,
+    marginTop: 10,
+    shadowColor: '#1E2B58',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  authSubmitButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  autofillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+  autofillText: {
+    fontSize: 11,
+    color: '#C5A880',
+    fontWeight: '600',
+  },
+  backToStoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  backToStoreText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+
+  // DASHBOARD LAYOUT
+  dashboardContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1E2B58',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  brandTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.8,
+  },
+  adminStatusText: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  topActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refreshIconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewStoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#C5A880',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  viewStoreText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  logoutIconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // TABS
+  tabsNavContainer: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  tabsNavScroll: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  tabButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+  },
+  tabButtonActive: {
+    backgroundColor: '#1E2B58',
+  },
+  tabButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  tabButtonTextActive: {
+    color: '#FFFFFF',
+  },
+
+  // MAIN CONTENT
+  mainScrollContent: {
+    padding: 20,
+    paddingBottom: 60,
+  },
+  sectionBlock: {
+    maxWidth: 1200,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  sectionHeaderTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+    marginBottom: 4,
+  },
+  sectionHeaderSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 18,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+    gap: 12,
+  },
+
+  // KPIS
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginBottom: 20,
+  },
+  kpiCard: {
+    flex: 1,
+    minWidth: 180,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  kpiIconWrapper: {
+    marginBottom: 8,
+  },
+  kpiValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+    marginBottom: 2,
+  },
+  kpiLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+
+  // ANALYTICS CARD & RANKINGS
+  analyticsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 10,
+    marginBottom: 12,
+  },
+  cardHeaderTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  rankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  rankBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  rankBadgeText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#B45309',
+  },
+  rankNameText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E2B58',
+  },
+  rankSubText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  rankSoldNumber: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  rankRevenueNumber: {
+    fontSize: 11,
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  twoColumnGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  miniRankRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  miniRankName: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#1E2B58',
+  },
+  miniRankValue: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  miniRankDate: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  starText: {
+    fontSize: 11,
+  },
+  discountBadgeTag: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginRight: 10,
+  },
+  discountBadgeTagText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#DC2626',
+  },
+  finalDiscountPriceText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#C5A880',
+  },
+  emptyText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    paddingVertical: 8,
+  },
+
+  // PEDIDOS
+  filterPillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  filterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  filterPillActive: {
+    backgroundColor: '#1E2B58',
+    borderColor: '#1E2B58',
+  },
+  filterPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  filterPillTextActive: {
+    color: '#FFFFFF',
+  },
+  orderAdminCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  orderCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 10,
+    marginBottom: 10,
+  },
+  orderIdBadge: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  orderDateText: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  statusBadgeBox: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  statusBadgeBoxText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  paymentStatusText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  orderClientInfoBox: {
+    backgroundColor: '#F8FAFC',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  clientInfoName: {
+    fontSize: 12,
+    color: '#1E2B58',
+    marginBottom: 2,
+  },
+  clientInfoDetail: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  orderItemsList: {
+    marginBottom: 12,
+  },
+  orderItemLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 3,
+  },
+  orderItemNameText: {
+    fontSize: 12,
+    color: '#1E2B58',
+  },
+  orderItemPriceText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  orderTotalLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 6,
+    marginTop: 4,
+  },
+  orderTotalLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  orderTotalValue: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#C5A880',
+  },
+  adminOrderActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  confirmPayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10B981',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  dispatchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  deliverButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  mapRouteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  actionBtnText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+
+  // INVENTARIO
+  addProductMainBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E2B58',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  addProductMainBtnText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  createCategoryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#C5A880',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  createCategoryBtnText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  inventoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  inventoryCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  inventoryImgWrapper: {
+    width: '100%',
+    height: 160,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    position: 'relative',
+  },
+  inventoryImg: {
+    width: '100%',
+    height: '100%',
+  },
+  discountFloatingTag: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  discountFloatingTagText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  inventoryDetailsBox: {
+    padding: 14,
+  },
+  inventoryCategoryBadge: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#C5A880',
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  inventoryItemName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+    marginBottom: 4,
+  },
+  inventoryImageNameTag: {
+    fontSize: 10,
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  priceRowAdmin: {
+    marginBottom: 10,
+  },
+  regularPriceText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#C5A880',
+  },
+  crossedPrice: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
+  },
+  discountPriceHighlight: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#DC2626',
+  },
+  stockControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  stockControlLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    marginRight: 8,
+  },
+  stockAdjustBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stockDisplayNumber: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+    paddingHorizontal: 12,
+    minWidth: 32,
+    textAlign: 'center',
+  },
+  discountConfigRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    marginBottom: 10,
+  },
+  discountRowLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    marginRight: 4,
+  },
+  discountQuickPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  discountQuickPillActive: {
+    backgroundColor: '#DC2626',
+  },
+  discountQuickPillText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  removeDiscountBtn: {
+    padding: 2,
+  },
+  inventoryFilterBar: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  invFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  invFilterChipActive: {
+    backgroundColor: '#1E2B58',
+    borderColor: '#1E2B58',
+  },
+  invFilterChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  invFilterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  statusDotSmall: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  changePhotoBtn: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(30, 43, 88, 0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  changePhotoBtnText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  cardActionsFooter: {
+    flexDirection: 'row',
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  editProdBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginRight: 6,
+  },
+  editProdBtnText: {
+    fontSize: 11,
+    color: '#1E2B58',
+    fontWeight: 'bold',
+  },
+  toggleActiveBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginRight: 6,
+  },
+  toggleActiveBtnActivate: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  toggleActiveBtnPause: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  toggleActiveBtnText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  deleteProdBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  deleteProdBtnText: {
+    fontSize: 11,
+    color: '#DC2626',
+    fontWeight: 'bold',
+  },
+
+  // COTIZACIONES
+  quoteAdminCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  quoteCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 8,
+    marginBottom: 10,
+  },
+  quoteIdText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  quoteClientText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  quoteStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  quoteStatusBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  quoteBodyRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  quoteThumbnail: {
+    width: 90,
+    height: 90,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+  },
+  quoteNoThumbnail: {
+    width: 90,
+    height: 90,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quotePromptTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+    marginBottom: 2,
+  },
+  quotePromptText: {
+    fontSize: 12,
+    color: '#334155',
+    fontStyle: 'italic',
+    marginBottom: 4,
+  },
+  quotePatternText: {
+    fontSize: 11,
+    color: '#C5A880',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  quoteDateText: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  quoteAnswerBox: {
+    backgroundColor: '#F0FDF4',
+    padding: 8,
+    borderRadius: 8,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  quoteAnswerPrice: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#166534',
+  },
+  quoteAnswerDays: {
+    fontSize: 11,
+    color: '#166534',
+  },
+  quoteAnswerNotes: {
+    fontSize: 10,
+    color: '#475569',
+    fontStyle: 'italic',
+  },
+  quoteCardFooter: {
+    flexDirection: 'row',
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 10,
+  },
+  openQuoteActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E2B58',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  openQuoteActionBtnText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  quoteChatShortcutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  quoteChatShortcutBtnText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+
+  // CHAT MODULE
+  chatModuleContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    minHeight: 480,
+  },
+  chatConversationsList: {
+    width: '100%',
+    maxWidth: 300,
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+  },
+  chatListHeader: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+    marginBottom: 10,
+  },
+  convItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  convItemActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#3B82F6',
+  },
+  convAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  convNameText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  convLastMsgText: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  convBadge: {
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  convBadgeText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  chatWindow: {
+    flex: 1,
+    minWidth: 320,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+  },
+  chatWindowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
+  },
+  chatWindowHeaderText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  chatMessagesArea: {
+    flex: 1,
+    minHeight: 300,
+  },
+  chatBubble: {
+    maxWidth: '80%',
+    padding: 10,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  chatBubbleAdmin: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#1E2B58',
+  },
+  chatBubbleClient: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F1F5F9',
+  },
+  chatSenderName: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  chatBubbleText: {
+    fontSize: 12,
+    color: '#1E2B58',
+    lineHeight: 16,
+  },
+  chatBubbleTime: {
+    fontSize: 9,
+    color: '#94A3B8',
+    alignSelf: 'flex-end',
+    marginTop: 4,
+  },
+  chatInputBar: {
+    flexDirection: 'row',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
+    gap: 8,
+  },
+  chatTextInput: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 40,
+    fontSize: 12,
+    color: '#1E2B58',
+  },
+  chatSendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#1E2B58',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chatPlaceholderBox: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+  },
+  chatPlaceholderText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+
+  // MODALES
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalDialog: {
+    width: '100%',
+    maxWidth: 500,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalDialogTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  formInputLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1E2B58',
+    marginBottom: 4,
+  },
+  formTextInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
+    color: '#1E2B58',
+    marginBottom: 10,
+  },
+  categoryChoiceChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    marginRight: 6,
+  },
+  categoryChoiceChipActive: {
+    backgroundColor: '#1E2B58',
+  },
+  categoryChoiceChipText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  categoryChoiceChipTextActive: {
+    color: '#FFFFFF',
+  },
+  saveModalBtn: {
+    backgroundColor: '#1E2B58',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  saveModalBtnText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  quoteModalPromptLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#64748B',
+  },
+  quoteModalPromptText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    color: '#1E2B58',
+    marginBottom: 12,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 30,
+  },
+  emptyContainerText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    marginTop: 10,
+  },
+
+  // ESTILOS PARA VISUALIZADOR DE FOTO A PANTALLA COMPLETA (LIGHTBOX)
+  adminImgTouchWrapper: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  quoteThumbnailTouch: {
+    position: 'relative',
+  },
+  imageZoomBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  imageZoomBadgeSmall: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    padding: 3,
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageZoomBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  fullImageModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(10, 15, 30, 0.96)',
+    justifyContent: 'space-between',
+  },
+  fullImageHeaderSafeArea: {
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  fullImageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  fullImageCategoryBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(197, 168, 128, 0.2)',
+    borderColor: '#C5A880',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginBottom: 4,
+  },
+  fullImageCategoryText: {
+    color: '#C5A880',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  fullImageTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  fullImageCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  fullImageBody: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+  },
+  fullImageLarge: {
+    width: '100%',
+    height: '100%',
+    maxHeight: 520,
+  },
+  fullImageFooterSafeArea: {
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  fullImageFooter: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  fullImagePriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  fullImagePriceLabel: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  fullImagePrice: {
+    color: '#C5A880',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  fullImageDescription: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    lineHeight: 17,
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  fullImageHint: {
+    color: '#64748B',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+
+  // BANNER DE TRAZABILIDAD EN PEDIDOS
+  orderTraceabilityBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(197, 168, 128, 0.15)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#C5A880',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    marginTop: 6,
+  },
+  orderTraceabilityText: {
+    fontSize: 11,
+    color: '#1E2B58',
+  },
+
+  // CONFIGURACIÓN, MULTI-ADMIN Y AUDITORÍA
+  settingsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  settingsCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  settingsIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  settingsCardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  settingsCardSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  feedbackMsgBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 14,
+  },
+  feedbackSuccess: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  feedbackError: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  feedbackText: {
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  settingsFormGrid: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  settingsFormGroup: {
+    gap: 4,
+  },
+  settingsLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  settingsInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
+    color: '#1E2B58',
+  },
+  passwordInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+  },
+  passwordTextInput: {
+    flex: 1,
+    paddingVertical: 9,
+    fontSize: 13,
+    color: '#1E2B58',
+  },
+  eyeBtn: {
+    padding: 6,
+  },
+  settingsPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E2B58',
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    shadowColor: '#1E2B58',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  settingsPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  settingsAccentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#C5A880',
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    shadowColor: '#C5A880',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  settingsAccentBtnText: {
+    color: '#1E2B58',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  adminListContainer: {
+    gap: 10,
+  },
+  adminUserCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
+  },
+  adminUserCardCurrent: {
+    backgroundColor: '#FEFCE8',
+    borderColor: '#FEF08A',
+  },
+  adminAvatarBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  adminCardName: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  adminCardEmail: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  adminCardDate: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  currentAdminPill: {
+    backgroundColor: '#1E2B58',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  currentAdminPillText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  roleBadge: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  roleBadgeText: {
+    color: '#1D4ED8',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  superRoleBadge: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  superRoleBadgeText: {
+    color: '#B45309',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  assignPasswordBtn: {
+    backgroundColor: '#1E2B58',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  assignPasswordBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  forgotAdminPasswordBtn: {
+    marginTop: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  forgotAdminPasswordText: {
+    fontSize: 12,
+    color: '#C5A880',
+    fontWeight: '600',
+  },
+  auditFiltersRow: {
+    marginBottom: 12,
+  },
+  auditFilterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  auditFilterChipActive: {
+    backgroundColor: '#1E2B58',
+    borderColor: '#1E2B58',
+  },
+  auditFilterChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  auditFilterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  auditSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginBottom: 14,
+  },
+  auditSearchInput: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1E2B58',
+  },
+  emptyAuditBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 36,
+  },
+  emptyAuditText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 8,
+  },
+  auditTimeline: {
+    gap: 10,
+  },
+  auditTimelineItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
+  },
+  auditTimelineIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  auditTimelineContent: {
+    flex: 1,
+  },
+  adminResponsiblePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(30, 43, 88, 0.08)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  adminResponsiblePillText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  auditTimelineTime: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  auditTimelineDetails: {
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 16,
+    marginTop: 4,
+  },
+});
