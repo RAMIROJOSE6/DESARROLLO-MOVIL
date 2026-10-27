@@ -156,7 +156,9 @@ export default function AdminScreen() {
   const [newDriverCedulaOrNit, setNewDriverCedulaOrNit] = useState('');
   const [newDriverType, setNewDriverType] = useState<'individual' | 'corporate'>('individual');
   const [newDriverCompany, setNewDriverCompany] = useState('');
-  const [newDriverVehicle, setNewDriverVehicle] = useState('');
+  const [newDriverVehicle, setNewDriverVehicle] = useState<'Moto' | 'Carro' | 'Otro' | string>('Moto');
+  const [newDriverVehicleOther, setNewDriverVehicleOther] = useState('');
+  const [isVehicleDropdownOpen, setIsVehicleDropdownOpen] = useState(false);
   const [newDriverPlate, setNewDriverPlate] = useState('');
   const [newDriverTrackingUrl, setNewDriverTrackingUrl] = useState('');
   const [isSubmittingNewDriver, setIsSubmittingNewDriver] = useState(false);
@@ -946,6 +948,10 @@ export default function AdminScreen() {
 
     setIsSubmittingNewDriver(true);
     try {
+      const finalVehicle = newDriverType === 'corporate'
+        ? (newDriverVehicle.trim() || 'Logística Nacional / Terrestre')
+        : (newDriverVehicle === 'Otro' ? (newDriverVehicleOther.trim() || 'Otro') : (newDriverVehicle || 'Moto'));
+
       const res = await createDriver({
         fullName: newDriverName.trim(),
         email: newDriverEmail.trim(),
@@ -954,7 +960,7 @@ export default function AdminScreen() {
         cedulaOrNit: newDriverCedulaOrNit.trim(),
         driverType: newDriverType,
         companyName: newDriverType === 'corporate' ? (newDriverCompany.trim() || newDriverName.trim()) : undefined,
-        vehicleType: newDriverVehicle.trim() || (newDriverType === 'corporate' ? 'Logística Nacional / Terrestre' : 'Motocicleta'),
+        vehicleType: finalVehicle,
         plateOrNit: newDriverPlate.trim() || newDriverCedulaOrNit.trim(),
         carrierTrackingUrl: newDriverType === 'corporate' ? newDriverTrackingUrl.trim() : undefined,
       });
@@ -967,9 +973,11 @@ export default function AdminScreen() {
         setNewDriverPhone('');
         setNewDriverCedulaOrNit('');
         setNewDriverCompany('');
-        setNewDriverVehicle('');
+        setNewDriverVehicle('Moto');
+        setNewDriverVehicleOther('');
         setNewDriverPlate('');
         setNewDriverTrackingUrl('');
+        setIsVehicleDropdownOpen(false);
         const successMsg = `¡${newDriverType === 'corporate' ? 'Empresa transportadora' : 'Repartidor'} registrado exitosamente! Ya puede iniciar sesión en la app móvil.`;
         if (Platform.OS === 'web') {
           window.alert(successMsg);
@@ -4672,35 +4680,181 @@ export default function AdminScreen() {
                 </View>
               </View>
 
-              {/* Teléfono y Vehículo / Placa */}
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
-                    Teléfono / WhatsApp (*):
-                  </Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Ej: 3015551234"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="phone-pad"
-                    value={newDriverPhone}
-                    onChangeText={setNewDriverPhone}
-                  />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
-                    {newDriverType === 'corporate' ? 'Flota / Modalidad:' : 'Tipo de Vehículo / Placa:'}
-                  </Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder={newDriverType === 'corporate' ? 'Carga Nacional Aérea/Terrestre' : 'Motocicleta (ABC-12D)'}
-                    placeholderTextColor="#94A3B8"
-                    value={newDriverVehicle}
-                    onChangeText={setNewDriverVehicle}
-                  />
-                </View>
+              {/* Teléfono Celular */}
+              <View style={{ marginBottom: 10 }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                  Teléfono / WhatsApp (*):
+                </Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Ej: 3015551234"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="phone-pad"
+                  value={newDriverPhone}
+                  onChangeText={setNewDriverPhone}
+                />
               </View>
+
+              {/* Fila: Tipo de Vehículo (Lista Desplegable) y Placa al lado */}
+              {newDriverType === 'individual' ? (
+                <>
+                  <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10, zIndex: 100 }}>
+                    {/* Lista desplegable para Tipo de Vehículo: Carro, Moto, Otro */}
+                    <View style={{ flex: 1, position: 'relative' }}>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                        Tipo de Vehículo (*):
+                      </Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.modalInput,
+                          {
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: '#FFFFFF',
+                          },
+                        ]}
+                        onPress={() => setIsVehicleDropdownOpen(!isVehicleDropdownOpen)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons
+                            name={newDriverVehicle === 'Carro' ? 'car-outline' : newDriverVehicle === 'Moto' ? 'bicycle-outline' : 'cube-outline'}
+                            size={16}
+                            color="#1E2B58"
+                            style={{ marginRight: 6 }}
+                          />
+                          <Text style={{ fontSize: 13, color: '#1E2B58', fontWeight: '600' }}>
+                            {newDriverVehicle || 'Moto'}
+                          </Text>
+                        </View>
+                        <Ionicons name={isVehicleDropdownOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#64748B" />
+                      </TouchableOpacity>
+
+                      {/* Menú desplegable */}
+                      {isVehicleDropdownOpen && (
+                        <View
+                          style={{
+                            position: 'absolute',
+                            top: 62,
+                            left: 0,
+                            right: 0,
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: '#CBD5E1',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 6,
+                            elevation: 8,
+                            zIndex: 9999,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {(['Carro', 'Moto', 'Otro'] as const).map(opt => (
+                            <TouchableOpacity
+                              key={opt}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                paddingVertical: 10,
+                                paddingHorizontal: 12,
+                                backgroundColor: newDriverVehicle === opt ? '#F1F5F9' : '#FFFFFF',
+                                borderBottomWidth: opt !== 'Otro' ? 1 : 0,
+                                borderBottomColor: '#F1F5F9',
+                              }}
+                              onPress={() => {
+                                setNewDriverVehicle(opt);
+                                setIsVehicleDropdownOpen(false);
+                              }}
+                            >
+                              <Ionicons
+                                name={opt === 'Carro' ? 'car' : opt === 'Moto' ? 'bicycle' : 'cube-outline'}
+                                size={16}
+                                color={newDriverVehicle === opt ? '#1E2B58' : '#64748B'}
+                                style={{ marginRight: 8 }}
+                              />
+                              <Text
+                                style={{
+                                  fontSize: 13,
+                                  color: newDriverVehicle === opt ? '#1E2B58' : '#334155',
+                                  fontWeight: newDriverVehicle === opt ? 'bold' : 'normal',
+                                  flex: 1,
+                                }}
+                              >
+                                {opt}
+                              </Text>
+                              {newDriverVehicle === opt && (
+                                <Ionicons name="checkmark" size={16} color="#1E2B58" />
+                              )}
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Diligenciar la Placa al lado */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                        Placa del Vehículo (*):
+                      </Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder={newDriverVehicle === 'Carro' ? 'Ej: ABC-123' : 'Ej: EIN-028'}
+                        placeholderTextColor="#94A3B8"
+                        autoCapitalize="characters"
+                        value={newDriverPlate}
+                        onChangeText={setNewDriverPlate}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Campo complementario si seleccionó Otro */}
+                  {newDriverVehicle === 'Otro' && (
+                    <View style={{ marginBottom: 10 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                        Especifica el tipo de vehículo:
+                      </Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder="Ej: Bicicleta de carga, Patineta eléctrica, Motocarro..."
+                        placeholderTextColor="#94A3B8"
+                        value={newDriverVehicleOther}
+                        onChangeText={setNewDriverVehicleOther}
+                      />
+                    </View>
+                  )}
+                </>
+              ) : (
+                /* Para empresa corporativa */
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                      Flota / Modalidad de Envíos:
+                    </Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Carga Nacional Aérea/Terrestre"
+                      placeholderTextColor="#94A3B8"
+                      value={newDriverVehicle}
+                      onChangeText={setNewDriverVehicle}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                      Código de Convenio / Flota:
+                    </Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Ej: FLOTA-COL-01"
+                      placeholderTextColor="#94A3B8"
+                      value={newDriverPlate}
+                      onChangeText={setNewDriverPlate}
+                    />
+                  </View>
+                </View>
+              )}
 
               {/* Si es corporativo: URL de Rastreo */}
               {newDriverType === 'corporate' && (
