@@ -213,6 +213,8 @@ export function useAdmin() {
       driverEmail: string;
       driverPhone: string;
       driverType: 'individual' | 'corporate';
+      vehicleType?: string;
+      plateOrNit?: string;
       trackingGuideNumber?: string;
       carrierTrackingUrl?: string;
     }
@@ -224,10 +226,11 @@ export function useAdmin() {
     const dName = driverInfo?.driverName || target.driverName || 'José Guajiro';
     const isCorp = driverInfo?.driverType === 'corporate' || target.driverType === 'corporate';
     const guide = driverInfo?.trackingGuideNumber || target.trackingGuideNumber;
+    const vehicleDesc = driverInfo?.vehicleType ? `${driverInfo.vehicleType}${driverInfo.plateOrNit ? ` (Placa ${driverInfo.plateOrNit})` : ''}` : '';
 
     const statusMsg = isCorp
       ? `¡Pedido Despachado vía ${dName}! Guía: ${guide || 'En trámite'}.`
-      : `¡Pedido Despachado por ${adminUser?.fullName || 'Administrador'}! Repartidor ${dName} va en camino a tu dirección.`;
+      : `¡Pedido Despachado por ${adminUser?.fullName || 'Administrador'}! Repartidor ${dName}${vehicleDesc ? ` en ${vehicleDesc}` : ''} va en camino a tu dirección.`;
 
     const etaMsg = isCorp
       ? 'En tránsito con transportadora (1 a 3 días hábiles)'
@@ -244,6 +247,8 @@ export function useAdmin() {
       driverEmail: driverInfo?.driverEmail || target.driverEmail,
       driverPhone: driverInfo?.driverPhone || target.driverPhone,
       driverType: isCorp ? 'corporate' : 'individual',
+      vehicleType: driverInfo?.vehicleType || target.vehicleType,
+      plateOrNit: driverInfo?.plateOrNit || target.plateOrNit,
       trackingGuideNumber: guide,
       carrierTrackingUrl: driverInfo?.carrierTrackingUrl || target.carrierTrackingUrl,
     });
@@ -255,7 +260,7 @@ export function useAdmin() {
       title: isCorp ? '🚚 ¡Tu pedido va en camino con transportadora!' : '🛵 ¡Tu pedido ha sido despachado!',
       message: isCorp
         ? `Tu pedido #${orderId} ha sido despachado con la empresa ${dName}. Número de Guía: ${guide || 'Generada'}. ¡Puedes hacerle seguimiento en línea!`
-        : `Tu pedido #${orderId} ha sido despachado por administración. El repartidor ${dName} va en camino a tu dirección. ¡Ahora puedes seguirlo en vivo!`,
+        : `Tu pedido #${orderId} va en camino con el repartidor ${dName} (${vehicleDesc || 'Reparto express'} • Tel: ${driverInfo?.driverPhone || target.driverPhone || 'En la app'}). ¡Ahora puedes seguirlo en vivo!`,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       read: false,
     });

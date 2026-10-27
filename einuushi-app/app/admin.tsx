@@ -146,6 +146,7 @@ export default function AdminScreen() {
   const [selectedOrderToDispatch, setSelectedOrderToDispatch] = useState<Order | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<string>('');
   const [customGuideNumber, setCustomGuideNumber] = useState<string>('');
+  const [dispatchDriverFilter, setDispatchDriverFilter] = useState<'suggested' | 'local' | 'corporate' | 'all'>('suggested');
 
   // Modal de Registro de Nuevo Repartidor o Transportadora
   const [isNewDriverModalVisible, setIsNewDriverModalVisible] = useState(false);
@@ -886,12 +887,20 @@ export default function AdminScreen() {
     }
   };
 
-  // Abrir modal de asignación y despacho a repartidor
+  // Abrir modal de asignación y despacho a repartidor con sugerencia según destino
   const openDispatchModal = (order: Order) => {
     setSelectedOrderToDispatch(order);
-    const defaultDriver = drivers.find(d => d.id === order.driverId) || drivers[0];
-    setSelectedDriverId(defaultDriver ? defaultDriver.id : '');
+    const orderCity = (order.city || '').toLowerCase().trim();
+    const isLocalRiohacha = !orderCity || orderCity.includes('riohacha') || orderCity.includes('guajira');
+
+    // Sugerencia inteligente de repartidor según destino
+    const suggestedDriver = isLocalRiohacha
+      ? drivers.find(d => d.driverType === 'individual' || !d.driverType) || drivers[0]
+      : drivers.find(d => d.driverType === 'corporate') || drivers[0];
+
+    setSelectedDriverId(suggestedDriver ? suggestedDriver.id : (drivers[0]?.id || ''));
     setCustomGuideNumber(order.trackingGuideNumber || `ENV-${Date.now().toString().slice(-6)}`);
+    setDispatchDriverFilter('suggested');
     setIsDispatchModalVisible(true);
   };
 
@@ -915,6 +924,8 @@ export default function AdminScreen() {
       driverEmail: matchedDriver.email,
       driverPhone: matchedDriver.phone,
       driverType: (matchedDriver.driverType || 'individual') as 'individual' | 'corporate',
+      vehicleType: matchedDriver.vehicleType,
+      plateOrNit: matchedDriver.plateOrNit,
       trackingGuideNumber: matchedDriver.driverType === 'corporate' ? customGuideNumber.trim() : undefined,
       carrierTrackingUrl: matchedDriver.carrierTrackingUrl,
     };
@@ -4436,16 +4447,134 @@ export default function AdminScreen() {
                 </Text>
               </View>
 
+              {/* Recomendación inteligente según ciudad de destino */}
+              {(() => {
+                const city = (selectedOrderToDispatch?.city || '').toLowerCase().trim();
+                const isLocal = !city || city.includes('riohacha') || city.includes('guajira');
+                return (
+                  <View
+                    style={{
+                      backgroundColor: isLocal ? '#EFF6FF' : '#FEF3C7',
+                      borderRadius: 8,
+                      padding: 10,
+                      marginBottom: 12,
+                      borderWidth: 1,
+                      borderColor: isLocal ? '#BFDBFE' : '#FDE68A',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Ionicons
+                      name={isLocal ? "navigate-circle" : "airplane"}
+                      size={22}
+                      color={isLocal ? "#1D4ED8" : "#B45309"}
+                      style={{ marginRight: 8 }}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: isLocal ? "#1E40AF" : "#92400E" }}>
+                        {isLocal ? '🎯 Destino Urbano Local (Riohacha / La Guajira)' : `✈️ Envío Nacional / Intermunicipal (${selectedOrderToDispatch?.city || 'Otra Ciudad'})`}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: isLocal ? "#1E3A8A" : "#78350F", marginTop: 2 }}>
+                        {isLocal
+                          ? '💡 Sugerencia: Asigna a un Repartidor Local (Moto / Carro) para entrega directa.'
+                          : '💡 Sugerencia: Despacha con una Empresa Transportadora Aliada con guía de tracking.'}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
               <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E2B58', marginBottom: 8 }}>
                 Selecciona el Repartidor o Transportadora:
               </Text>
 
-              {(!drivers || drivers.length === 0) ? (
-                <Text style={{ fontStyle: 'italic', color: '#EF4444', marginBottom: 12 }}>
-                  No hay repartidores registrados en el sistema. Registra uno primero en Configuración.
-                </Text>
-              ) : (
-                drivers.map((drv: any) => {
+              {/* Filtros de selección de repartidor */}
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                <TouchableOpacity
+                  style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 16,
+                    backgroundColor: dispatchDriverFilter === 'suggested' ? '#1E2B58' : '#F1F5F9',
+                  }}
+                  onPress={() => setDispatchDriverFilter('suggested')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: dispatchDriverFilter === 'suggested' ? '#FFFFFF' : '#475569' }}>
+                    🎯 Sugeridos
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 16,
+                    backgroundColor: dispatchDriverFilter === 'local' ? '#1E2B58' : '#F1F5F9',
+                  }}
+                  onPress={() => setDispatchDriverFilter('local')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: dispatchDriverFilter === 'local' ? '#FFFFFF' : '#475569' }}>
+                    🛵 Locales ({drivers.filter(d => d.driverType !== 'corporate').length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 16,
+                    backgroundColor: dispatchDriverFilter === 'corporate' ? '#1E2B58' : '#F1F5F9',
+                  }}
+                  onPress={() => setDispatchDriverFilter('corporate')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: dispatchDriverFilter === 'corporate' ? '#FFFFFF' : '#475569' }}>
+                    🚚 Transportadoras ({drivers.filter(d => d.driverType === 'corporate').length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 16,
+                    backgroundColor: dispatchDriverFilter === 'all' ? '#1E2B58' : '#F1F5F9',
+                  }}
+                  onPress={() => setDispatchDriverFilter('all')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: dispatchDriverFilter === 'all' ? '#FFFFFF' : '#475569' }}>
+                    🌐 Todos ({drivers.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {(() => {
+                const city = (selectedOrderToDispatch?.city || '').toLowerCase().trim();
+                const isLocal = !city || city.includes('riohacha') || city.includes('guajira');
+
+                const filteredDrivers = drivers.filter(drv => {
+                  if (dispatchDriverFilter === 'local') return drv.driverType !== 'corporate';
+                  if (dispatchDriverFilter === 'corporate') return drv.driverType === 'corporate';
+                  if (dispatchDriverFilter === 'suggested') {
+                    return isLocal ? drv.driverType !== 'corporate' : drv.driverType === 'corporate';
+                  }
+                  return true;
+                });
+
+                const displayList = filteredDrivers.length > 0 ? filteredDrivers : drivers;
+
+                if (!displayList || displayList.length === 0) {
+                  return (
+                    <Text style={{ fontStyle: 'italic', color: '#EF4444', marginBottom: 12 }}>
+                      No hay repartidores registrados en esta categoría. Registra uno en Configuración.
+                    </Text>
+                  );
+                }
+
+                return displayList.map((drv: any) => {
                   const isSelected = selectedDriverId === drv.id;
                   const isCorp = drv.driverType === 'corporate';
                   return (
@@ -4466,9 +4595,9 @@ export default function AdminScreen() {
                     >
                       <View
                         style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 18,
+                          width: 38,
+                          height: 38,
+                          borderRadius: 19,
                           backgroundColor: isCorp ? '#EEF2FF' : '#FEF3C7',
                           justifyContent: 'center',
                           alignItems: 'center',
@@ -4476,7 +4605,7 @@ export default function AdminScreen() {
                         }}
                       >
                         <Ionicons
-                          name={isCorp ? 'business' : 'bicycle'}
+                          name={isCorp ? 'business' : drv.vehicleType === 'Carro' ? 'car' : 'bicycle'}
                           size={18}
                           color={isCorp ? '#4338CA' : '#D97706'}
                         />
@@ -4491,7 +4620,7 @@ export default function AdminScreen() {
                           </Text>
                         </View>
                         <Text style={{ fontSize: 11, color: '#64748B' }}>
-                          📞 {drv.phone} • {drv.vehicleType || (isCorp ? 'Logística Nacional' : 'Moto')}
+                          📞 {drv.phone} • {drv.vehicleType || (isCorp ? 'Logística Nacional' : 'Moto')}{drv.plateOrNit ? ` • Placa: ${drv.plateOrNit}` : ''}
                         </Text>
                       </View>
                       <Ionicons
@@ -4501,8 +4630,8 @@ export default function AdminScreen() {
                       />
                     </TouchableOpacity>
                   );
-                })
-              )}
+                });
+              })()}
 
               {/* Número de Guía o Código de Tracking */}
               <View style={{ marginTop: 10, marginBottom: 16 }}>

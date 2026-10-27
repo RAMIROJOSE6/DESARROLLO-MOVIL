@@ -1963,6 +1963,24 @@ export default function HomeScreen() {
 
                     <Text style={styles.etaText}>⏱️ {order.eta}</Text>
 
+                    {/* DATOS DEL REPARTIDOR O TRANSPORTADORA ASIGNADA */}
+                    {order.driverName && (
+                      <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name={order.driverType === 'corporate' ? "business" : "bicycle"} size={16} color="#1E2B58" style={{ marginRight: 6 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#1E2B58' }}>
+                            {order.driverType === 'corporate' ? '🚚 Transportadora: ' : '🛵 Repartidor Asignado: '}
+                            {order.driverName}
+                          </Text>
+                          <Text style={{ fontSize: 10, color: '#64748B' }}>
+                            {order.driverType === 'corporate'
+                              ? (order.trackingGuideNumber ? `Guía oficial: #${order.trackingGuideNumber}` : 'Despacho nacional')
+                              : `${order.vehicleType || 'Moto'}${order.plateOrNit ? ` • Placa: ${order.plateOrNit}` : ''} • Tel: ${order.driverPhone || 'En la app'}`}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
                     {/* Aviso cuando el repartidor llega a la dirección o si va en ruta */}
                     {(order.statusCode === 'ARRIVED' || order.statusCode === 'DISPATCHED') && (
                       <View style={[styles.orderArrivedNoticeBox, order.statusCode === 'DISPATCHED' && { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
@@ -1973,8 +1991,8 @@ export default function HomeScreen() {
                           </Text>
                           <Text style={[styles.orderArrivedNoticeText, order.statusCode === 'DISPATCHED' && { color: '#1E3A8A' }]}>
                             {order.statusCode === 'ARRIVED' 
-                              ? 'José Guajiro está en tu puerta esperando la entrega. Por favor confirma la recepción y pago:'
-                              : 'José Guajiro está en tu zona. Si ya recibiste tu paquete, confirma la entrega y pago:'}
+                              ? `${order.driverName || 'El repartidor'} está en tu puerta esperando la entrega. Por favor confirma la recepción y pago:`
+                              : `${order.driverName || 'El repartidor'} está en tu zona. Si ya recibiste tu paquete, confirma la entrega y pago:`}
                           </Text>
                         </View>
                       </View>
@@ -2288,7 +2306,7 @@ export default function HomeScreen() {
                     <Text style={styles.deliveryDriverVehicle}>
                       {activeTrackingOrder?.driverType === 'corporate'
                         ? (activeTrackingOrder?.trackingGuideNumber ? `Guía Oficial: #${activeTrackingOrder.trackingGuideNumber}` : 'Despacho Nacional Aliado')
-                        : 'Reparto Express Local'}
+                        : `${activeTrackingOrder?.vehicleType || 'Moto'}${activeTrackingOrder?.plateOrNit ? ` • Placa: ${activeTrackingOrder.plateOrNit}` : ''} • Tel: ${activeTrackingOrder?.driverPhone || 'En la app'}`}
                     </Text>
                   </View>
                   {simulationProgress < 100 && (

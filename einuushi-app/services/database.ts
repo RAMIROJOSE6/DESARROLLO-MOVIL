@@ -96,6 +96,8 @@ export interface Order {
   driverEmail?: string; // Correo de la cuenta del repartidor
   driverPhone?: string; // Teléfono de contacto del repartidor
   driverType?: 'individual' | 'corporate'; // individual (repartidor) | corporate (transportadora)
+  vehicleType?: string; // Tipo de vehículo (Moto, Carro, etc.)
+  plateOrNit?: string; // Placa de vehículo o NIT corporativo
   trackingGuideNumber?: string; // Número de guía de envío de la transportadora
   carrierTrackingUrl?: string; // Enlace web de rastreo del paquete
   driverCollectionEvidence?: string; // Nota/evidencia de cobro tomada por el repartidor
@@ -961,6 +963,8 @@ export async function updateOrderStatusInDb(
     driverEmail?: string;
     driverPhone?: string;
     driverType?: 'individual' | 'corporate';
+    vehicleType?: string;
+    plateOrNit?: string;
     trackingGuideNumber?: string;
     carrierTrackingUrl?: string;
     driverCollectionEvidence?: string;
@@ -1184,15 +1188,18 @@ export async function assignOrderToDriver(
     driverEmail: string;
     driverPhone: string;
     driverType: 'individual' | 'corporate';
+    vehicleType?: string;
+    plateOrNit?: string;
     trackingGuideNumber?: string;
     carrierTrackingUrl?: string;
   },
   adminResponsible: string
 ): Promise<void> {
   const isCorp = driverData.driverType === 'corporate';
+  const vehicleDesc = driverData.vehicleType ? `${driverData.vehicleType}${driverData.plateOrNit ? ` (Placa ${driverData.plateOrNit})` : ''}` : 'Reparto express';
   const statusMessage = isCorp
     ? `¡Pedido Despachado con ${driverData.driverName}! Guía de transporte: ${driverData.trackingGuideNumber || 'En asignación'}.`
-    : `¡Pedido Despachado por ${adminResponsible}! Repartidor ${driverData.driverName} va en camino a tu dirección.`;
+    : `¡Pedido Despachado por ${adminResponsible}! Repartidor ${driverData.driverName} (${vehicleDesc}) va en camino a tu dirección.`;
 
   await updateOrderStatusInDb(orderId, {
     statusCode: 'DISPATCHED',
@@ -1205,6 +1212,8 @@ export async function assignOrderToDriver(
     driverEmail: driverData.driverEmail,
     driverPhone: driverData.driverPhone,
     driverType: driverData.driverType,
+    vehicleType: driverData.vehicleType,
+    plateOrNit: driverData.plateOrNit,
     trackingGuideNumber: driverData.trackingGuideNumber,
     carrierTrackingUrl: driverData.carrierTrackingUrl,
   });
@@ -1215,7 +1224,7 @@ export async function assignOrderToDriver(
     title: '📦 ¡Tu pedido ha sido despachado!',
     message: isCorp
       ? `Tu pedido #${orderId} ha sido despachado a través de ${driverData.driverName}. Guía de envío: ${driverData.trackingGuideNumber || 'Generada'}. ¡Puedes hacerle seguimiento en línea!`
-      : `Tu pedido #${orderId} ha sido asignado al repartidor ${driverData.driverName} (Tel: ${driverData.driverPhone}). ¡Ahora puedes seguirlo en vivo!`,
+      : `Tu pedido #${orderId} ha sido asignado al repartidor ${driverData.driverName} (${vehicleDesc} • Tel: ${driverData.driverPhone}). ¡Ahora puedes seguirlo en vivo!`,
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     read: false,
   });
