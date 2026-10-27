@@ -1843,26 +1843,40 @@ export default function AdminScreen() {
                       </Text>
                     </View>
 
-                    {/* LOGÍSTICA: REPARTIDOR O TRANSPORTADORA ASIGNADA */}
-                    <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name={order.driverType === 'corporate' ? "business" : "bicycle"} size={16} color="#1E2B58" style={{ marginRight: 8 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 12, color: '#1E2B58' }}>
-                          {order.driverType === 'corporate' ? '🚚 Empresa Transportadora: ' : '🛵 Repartidor Asignado: '}
-                          <Text style={{ fontWeight: 'bold' }}>{order.driverName || 'José Guajiro (Repartidor Local)'}</Text>
-                        </Text>
-                        {order.trackingGuideNumber ? (
-                          <Text style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
-                            Nº de Guía: <Text style={{ fontWeight: 'bold', color: '#1E2B58' }}>#{order.trackingGuideNumber}</Text>
+                    {/* LOGÍSTICA: ESTADO DE REPARTIDOR / ASIGNACIÓN */}
+                    {order.statusCode === 'PENDING' ? (
+                      <View style={{ backgroundColor: '#FEF3C7', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginTop: 6, borderWidth: 1, borderColor: '#FDE68A', flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name="hourglass-outline" size={16} color="#B45309" style={{ marginRight: 8 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 12, color: '#92400E', fontWeight: 'bold' }}>
+                            ⏳ Pendiente de Despacho y Asignación de Repartidor
                           </Text>
-                        ) : null}
-                        {order.driverPhone ? (
-                          <Text style={{ fontSize: 11, color: '#64748B' }}>
-                            Contacto directo: <Text style={{ fontWeight: 'bold' }}>{order.driverPhone}</Text>
+                          <Text style={{ fontSize: 11, color: '#B45309', marginTop: 1 }}>
+                            Pulsa "Asignar y Despachar" para elegir el repartidor local o transportadora según el destino.
                           </Text>
-                        ) : null}
+                        </View>
                       </View>
-                    </View>
+                    ) : (
+                      <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name={order.driverType === 'corporate' ? "business" : "bicycle"} size={16} color="#1E2B58" style={{ marginRight: 8 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 12, color: '#1E2B58' }}>
+                            {order.driverType === 'corporate' ? '🚚 Empresa Transportadora: ' : '🛵 Repartidor Asignado: '}
+                            <Text style={{ fontWeight: 'bold' }}>{order.driverName || 'Sin asignar'}</Text>
+                          </Text>
+                          {order.trackingGuideNumber ? (
+                            <Text style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+                              Nº de Guía: <Text style={{ fontWeight: 'bold', color: '#1E2B58' }}>#{order.trackingGuideNumber}</Text>
+                            </Text>
+                          ) : null}
+                          {order.driverPhone ? (
+                            <Text style={{ fontSize: 11, color: '#64748B' }}>
+                              Contacto directo: <Text style={{ fontWeight: 'bold' }}>{order.driverPhone}</Text>
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    )}
 
                     {/* CONFIRMACIÓN DE ENTREGA Y CARGA DE VENTA */}
                     {order.statusCode === 'DELIVERED' && (

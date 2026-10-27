@@ -348,11 +348,12 @@ export default function HomeScreen() {
 
   const notifyOrderArrival = (order: any) => {
     const notifId = `notif-${order.id}-${Date.now()}`;
+    const driverLabel = order.driverName ? `El repartidor ${order.driverName}` : 'El repartidor';
     const newNotif = {
       id: notifId,
       orderId: order.id,
       title: `¡Tu pedido ${order.id} ya llegó a tu dirección!`,
-      message: `El repartidor José Guajiro está en tu puerta (${order.client?.address || 'tu dirección'}). Recibe tu paquete y califica el servicio.`,
+      message: `${driverLabel} está en tu puerta (${order.client?.address || 'tu dirección'}). Recibe tu paquete y confirma la entrega.`,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       read: false,
     };
@@ -371,7 +372,7 @@ export default function HomeScreen() {
     setInAppToast({
       id: `toast-${Date.now()}`,
       title: `¡Tu pedido ${order.id} ya llegó a tu dirección! 🛵`,
-      message: `El repartidor José Guajiro está esperando en tu puerta. Toca aquí para marcar como recibido y calificar.`,
+      message: `${driverLabel} está esperando en tu puerta. Toca aquí para confirmar la recepción a satisfacción.`,
       orderId: order.id
     });
   };
@@ -461,6 +462,10 @@ export default function HomeScreen() {
             return Math.min(100, prev + 15);
           });
         }, 1500);
+      } else {
+        // Pedido PENDING (Esperando despacho y asignación)
+        setSimulationProgress(0);
+        setDeliveryRating(0);
       }
     }
     return () => clearInterval(timer);
@@ -878,12 +883,20 @@ export default function HomeScreen() {
         subtotal: subtotalProductsValue,
         shipping: shippingCostValue,
         total: finalTotalValue,
-        status: isContraentrega ? 'Pendiente de despacho (Pago contra entrega)' : 'Pendiente de despacho en tienda',
+        status: isContraentrega ? 'Pendiente de despacho y asignación de repartidor (Contra entrega)' : 'Pendiente de despacho y asignación de repartidor',
         statusCode: 'PENDING',
         paymentStatus: isContraentrega ? 'PENDING' : 'PAID',
         settlementStatus: (isContraentrega ? 'PENDING_SETTLEMENT' : 'SETTLED') as 'PENDING_SETTLEMENT' | 'SETTLED',
-        driverName: 'José Guajiro',
-        eta: 'Esperando despacho por parte del administrador',
+        driverName: undefined,
+        driverId: undefined,
+        driverEmail: undefined,
+        driverPhone: undefined,
+        driverType: undefined,
+        vehicleType: undefined,
+        plateOrNit: undefined,
+        trackingGuideNumber: undefined,
+        carrierTrackingUrl: undefined,
+        eta: 'Esperando despacho y asignación de repartidor por administración',
         rating: 0
       };
 
@@ -929,8 +942,8 @@ export default function HomeScreen() {
       const initialNotif = {
         id: `notif-${orderId}-${Date.now()}`,
         orderId: orderId,
-        title: `Pedido ${orderId} registrado con éxito`,
-        message: `Tu pedido #${orderId} ha sido registrado y está en estado Pendiente de despacho. El administrador lo despachará en breve para habilitar el seguimiento en vivo.`,
+        title: `📦 Pedido ${orderId} recibido en tienda`,
+        message: `Tu pedido #${orderId} ha sido confirmado: Pendiente de despacho y asignación de repartidor por el administrador. En cuanto sea despachado se te notificará el repartidor asignado.`,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         read: false
       };
@@ -979,6 +992,9 @@ export default function HomeScreen() {
       receivedAt: formattedReceivedAt,
     }).catch(err => console.warn('Error updating order status in SQLite Drizzle:', err));
 
+    const matchedOrd = orders.find(o => o.id === orderId);
+    const driverLabel = matchedOrd?.driverName ? `del repartidor ${matchedOrd.driverName}` : 'del repartidor';
+
     // Registrar trazabilidad para el administrador
     logAdminActivity({
       adminEmail: effectiveUser?.email || 'cliente@einuushi.com',
@@ -986,7 +1002,7 @@ export default function HomeScreen() {
       actionType: 'DELIVERY_CONFIRMED',
       entityType: 'PEDIDO',
       entityId: orderId,
-      details: `El cliente confirmó la recepción y pago del pedido #${orderId} el ${formattedReceivedAt}.${isContra ? ' Dinero en efectivo en poder del repartidor José Guajiro (Pendiente entrega en tienda y Paz y Salvo).' : ' Venta finalizada.'}`,
+      details: `El cliente confirmó la recepción y pago del pedido #${orderId} el ${formattedReceivedAt}.${isContra ? ` Dinero en efectivo en poder ${driverLabel} (Pendiente entrega en tienda y Paz y Salvo).` : ' Venta finalizada.'}`,
     }).catch(e => console.warn('Error logging admin activity:', e));
 
     setOrders(prevOrders =>
@@ -1907,27 +1923,38 @@ export default function HomeScreen() {
                     <Ionicons name="notifications" size={16} color="#DC2626" style={{marginRight: 6}} />
                     <Text style={styles.notificationsSectionTitle}>Avisos de Entrega ({notifications.length})</Text>
                   </View>
-                  {notifications.map(notif => (
-                    <TouchableOpacity 
-                      key={notif.id} 
-                      style={[styles.notifItemCard, !notif.read && styles.notifItemCardUnread]}
-                      onPress={() => {
-                        const matched = orders.find(o => o.id === notif.orderId);
-                        if (matched) {
-                          setActiveTrackingOrder(matched);
-                          setIsAlertsModalVisible(false);
-                          setIsTrackingModalVisible(true);
-                        }
-                      }}
-                    >
-                      <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 2}}>
-                        <Ionicons name="bicycle-outline" size={14} color="#166534" style={{marginRight: 4}} />
-                        <Text style={styles.notifItemTitle}>{notif.title}</Text>
-                      </View>
-                      <Text style={styles.notifItemMessage}>{notif.message}</Text>
-                      <Text style={styles.notifItemTime}>⏰ {notif.time} • Toca para abrir mapa y calificar</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {notifications.map(notif => {
+                    const isDispatched = notif.title.toLowerCase().includes('despachado') || notif.message.toLowerCase().includes('camino') || notif.title.toLowerCase().includes('camino');
+                    const isArrived = notif.title.toLowerCase().includes('llegó') || notif.title.toLowerCase().includes('puerta');
+                    const isDelivered = notif.title.toLowerCase().includes('entregado') || notif.title.toLowerCase().includes('recibido a satisfacción');
+
+                    const iconName = isArrived ? 'location' : isDispatched ? 'bicycle' : isDelivered ? 'checkmark-circle' : 'hourglass-outline';
+                    const iconColor = isArrived ? '#DC2626' : isDispatched ? '#166534' : isDelivered ? '#2563EB' : '#D97706';
+
+                    return (
+                      <TouchableOpacity 
+                        key={notif.id} 
+                        style={[styles.notifItemCard, !notif.read && styles.notifItemCardUnread]}
+                        onPress={() => {
+                          const matched = orders.find(o => o.id === notif.orderId);
+                          if (matched) {
+                            setActiveTrackingOrder(matched);
+                            setIsAlertsModalVisible(false);
+                            setIsTrackingModalVisible(true);
+                          }
+                        }}
+                      >
+                        <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 2}}>
+                          <Ionicons name={iconName} size={15} color={iconColor} style={{marginRight: 6}} />
+                          <Text style={styles.notifItemTitle}>{notif.title}</Text>
+                        </View>
+                        <Text style={styles.notifItemMessage}>{notif.message}</Text>
+                        <Text style={styles.notifItemTime}>
+                          ⏰ {notif.time} {isDispatched ? '• Toca para seguir repartidor en vivo' : '• Toca para consultar estado'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               )}
 
@@ -1963,8 +1990,15 @@ export default function HomeScreen() {
 
                     <Text style={styles.etaText}>⏱️ {order.eta}</Text>
 
-                    {/* DATOS DEL REPARTIDOR O TRANSPORTADORA ASIGNADA */}
-                    {order.driverName && (
+                    {/* DATOS DEL REPARTIDOR O AVISO PENDIENTE DE ASIGNACIÓN */}
+                    {order.statusCode === 'PENDING' ? (
+                      <View style={{ backgroundColor: '#FEF3C7', borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: '#FDE68A', flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name="hourglass-outline" size={16} color="#92400E" style={{ marginRight: 6 }} />
+                        <Text style={{ fontSize: 11, color: '#92400E', flex: 1 }}>
+                          <Text style={{ fontWeight: 'bold' }}>Esperando a la Tienda:</Text> Pendiente de despacho y asignación de repartidor por parte del administrador.
+                        </Text>
+                      </View>
+                    ) : order.driverName ? (
                       <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' }}>
                         <Ionicons name={order.driverType === 'corporate' ? "business" : "bicycle"} size={16} color="#1E2B58" style={{ marginRight: 6 }} />
                         <View style={{ flex: 1 }}>
@@ -1979,7 +2013,7 @@ export default function HomeScreen() {
                           </Text>
                         </View>
                       </View>
-                    )}
+                    ) : null}
 
                     {/* Aviso cuando el repartidor llega a la dirección o si va en ruta */}
                     {(order.statusCode === 'ARRIVED' || order.statusCode === 'DISPATCHED') && (
@@ -2240,7 +2274,7 @@ export default function HomeScreen() {
                 <View style={styles.mapFloatingAddressBadge}>
                   <Ionicons name="location" size={13} color="#C5A880" style={{marginRight: 4}} />
                   <Text style={styles.mapFloatingAddressText} numberOfLines={1}>
-                    {activeTrackingOrder?.client?.address || 'Riohacha, La Guajira'}
+                    {activeTrackingOrder?.statusCode === 'PENDING' ? '🏪 Tienda Einuushi • En preparación' : (activeTrackingOrder?.client?.address || 'Riohacha, La Guajira')}
                   </Text>
                 </View>
               </View>
@@ -2292,53 +2326,76 @@ export default function HomeScreen() {
                 </View>
               )}
 
-              {/* Tarjeta de Datos del Repartidor */}
-              <View style={styles.deliveryInfoCard}>
-                <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 8}}>
-                  <View style={styles.deliveryAvatarBox}>
-                    <Ionicons name={activeTrackingOrder?.driverType === 'corporate' ? "business" : "person"} size={18} color="#1E2B58" />
+              {/* Tarjeta de Datos del Repartidor o Aviso Pendiente */}
+              {activeTrackingOrder?.statusCode === 'PENDING' ? (
+                <View style={[styles.deliveryInfoCard, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <View style={[styles.deliveryAvatarBox, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
+                      <Ionicons name="hourglass-outline" size={18} color="#B45309" />
+                    </View>
+                    <View style={{ marginLeft: 10, flex: 1 }}>
+                      <Text style={[styles.deliveryDriverName, { color: '#B45309' }]}>
+                        ⏳ Pendiente de Despacho y Asignación
+                      </Text>
+                      <Text style={[styles.deliveryDriverVehicle, { color: '#92400E' }]}>
+                        Esperando que la tienda procese y asigne el repartidor
+                      </Text>
+                    </View>
                   </View>
-                  <View style={{marginLeft: 10, flex: 1}}>
-                    <Text style={styles.deliveryDriverName}>
-                      {activeTrackingOrder?.driverType === 'corporate' ? '🚚 Empresa de Envíos: ' : '🛵 Repartidor: '}
-                      {activeTrackingOrder?.driverName || 'José Guajiro'}
-                    </Text>
-                    <Text style={styles.deliveryDriverVehicle}>
-                      {activeTrackingOrder?.driverType === 'corporate'
-                        ? (activeTrackingOrder?.trackingGuideNumber ? `Guía Oficial: #${activeTrackingOrder.trackingGuideNumber}` : 'Despacho Nacional Aliado')
-                        : `${activeTrackingOrder?.vehicleType || 'Moto'}${activeTrackingOrder?.plateOrNit ? ` • Placa: ${activeTrackingOrder.plateOrNit}` : ''} • Tel: ${activeTrackingOrder?.driverPhone || 'En la app'}`}
+                  <View style={{ backgroundColor: '#FEF3C7', borderRadius: 8, padding: 8 }}>
+                    <Text style={{ fontSize: 11, color: '#78350F', lineHeight: 16 }}>
+                      📦 Tu pedido está confirmado y registrado en la tienda. En cuanto el administrador lo despache y te asigne el repartidor correspondiente (o empresa transportadora si es nacional), podrás ver sus datos y seguir la ruta en tiempo real.
                     </Text>
                   </View>
-                  {simulationProgress < 100 && (
-                    <TouchableOpacity 
-                      style={styles.callDriverButton} 
-                      onPress={() => {
-                        if (activeTrackingOrder?.driverType === 'corporate' && activeTrackingOrder?.carrierTrackingUrl) {
-                          Linking.openURL(activeTrackingOrder.carrierTrackingUrl).catch(() => showAlert('Rastreo Web', `Guía: ${activeTrackingOrder.trackingGuideNumber}`));
-                        } else {
-                          showAlert('Contacto Logístico', `Contactando a ${activeTrackingOrder?.driverName || 'José Guajiro'} (${activeTrackingOrder?.driverPhone || '+57 300 000 0000'})...`);
-                        }
-                      }}
-                    >
-                      <Ionicons name={activeTrackingOrder?.driverType === 'corporate' ? "globe-outline" : "call"} size={16} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  )}
                 </View>
+              ) : (
+                <View style={styles.deliveryInfoCard}>
+                  <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 8}}>
+                    <View style={styles.deliveryAvatarBox}>
+                      <Ionicons name={activeTrackingOrder?.driverType === 'corporate' ? "business" : "person"} size={18} color="#1E2B58" />
+                    </View>
+                    <View style={{marginLeft: 10, flex: 1}}>
+                      <Text style={styles.deliveryDriverName}>
+                        {activeTrackingOrder?.driverType === 'corporate' ? '🚚 Empresa de Envíos: ' : '🛵 Repartidor: '}
+                        {activeTrackingOrder?.driverName || 'Por asignar'}
+                      </Text>
+                      <Text style={styles.deliveryDriverVehicle}>
+                        {activeTrackingOrder?.driverType === 'corporate'
+                          ? (activeTrackingOrder?.trackingGuideNumber ? `Guía Oficial: #${activeTrackingOrder.trackingGuideNumber}` : 'Despacho Nacional Aliado')
+                          : `${activeTrackingOrder?.vehicleType || 'Moto'}${activeTrackingOrder?.plateOrNit ? ` • Placa: ${activeTrackingOrder.plateOrNit}` : ''} • Tel: ${activeTrackingOrder?.driverPhone || 'En la app'}`}
+                      </Text>
+                    </View>
+                    {simulationProgress < 100 && (
+                      <TouchableOpacity 
+                        style={styles.callDriverButton} 
+                        onPress={() => {
+                          if (activeTrackingOrder?.driverType === 'corporate' && activeTrackingOrder?.carrierTrackingUrl) {
+                            Linking.openURL(activeTrackingOrder.carrierTrackingUrl).catch(() => showAlert('Rastreo Web', `Guía: ${activeTrackingOrder.trackingGuideNumber}`));
+                          } else {
+                            showAlert('Contacto Logístico', `Contactando a ${activeTrackingOrder?.driverName || 'el encargado logístico'} (${activeTrackingOrder?.driverPhone || '+57 300 000 0000'})...`);
+                          }
+                        }}
+                      >
+                        <Ionicons name={activeTrackingOrder?.driverType === 'corporate' ? "globe-outline" : "call"} size={16} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
 
-                <View style={styles.progressBarContainer}>
-                  <View style={[styles.progressBarFill, { width: `${simulationProgress}%` }]} />
+                  <View style={styles.progressBarContainer}>
+                    <View style={[styles.progressBarFill, { width: `${simulationProgress}%` }]} />
+                  </View>
+                  
+                  <Text style={styles.progressStatusText}>
+                    {simulationProgress < 40 
+                      ? '📦 Despachado: En camino hacia tu destino' 
+                      : simulationProgress < 100 
+                      ? '🛵 Repartidor en tu zona: Está a pocas cuadras de tu dirección' 
+                      : activeTrackingOrder?.statusCode === 'ARRIVED'
+                      ? '🛵 ¡El repartidor ha llegado a tu dirección! Confirma tu entrega abajo.'
+                      : '🎉 ¡Pedido Entregado con Éxito y Recibido a Satisfacción!'}
+                  </Text>
                 </View>
-                
-                <Text style={styles.progressStatusText}>
-                  {simulationProgress < 40 
-                    ? '📦 Despachado: En camino hacia tu destino en Riohacha' 
-                    : simulationProgress < 100 
-                    ? '🛵 Repartidor en tu zona: Está a pocas cuadras de tu dirección' 
-                    : activeTrackingOrder?.statusCode === 'ARRIVED'
-                    ? '🛵 ¡El repartidor ha llegado a tu dirección! Confirma tu entrega abajo.'
-                    : '🎉 ¡Pedido Entregado con Éxito y Recibido a Satisfacción!'}
-                </Text>
-              </View>
+              )}
 
               {/* Botón de Confirmación cuando el repartidor llega a la dirección */}
               {(activeTrackingOrder?.statusCode === 'ARRIVED' || simulationProgress >= 100) && activeTrackingOrder?.statusCode !== 'DELIVERED' && (
@@ -2347,7 +2404,7 @@ export default function HomeScreen() {
                     <Ionicons name="bicycle" size={24} color="#166534" style={{marginRight: 8}} />
                     <View style={{flex: 1}}>
                       <Text style={styles.orderArrivedActionTitle}>¡El repartidor ha llegado a tu puerta!</Text>
-                      <Text style={styles.orderArrivedActionSub}>José Guajiro está en tu dirección con tu pedido.</Text>
+                      <Text style={styles.orderArrivedActionSub}>{activeTrackingOrder?.driverName || 'El repartidor'} está en tu dirección con tu pedido.</Text>
                     </View>
                   </View>
                   <TouchableOpacity 

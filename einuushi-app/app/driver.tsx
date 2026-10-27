@@ -101,18 +101,17 @@ export default function DriverScreen() {
       const driverNameNorm = driverUser.fullName.toLowerCase().trim();
 
       const matched = allOrders.filter(o => {
+        // Un pedido solo le aparece al repartidor una vez haya sido despachado por el administrador
+        if (o.statusCode === 'PENDING') return false;
+
         const oDriverEmail = (o.driverEmail || '').toLowerCase().trim();
         const oDriverId = o.driverId || '';
         const oDriverName = (o.driverName || '').toLowerCase().trim();
 
-        // Si el pedido tiene asignado explícitamente este repartidor
-        if (oDriverEmail === driverEmailNorm || oDriverId === driverUser.id) return true;
+        // Validar si el pedido fue asignado explícitamente a este repartidor
+        if (oDriverEmail && oDriverEmail === driverEmailNorm) return true;
+        if (oDriverId && oDriverId === driverUser.id) return true;
         if (oDriverName && driverNameNorm && oDriverName.includes(driverNameNorm)) return true;
-
-        // Si es José Guajiro por defecto y el pedido no tiene asignación específica pero es reparto local
-        if (driverEmailNorm.includes('jose') && (!o.driverEmail || o.driverName === 'José Guajiro')) {
-          return true;
-        }
 
         return false;
       });
