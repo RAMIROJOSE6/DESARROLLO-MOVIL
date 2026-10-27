@@ -515,13 +515,14 @@ export default function DriverScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Regresar a la tienda */}
+            {/* Regresar al inicio de sesión principal */}
             <TouchableOpacity
               style={styles.backToStoreBtn}
-              onPress={() => router.replace('/home')}
+              onPress={() => router.replace('/')}
+              activeOpacity={0.7}
             >
-              <Ionicons name="arrow-back" size={16} color="#64748B" style={{ marginRight: 4 }} />
-              <Text style={styles.backToStoreBtnText}>Volver a la Tienda Einuushi</Text>
+              <Ionicons name="arrow-back" size={16} color="#64748B" style={{ marginRight: 6 }} />
+              <Text style={styles.backToStoreBtnText}>Volver</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -1797,3 +1798,4 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 });
+
