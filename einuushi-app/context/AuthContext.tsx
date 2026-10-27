@@ -14,7 +14,7 @@ import {
 interface AuthContextType {
   currentUser: User | null;
   isLoadingSession: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string; user?: User }>;
   register: (userData: Omit<User, 'id' | 'createdAt'>) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   resetPassword: (email: string, newPass: string) => Promise<{ success: boolean; message?: string }>;
@@ -66,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.success && res.user) {
       setCurrentUser(res.user);
       await saveSessionUser(res.user);
-      return { success: true };
+      return { success: true, user: res.user };
     }
     return { success: false, message: res.message };
   };

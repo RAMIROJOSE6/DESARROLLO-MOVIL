@@ -2278,15 +2278,31 @@ export default function HomeScreen() {
               <View style={styles.deliveryInfoCard}>
                 <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 8}}>
                   <View style={styles.deliveryAvatarBox}>
-                    <Ionicons name="person" size={18} color="#1E2B58" />
+                    <Ionicons name={activeTrackingOrder?.driverType === 'corporate' ? "business" : "person"} size={18} color="#1E2B58" />
                   </View>
                   <View style={{marginLeft: 10, flex: 1}}>
-                    <Text style={styles.deliveryDriverName}>Repartidor: José Guajiro</Text>
-                    <Text style={styles.deliveryDriverVehicle}>Moto de reparto • Placa EIN-028</Text>
+                    <Text style={styles.deliveryDriverName}>
+                      {activeTrackingOrder?.driverType === 'corporate' ? '🚚 Empresa de Envíos: ' : '🛵 Repartidor: '}
+                      {activeTrackingOrder?.driverName || 'José Guajiro'}
+                    </Text>
+                    <Text style={styles.deliveryDriverVehicle}>
+                      {activeTrackingOrder?.driverType === 'corporate'
+                        ? (activeTrackingOrder?.trackingGuideNumber ? `Guía Oficial: #${activeTrackingOrder.trackingGuideNumber}` : 'Despacho Nacional Aliado')
+                        : 'Reparto Express Local'}
+                    </Text>
                   </View>
                   {simulationProgress < 100 && (
-                    <TouchableOpacity style={styles.callDriverButton} onPress={() => showAlert('Llamada al Repartidor', 'Llamando al repartidor José Guajiro (+57 300 000 0000)...')}>
-                      <Ionicons name="call" size={16} color="#FFFFFF" />
+                    <TouchableOpacity 
+                      style={styles.callDriverButton} 
+                      onPress={() => {
+                        if (activeTrackingOrder?.driverType === 'corporate' && activeTrackingOrder?.carrierTrackingUrl) {
+                          Linking.openURL(activeTrackingOrder.carrierTrackingUrl).catch(() => showAlert('Rastreo Web', `Guía: ${activeTrackingOrder.trackingGuideNumber}`));
+                        } else {
+                          showAlert('Contacto Logístico', `Contactando a ${activeTrackingOrder?.driverName || 'José Guajiro'} (${activeTrackingOrder?.driverPhone || '+57 300 000 0000'})...`);
+                        }
+                      }}
+                    >
+                      <Ionicons name={activeTrackingOrder?.driverType === 'corporate' ? "globe-outline" : "call"} size={16} color="#FFFFFF" />
                     </TouchableOpacity>
                   )}
                 </View>

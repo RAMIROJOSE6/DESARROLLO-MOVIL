@@ -50,6 +50,7 @@ export default function AdminScreen() {
     messages,
     users,
     adminUsers,
+    drivers,
     activityLogs,
     analytics,
     activeTrackingOrder,
@@ -62,6 +63,8 @@ export default function AdminScreen() {
     markOrderArrived,
     markOrderDelivered,
     settleOrderPazYSalvo,
+    createDriver,
+    updateDriver,
     updateStock,
     toggleDiscount,
     addProduct,
@@ -134,6 +137,26 @@ export default function AdminScreen() {
   const [settlementTransferRef, setSettlementTransferRef] = useState('');
   const [settlementNotes, setSettlementNotes] = useState('');
   const [isSubmittingSettlement, setIsSubmittingSettlement] = useState(false);
+
+  // Modal de Despacho y Asignación de Repartidor / Transportadora
+  const [isDispatchModalVisible, setIsDispatchModalVisible] = useState(false);
+  const [selectedOrderToDispatch, setSelectedOrderToDispatch] = useState<Order | null>(null);
+  const [selectedDriverId, setSelectedDriverId] = useState<string>('');
+  const [customGuideNumber, setCustomGuideNumber] = useState<string>('');
+
+  // Modal de Registro de Nuevo Repartidor o Transportadora
+  const [isNewDriverModalVisible, setIsNewDriverModalVisible] = useState(false);
+  const [newDriverName, setNewDriverName] = useState('');
+  const [newDriverEmail, setNewDriverEmail] = useState('');
+  const [newDriverPassword, setNewDriverPassword] = useState('');
+  const [newDriverPhone, setNewDriverPhone] = useState('');
+  const [newDriverCedulaOrNit, setNewDriverCedulaOrNit] = useState('');
+  const [newDriverType, setNewDriverType] = useState<'individual' | 'corporate'>('individual');
+  const [newDriverCompany, setNewDriverCompany] = useState('');
+  const [newDriverVehicle, setNewDriverVehicle] = useState('');
+  const [newDriverPlate, setNewDriverPlate] = useState('');
+  const [newDriverTrackingUrl, setNewDriverTrackingUrl] = useState('');
+  const [isSubmittingNewDriver, setIsSubmittingNewDriver] = useState(false);
 
   const [isNewProductModalVisible, setIsNewProductModalVisible] = useState(false);
   const [isNewCategoryModalVisible, setIsNewCategoryModalVisible] = useState(false);
@@ -855,6 +878,108 @@ export default function AdminScreen() {
       Alert.alert('Error', 'No se pudo registrar la liquidación del pedido.');
     } finally {
       setIsSubmittingSettlement(false);
+    }
+  };
+
+  // Abrir modal de asignación y despacho a repartidor
+  const openDispatchModal = (order: Order) => {
+    setSelectedOrderToDispatch(order);
+    const defaultDriver = drivers.find(d => d.id === order.driverId) || drivers[0];
+    setSelectedDriverId(defaultDriver ? defaultDriver.id : '');
+    setCustomGuideNumber(order.trackingGuideNumber || `ENV-${Date.now().toString().slice(-6)}`);
+    setIsDispatchModalVisible(true);
+  };
+
+  // Confirmar despacho y asignación
+  const handleConfirmDispatchWithDriver = async () => {
+    if (!selectedOrderToDispatch) return;
+
+    const matchedDriver = drivers.find(d => d.id === selectedDriverId) || drivers[0];
+    if (!matchedDriver) {
+      if (Platform.OS === 'web') {
+        window.alert('No hay repartidores disponibles. Por favor registra uno primero.');
+      } else {
+        Alert.alert('Sin repartidores', 'No hay repartidores disponibles. Por favor registra uno primero.');
+      }
+      return;
+    }
+
+    const driverInfo = {
+      driverId: matchedDriver.id,
+      driverName: matchedDriver.fullName,
+      driverEmail: matchedDriver.email,
+      driverPhone: matchedDriver.phone,
+      driverType: (matchedDriver.driverType || 'individual') as 'individual' | 'corporate',
+      trackingGuideNumber: matchedDriver.driverType === 'corporate' ? customGuideNumber.trim() : undefined,
+      carrierTrackingUrl: matchedDriver.carrierTrackingUrl,
+    };
+
+    try {
+      await dispatchOrder(selectedOrderToDispatch.id, driverInfo);
+      setIsDispatchModalVisible(false);
+      const msg = matchedDriver.driverType === 'corporate'
+        ? `¡Pedido #${selectedOrderToDispatch.id} despachado a través de ${matchedDriver.fullName}! Guía: ${customGuideNumber}`
+        : `¡Pedido #${selectedOrderToDispatch.id} despachado y asignado al repartidor ${matchedDriver.fullName}!`;
+      if (Platform.OS === 'web') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Despacho Exitoso 🚀', msg);
+      }
+    } catch (err) {
+      Alert.alert('Error', 'No se pudo despachar el pedido.');
+    }
+  };
+
+  // Guardar nuevo repartidor o transportadora
+  const handleSaveNewDriver = async () => {
+    if (!newDriverName.trim() || !newDriverEmail.trim() || !newDriverPhone.trim() || !newDriverCedulaOrNit.trim()) {
+      if (Platform.OS === 'web') {
+        window.alert('Por favor complete todos los campos obligatorios (*).');
+      } else {
+        Alert.alert('Datos incompletos', 'Por favor complete todos los campos obligatorios (*).');
+      }
+      return;
+    }
+
+    setIsSubmittingNewDriver(true);
+    try {
+      const res = await createDriver({
+        fullName: newDriverName.trim(),
+        email: newDriverEmail.trim(),
+        password: newDriverPassword.trim() || 'repartidor2026',
+        phone: newDriverPhone.trim(),
+        cedulaOrNit: newDriverCedulaOrNit.trim(),
+        driverType: newDriverType,
+        companyName: newDriverType === 'corporate' ? (newDriverCompany.trim() || newDriverName.trim()) : undefined,
+        vehicleType: newDriverVehicle.trim() || (newDriverType === 'corporate' ? 'Logística Nacional / Terrestre' : 'Motocicleta'),
+        plateOrNit: newDriverPlate.trim() || newDriverCedulaOrNit.trim(),
+        carrierTrackingUrl: newDriverType === 'corporate' ? newDriverTrackingUrl.trim() : undefined,
+      });
+
+      if (res.success) {
+        setIsNewDriverModalVisible(false);
+        setNewDriverName('');
+        setNewDriverEmail('');
+        setNewDriverPassword('');
+        setNewDriverPhone('');
+        setNewDriverCedulaOrNit('');
+        setNewDriverCompany('');
+        setNewDriverVehicle('');
+        setNewDriverPlate('');
+        setNewDriverTrackingUrl('');
+        const successMsg = `¡${newDriverType === 'corporate' ? 'Empresa transportadora' : 'Repartidor'} registrado exitosamente! Ya puede iniciar sesión en la app móvil.`;
+        if (Platform.OS === 'web') {
+          window.alert(successMsg);
+        } else {
+          Alert.alert('Registro Exitoso ✅', successMsg);
+        }
+      } else {
+        Alert.alert('Error al registrar', res.message || 'No se pudo completar el registro.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Error inesperado al registrar.');
+    } finally {
+      setIsSubmittingNewDriver(false);
     }
   };
 
@@ -1696,6 +1821,27 @@ export default function AdminScreen() {
                       </Text>
                     </View>
 
+                    {/* LOGÍSTICA: REPARTIDOR O TRANSPORTADORA ASIGNADA */}
+                    <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name={order.driverType === 'corporate' ? "business" : "bicycle"} size={16} color="#1E2B58" style={{ marginRight: 8 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, color: '#1E2B58' }}>
+                          {order.driverType === 'corporate' ? '🚚 Empresa Transportadora: ' : '🛵 Repartidor Asignado: '}
+                          <Text style={{ fontWeight: 'bold' }}>{order.driverName || 'José Guajiro (Repartidor Local)'}</Text>
+                        </Text>
+                        {order.trackingGuideNumber ? (
+                          <Text style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+                            Nº de Guía: <Text style={{ fontWeight: 'bold', color: '#1E2B58' }}>#{order.trackingGuideNumber}</Text>
+                          </Text>
+                        ) : null}
+                        {order.driverPhone ? (
+                          <Text style={{ fontSize: 11, color: '#64748B' }}>
+                            Contacto directo: <Text style={{ fontWeight: 'bold' }}>{order.driverPhone}</Text>
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+
                     {/* CONFIRMACIÓN DE ENTREGA Y CARGA DE VENTA */}
                     {order.statusCode === 'DELIVERED' && (
                       <View style={styles.orderDeliveredSuccessBanner}>
@@ -1788,11 +1934,11 @@ export default function AdminScreen() {
                     {order.statusCode === 'PENDING' && (
                       <TouchableOpacity
                         style={styles.dispatchButton}
-                        onPress={() => dispatchOrder(order.id)}
+                        onPress={() => openDispatchModal(order)}
                         activeOpacity={0.8}
                       >
                         <Ionicons name="bicycle" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
-                        <Text style={styles.actionBtnText}>Despachar a Ruta</Text>
+                        <Text style={styles.actionBtnText}>Asignar y Despachar</Text>
                       </TouchableOpacity>
                     )}
 
@@ -2718,6 +2864,129 @@ export default function AdminScreen() {
                     </View>
                   );
                 })}
+              </View>
+            </View>
+
+            {/* SECCIÓN 3B: GESTIÓN DE REPARTIDORES Y TRANSPORTADORAS */}
+            <View style={styles.settingsCard}>
+              <View style={styles.settingsCardHeader}>
+                <View style={[styles.settingsIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="bicycle" size={22} color="#1E2B58" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsCardTitle}>Equipo de Repartidores & Transportadoras</Text>
+                  <Text style={styles.settingsCardSubtitle}>
+                    Repartidores locales y empresas transportadoras aliadas para entregas locales y nacionales
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.saveProfileBtn, { backgroundColor: '#1E2B58', paddingVertical: 8, paddingHorizontal: 12, marginTop: 0 }]}
+                  onPress={() => setIsNewDriverModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={[styles.saveProfileBtnText, { fontSize: 12 }]}>Nuevo Repartidor</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ marginTop: 14, gap: 10 }}>
+                {(!drivers || drivers.length === 0) ? (
+                  <Text style={{ fontStyle: 'italic', color: '#64748B', fontSize: 13, textAlign: 'center', paddingVertical: 12 }}>
+                    No hay repartidores o transportadoras registrados aún.
+                  </Text>
+                ) : (
+                  drivers.map((drv: any) => {
+                    const isCorp = drv.driverType === 'corporate';
+                    return (
+                      <View
+                        key={drv.id}
+                        style={{
+                          backgroundColor: '#F8FAFC',
+                          borderRadius: 10,
+                          padding: 12,
+                          borderWidth: 1,
+                          borderColor: '#E2E8F0',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: 10,
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 240 }}>
+                          <View
+                            style={{
+                              width: 42,
+                              height: 42,
+                              borderRadius: 21,
+                              backgroundColor: isCorp ? '#EEF2FF' : '#FEF3C7',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              marginRight: 12,
+                            }}
+                          >
+                            <Ionicons
+                              name={isCorp ? 'business' : 'bicycle'}
+                              size={22}
+                              color={isCorp ? '#4338CA' : '#D97706'}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1E2B58' }}>
+                                {drv.fullName}
+                              </Text>
+                              <View
+                                style={{
+                                  backgroundColor: isCorp ? '#E0E7FF' : '#FEF9C3',
+                                  paddingHorizontal: 7,
+                                  paddingVertical: 2,
+                                  borderRadius: 4,
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 'bold',
+                                    color: isCorp ? '#3730A3' : '#854D0E',
+                                  }}
+                                >
+                                  {isCorp ? 'TRANSPORTADORA CORPORATIVA' : 'REPARTIDOR LOCAL'}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+                              ✉️ {drv.email} • 📞 {drv.phone || 'Sin teléfono'}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                              🆔 {isCorp ? 'NIT: ' : 'C.C: '}{drv.cedulaOrNit || drv.cedula || 'N/A'} • 🚗 {drv.vehicleType || (isCorp ? 'Flota Terrestre' : 'Moto')} {drv.plateOrNit ? `(${drv.plateOrNit})` : ''}
+                            </Text>
+                            {drv.carrierTrackingUrl ? (
+                              <Text style={{ fontSize: 11, color: '#2563EB', marginTop: 2 }}>
+                                🔗 Rastreo: {drv.carrierTrackingUrl}
+                              </Text>
+                            ) : null}
+                          </View>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <View
+                            style={{
+                              backgroundColor: '#DCFCE7',
+                              paddingHorizontal: 8,
+                              paddingVertical: 3,
+                              borderRadius: 6,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Ionicons name="checkmark-circle" size={13} color="#15803D" style={{ marginRight: 4 }} />
+                            <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#15803D' }}>Activo</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
               </View>
             </View>
 
@@ -3987,6 +4256,393 @@ export default function AdminScreen() {
               </View>
             </SafeAreaView>
           ) : null}
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL 1: DESPACHO Y ASIGNACIÓN DE REPARTIDOR O TRANSPORTADORA    */}
+      {/* ================================================================= */}
+      <Modal
+        visible={isDispatchModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsDispatchModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 560 }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: '#1E2B58',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 10,
+                  }}
+                >
+                  <Ionicons name="paper-plane" size={18} color="#C5A880" />
+                </View>
+                <View>
+                  <Text style={styles.modalDialogTitle}>Asignar y Despachar Pedido</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>
+                    Orden #{selectedOrderToDispatch?.id} • {selectedOrderToDispatch?.client?.name}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setIsDispatchModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+              {/* Resumen del Destino */}
+              <View
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  borderRadius: 8,
+                  padding: 12,
+                  marginBottom: 16,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 2 }}>
+                  📍 Destino de Entrega:
+                </Text>
+                <Text style={{ fontSize: 13, color: '#334155' }}>
+                  {selectedOrderToDispatch?.client?.address}, {selectedOrderToDispatch?.city || 'Riohacha'}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                  Monto a cobrar / Total: <Text style={{ fontWeight: 'bold', color: '#166534' }}>${(selectedOrderToDispatch?.total || 0).toLocaleString('es-CO')} COP</Text> ({selectedOrderToDispatch?.client?.payment})
+                </Text>
+              </View>
+
+              <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E2B58', marginBottom: 8 }}>
+                Selecciona el Repartidor o Transportadora:
+              </Text>
+
+              {(!drivers || drivers.length === 0) ? (
+                <Text style={{ fontStyle: 'italic', color: '#EF4444', marginBottom: 12 }}>
+                  No hay repartidores registrados en el sistema. Registra uno primero en Configuración.
+                </Text>
+              ) : (
+                drivers.map((drv: any) => {
+                  const isSelected = selectedDriverId === drv.id;
+                  const isCorp = drv.driverType === 'corporate';
+                  return (
+                    <TouchableOpacity
+                      key={drv.id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        padding: 12,
+                        borderRadius: 8,
+                        borderWidth: 2,
+                        borderColor: isSelected ? '#1E2B58' : '#E2E8F0',
+                        backgroundColor: isSelected ? '#F0F4FF' : '#FFFFFF',
+                        marginBottom: 8,
+                      }}
+                      onPress={() => setSelectedDriverId(drv.id)}
+                      activeOpacity={0.8}
+                    >
+                      <View
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: isCorp ? '#EEF2FF' : '#FEF3C7',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 10,
+                        }}
+                      >
+                        <Ionicons
+                          name={isCorp ? 'business' : 'bicycle'}
+                          size={18}
+                          color={isCorp ? '#4338CA' : '#D97706'}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E2B58' }}>
+                            {drv.fullName}
+                          </Text>
+                          <Text style={{ fontSize: 10, color: isCorp ? '#4338CA' : '#D97706', fontWeight: 'bold' }}>
+                            {isCorp ? 'CORPORATIVO' : 'LOCAL'}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#64748B' }}>
+                          📞 {drv.phone} • {drv.vehicleType || (isCorp ? 'Logística Nacional' : 'Moto')}
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                        size={20}
+                        color={isSelected ? '#1E2B58' : '#94A3B8'}
+                      />
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+
+              {/* Número de Guía o Código de Tracking */}
+              <View style={{ marginTop: 10, marginBottom: 16 }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                  Número de Guía / Código de Despacho:
+                </Text>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: '#F8FAFC' }]}
+                  placeholder="Ej: ENV-982341 o Servientrega 892341829"
+                  placeholderTextColor="#94A3B8"
+                  value={customGuideNumber}
+                  onChangeText={setCustomGuideNumber}
+                />
+                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
+                  Este número se enviará al cliente para consultar y rastrear el paquete en vivo.
+                </Text>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActionButtonsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setIsDispatchModalVisible(false)}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalConfirmButton, { backgroundColor: '#1E2B58' }]}
+                onPress={handleConfirmDispatchWithDriver}
+              >
+                <Ionicons name="paper-plane" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.modalConfirmButtonText}>Confirmar Despacho</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL 2: REGISTRO DE NUEVO REPARTIDOR O TRANSPORTADORA            */}
+      {/* ================================================================= */}
+      <Modal
+        visible={isNewDriverModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsNewDriverModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 580 }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    backgroundColor: '#1E2B58',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 10,
+                  }}
+                >
+                  <Ionicons name="person-add" size={18} color="#C5A880" />
+                </View>
+                <View>
+                  <Text style={styles.modalDialogTitle}>Nuevo Repartidor / Transportadora</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>
+                    Habilita acceso logístico sincronizado al portal móvil
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setIsNewDriverModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+              {/* Selector de Tipo: Individual vs Corporativa */}
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 6 }}>
+                  Tipo de Prestador Logístico (*):
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      borderWidth: 2,
+                      borderColor: newDriverType === 'individual' ? '#1E2B58' : '#CBD5E1',
+                      backgroundColor: newDriverType === 'individual' ? '#F0F4FF' : '#FFFFFF',
+                    }}
+                    onPress={() => setNewDriverType('individual')}
+                  >
+                    <Ionicons name="bicycle" size={18} color={newDriverType === 'individual' ? '#1E2B58' : '#64748B'} style={{ marginRight: 6 }} />
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: newDriverType === 'individual' ? '#1E2B58' : '#64748B' }}>
+                      Repartidor Local
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      borderWidth: 2,
+                      borderColor: newDriverType === 'corporate' ? '#1E2B58' : '#CBD5E1',
+                      backgroundColor: newDriverType === 'corporate' ? '#F0F4FF' : '#FFFFFF',
+                    }}
+                    onPress={() => setNewDriverType('corporate')}
+                  >
+                    <Ionicons name="business" size={18} color={newDriverType === 'corporate' ? '#1E2B58' : '#64748B'} style={{ marginRight: 6 }} />
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: newDriverType === 'corporate' ? '#1E2B58' : '#64748B' }}>
+                      Empresa Corporativa
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Nombre o Razón Social */}
+              <View style={{ marginBottom: 10 }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                  {newDriverType === 'corporate' ? 'Razón Social / Empresa (*):' : 'Nombre Completo del Repartidor (*):'}
+                </Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder={newDriverType === 'corporate' ? 'Ej: Servientrega Express S.A.S.' : 'Ej: Carlos Peñalver'}
+                  placeholderTextColor="#94A3B8"
+                  value={newDriverName}
+                  onChangeText={setNewDriverName}
+                />
+              </View>
+
+              {/* Cédula o NIT */}
+              <View style={{ marginBottom: 10 }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                  {newDriverType === 'corporate' ? 'NIT de la Empresa (*):' : 'Cédula de Ciudadanía (*):'}
+                </Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder={newDriverType === 'corporate' ? 'Ej: 900.123.456-7' : 'Ej: 1124019283'}
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numeric"
+                  value={newDriverCedulaOrNit}
+                  onChangeText={setNewDriverCedulaOrNit}
+                />
+              </View>
+
+              {/* Correo Electrónico y Contraseña */}
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                    Correo de Acceso (*):
+                  </Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="correo@repartidor.com"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={newDriverEmail}
+                    onChangeText={setNewDriverEmail}
+                  />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                    Contraseña Inicial:
+                  </Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Mínimo 6 caracteres"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry
+                    value={newDriverPassword}
+                    onChangeText={setNewDriverPassword}
+                  />
+                </View>
+              </View>
+
+              {/* Teléfono y Vehículo / Placa */}
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                    Teléfono / WhatsApp (*):
+                  </Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Ej: 3015551234"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="phone-pad"
+                    value={newDriverPhone}
+                    onChangeText={setNewDriverPhone}
+                  />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                    {newDriverType === 'corporate' ? 'Flota / Modalidad:' : 'Tipo de Vehículo / Placa:'}
+                  </Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder={newDriverType === 'corporate' ? 'Carga Nacional Aérea/Terrestre' : 'Motocicleta (ABC-12D)'}
+                    placeholderTextColor="#94A3B8"
+                    value={newDriverVehicle}
+                    onChangeText={setNewDriverVehicle}
+                  />
+                </View>
+              </View>
+
+              {/* Si es corporativo: URL de Rastreo */}
+              {newDriverType === 'corporate' && (
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                    URL Oficial de Rastreo Web (Opcional):
+                  </Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="https://www.servientrega.com/rastreo?id="
+                    placeholderTextColor="#94A3B8"
+                    autoCapitalize="none"
+                    value={newDriverTrackingUrl}
+                    onChangeText={setNewDriverTrackingUrl}
+                  />
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalActionButtonsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setIsNewDriverModalVisible(false)}
+                disabled={isSubmittingNewDriver}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalConfirmButton, { backgroundColor: '#1E2B58' }]}
+                onPress={handleSaveNewDriver}
+                disabled={isSubmittingNewDriver}
+              >
+                <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.modalConfirmButtonText}>
+                  {isSubmittingNewDriver ? 'Guardando...' : 'Registrar en Sistema'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
     </View>
@@ -5980,6 +6636,30 @@ const styles = StyleSheet.create({
   },
   modalConfirmButtonText: {
     fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  modalInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: '#1E2B58',
+  },
+  saveProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E2B58',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  saveProfileBtnText: {
+    fontSize: 13,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },

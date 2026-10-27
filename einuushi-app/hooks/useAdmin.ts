@@ -32,6 +32,10 @@ import {
   getAdminUsers,
   getAdminActivityLogs,
   logAdminActivity,
+  getDrivers,
+  createDriverUser,
+  updateDriverUser,
+  assignOrderToDriver,
   updateAdminProfile as dbUpdateAdminProfile,
   createAdminUser as dbCreateAdminUser,
   changeAdminPasswordBySuperAdmin,
@@ -53,6 +57,7 @@ export function useAdmin() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [usersList, setUsersList] = useState<User[]>([]);
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
+  const [drivers, setDrivers] = useState<User[]>([]);
   const [activityLogs, setActivityLogs] = useState<AdminActivityLog[]>([]);
   const [analytics, setAnalytics] = useState<StoreAnalytics | null>(null);
 
@@ -65,7 +70,7 @@ export function useAdmin() {
       const activeSession = await getAdminSession();
       const isSuper = isSuperAdmin(activeSession);
 
-      const [ord, prod, cat, qts, msgs, anl, usrs, logs, admins] = await Promise.all([
+      const [ord, prod, cat, qts, msgs, anl, usrs, logs, admins, drvs] = await Promise.all([
         getOrders(),
         getProducts(),
         getCategories(),
@@ -75,6 +80,7 @@ export function useAdmin() {
         isSuper ? getUsers() : Promise.resolve([]),
         getAdminActivityLogs(100),
         getAdminUsers(activeSession),
+        getDrivers(),
       ]);
       setOrders(ord);
       setProducts(prod);
@@ -83,6 +89,7 @@ export function useAdmin() {
       setMessages(msgs);
       setAnalytics(anl);
       setUsersList(isSuper ? usrs : []);
+      setDrivers(drvs || []);
       // Si es administrador regular, no tiene acceso a visualizar movimientos ni datos del Superadministrador
       setActivityLogs(
         isSuper
@@ -197,26 +204,58 @@ export function useAdmin() {
     await refreshAll();
   };
 
-  // Despachar pedido con trazabilidad
-  const dispatchOrder = async (orderId: string) => {
+  // Despachar pedido con selección de repartidor o transportadora corporativa
+  const dispatchOrder = async (
+    orderId: string,
+    driverInfo?: {
+      driverId: string;
+      driverName: string;
+      driverEmail: string;
+      driverPhone: string;
+      driverType: 'individual' | 'corporate';
+      trackingGuideNumber?: string;
+      carrierTrackingUrl?: string;
+    }
+  ) => {
     const target = orders.find(o => o.id === orderId);
     if (!target) return;
     const adminLabel = adminUser ? `${adminUser.fullName} (${adminUser.email})` : 'Administrador';
 
+    const dName = driverInfo?.driverName || target.driverName || 'José Guajiro';
+    const isCorp = driverInfo?.driverType === 'corporate' || target.driverType === 'corporate';
+    const guide = driverInfo?.trackingGuideNumber || target.trackingGuideNumber;
+
+    const statusMsg = isCorp
+      ? `¡Pedido Despachado vía ${dName}! Guía: ${guide || 'En trámite'}.`
+      : `¡Pedido Despachado por ${adminUser?.fullName || 'Administrador'}! Repartidor ${dName} va en camino a tu dirección.`;
+
+    const etaMsg = isCorp
+      ? 'En tránsito con transportadora (1 a 3 días hábiles)'
+      : 'En ruta (aprox. 15-25 min)';
+
     await updateOrderStatusInDb(orderId, {
       statusCode: 'DISPATCHED',
-      status: `¡Pedido Despachado por ${adminUser?.fullName || 'Administrador'}! Repartidor José Guajiro va en camino a tu dirección.`,
-      eta: 'En ruta (aprox. 15-25 min)',
+      status: statusMsg,
+      eta: etaMsg,
       dispatchedAt: Date.now(),
       adminResponsible: adminLabel,
+      driverName: dName,
+      driverId: driverInfo?.driverId || target.driverId,
+      driverEmail: driverInfo?.driverEmail || target.driverEmail,
+      driverPhone: driverInfo?.driverPhone || target.driverPhone,
+      driverType: isCorp ? 'corporate' : 'individual',
+      trackingGuideNumber: guide,
+      carrierTrackingUrl: driverInfo?.carrierTrackingUrl || target.carrierTrackingUrl,
     });
 
-    // Notificar al cliente en tiempo real que su pedido ya fue despachado para habilitar seguimiento en vivo
+    // Notificar al cliente en tiempo real que su pedido ya fue despachado
     await saveNotificationToDb({
       id: `notif-${orderId}-${Date.now()}`,
       orderId: orderId,
-      title: '🛵 ¡Tu pedido ha sido despachado!',
-      message: `Tu pedido #${orderId} ha sido despachado por administración. El repartidor José Guajiro va en camino a tu dirección. ¡Ahora puedes seguirlo en vivo en el mapa!`,
+      title: isCorp ? '🚚 ¡Tu pedido va en camino con transportadora!' : '🛵 ¡Tu pedido ha sido despachado!',
+      message: isCorp
+        ? `Tu pedido #${orderId} ha sido despachado con la empresa ${dName}. Número de Guía: ${guide || 'Generada'}. ¡Puedes hacerle seguimiento en línea!`
+        : `Tu pedido #${orderId} ha sido despachado por administración. El repartidor ${dName} va en camino a tu dirección. ¡Ahora puedes seguirlo en vivo!`,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       read: false,
     });
@@ -228,7 +267,7 @@ export function useAdmin() {
       actionType: 'DISPATCH_ORDER',
       entityType: 'PEDIDO',
       entityId: orderId,
-      details: `${adminUser?.fullName || 'Administrador'} despachó a ruta el pedido #${orderId} para el cliente ${target.client?.name || 'Cliente'}.`,
+      details: `${adminUser?.fullName || 'Administrador'} despachó el pedido #${orderId} asignado a ${dName} (${isCorp ? 'Empresa Transportadora' : 'Repartidor Propio'})${guide ? ` con Guía #${guide}` : ''}.`,
     });
 
     setOrders(prev =>
@@ -237,15 +276,65 @@ export function useAdmin() {
           ? {
               ...o,
               statusCode: 'DISPATCHED',
-              status: `¡Pedido Despachado por ${adminUser?.fullName || 'Administrador'}! Repartidor José Guajiro va en camino.`,
-              eta: 'En ruta (aprox. 15-25 min)',
+              status: statusMsg,
+              eta: etaMsg,
               dispatchedAt: Date.now(),
               adminResponsible: adminLabel,
+              driverName: dName,
+              driverId: driverInfo?.driverId || target.driverId,
+              driverEmail: driverInfo?.driverEmail || target.driverEmail,
+              driverPhone: driverInfo?.driverPhone || target.driverPhone,
+              driverType: isCorp ? 'corporate' : 'individual',
+              trackingGuideNumber: guide,
+              carrierTrackingUrl: driverInfo?.carrierTrackingUrl || target.carrierTrackingUrl,
             }
           : o
       )
     );
     await refreshAll();
+  };
+
+  const createDriver = async (driverData: {
+    fullName: string;
+    email: string;
+    password?: string;
+    phone: string;
+    city?: string;
+    cedulaOrNit: string;
+    driverType: 'individual' | 'corporate';
+    companyName?: string;
+    vehicleType?: string;
+    plateOrNit?: string;
+    carrierTrackingUrl?: string;
+  }) => {
+    const res = await createDriverUser(
+      {
+        id: adminUser?.id,
+        email: adminUser?.email || 'admin@einuushi.com',
+        name: adminUser?.fullName || 'Administrador',
+      },
+      driverData
+    );
+    if (res.success) {
+      await refreshAll();
+    }
+    return res;
+  };
+
+  const updateDriver = async (driverId: string, updates: Partial<User>) => {
+    const res = await updateDriverUser(
+      {
+        id: adminUser?.id,
+        email: adminUser?.email || 'admin@einuushi.com',
+        name: adminUser?.fullName || 'Administrador',
+      },
+      driverId,
+      updates
+    );
+    if (res.success) {
+      await refreshAll();
+    }
+    return res;
   };
 
   // Notificar llegada del repartidor a la dirección del cliente en tiempo real
@@ -777,6 +866,7 @@ export function useAdmin() {
     messages,
     users: usersList,
     adminUsers,
+    drivers,
     activityLogs,
     analytics,
     activeTrackingOrder,
@@ -789,6 +879,8 @@ export function useAdmin() {
     markOrderArrived,
     markOrderDelivered,
     settleOrderPazYSalvo,
+    createDriver,
+    updateDriver,
     updateStock,
     toggleDiscount,
     addProduct,

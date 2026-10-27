@@ -49,7 +49,11 @@ export default function LoginScreen() {
     setIsSubmitting(false);
 
     if (res.success) {
-      router.replace('/home');
+      if (res.user?.role === 'driver') {
+        router.replace('/driver');
+      } else {
+        router.replace('/home');
+      }
     } else {
       showNotification('Acceso Denegado', res.message || 'Credenciales incorrectas.');
     }
@@ -141,6 +145,27 @@ export default function LoginScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={{ marginTop: 14 }} onPress={() => router.push('/register')}>
               <Text style={styles.linkTextBold}>Crear cuenta nueva</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={{
+                marginTop: 18,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#F8FAFC',
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+              }}
+              onPress={() => router.push('/driver')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="bicycle" size={17} color="#1E2B58" style={{ marginRight: 8 }} />
+              <Text style={{ fontSize: 12, color: '#1E2B58', fontWeight: 'bold' }}>
+                Portal de Repartidores & Envíos ➔
+              </Text>
             </TouchableOpacity>
           </View>
 

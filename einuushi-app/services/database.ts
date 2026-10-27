@@ -33,9 +33,16 @@ export interface User {
   phone: string;
   city: string;
   password: string;
-  role?: "client" | "admin" | "superadmin";
+  role?: "client" | "admin" | "superadmin" | "driver";
   avatar?: string;
   createdAt: string;
+  // Propiedades especializadas para Repartidores y Empresas de Envíos
+  driverType?: "individual" | "corporate"; // individual (repartidor en moto/bici) | corporate (empresa transportadora)
+  companyName?: string; // Nombre corporativo (ej. Servientrega, DHL, Coordinadora, FedEx)
+  vehicleType?: string; // Ej: Motocicleta Yamaha XTZ 125, Bicicleta de carga, Camión, Encomiendas aéreas
+  plateOrNit?: string; // Placa de rodamiento o NIT de la empresa
+  carrierTrackingUrl?: string; // Portal de rastreo web corporativo
+  isActive?: boolean;
 }
 
 export interface EmailConfig {
@@ -85,6 +92,13 @@ export interface Order {
   settlementMethod?: 'EFECTIVO_EN_TIENDA' | 'TRANSFERENCIA_TIENDA'; // Medio de liquidación con tienda
   transferReference?: string; // Número de transferencia / comprobante
   driverName?: string; // Repartidor responsable (ej: José Guajiro)
+  driverId?: string; // ID del usuario repartidor o transportadora
+  driverEmail?: string; // Correo de la cuenta del repartidor
+  driverPhone?: string; // Teléfono de contacto del repartidor
+  driverType?: 'individual' | 'corporate'; // individual (repartidor) | corporate (transportadora)
+  trackingGuideNumber?: string; // Número de guía de envío de la transportadora
+  carrierTrackingUrl?: string; // Enlace web de rastreo del paquete
+  driverCollectionEvidence?: string; // Nota/evidencia de cobro tomada por el repartidor
   settlementNotes?: string; // Nota o evidencia de pago
 }
 
@@ -293,6 +307,38 @@ const INITIAL_USERS: User[] = [
     city: "Riohacha",
     password: "admin2026",
     role: "superadmin",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "USR-DRIVER-01",
+    fullName: "José Guajiro",
+    cedula: "1124555888",
+    email: "jose.guajiro@einuushi.com",
+    phone: "+57 300 444 5566",
+    city: "Riohacha",
+    password: "repartidor2026",
+    role: "driver",
+    driverType: "individual",
+    vehicleType: "Motocicleta Yamaha XTZ 125",
+    plateOrNit: "Placa GUA-42E",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "USR-DRIVER-02",
+    fullName: "Servientrega Express",
+    companyName: "Servientrega S.A.",
+    cedula: "860512330-3",
+    email: "envios@servientrega.com",
+    phone: "018000912345",
+    city: "Nacional / Internacional",
+    password: "servientrega2026",
+    role: "driver",
+    driverType: "corporate",
+    vehicleType: "Logística y Encomiendas Nacionales",
+    plateOrNit: "NIT 860.512.330-3",
+    carrierTrackingUrl: "https://www.servientrega.com/wps/portal/rastreo-envio",
+    isActive: true,
     createdAt: new Date().toISOString(),
   },
 ];
@@ -784,6 +830,13 @@ export async function getOrders(filterUserEmail?: string): Promise<Order[]> {
           settlementMethod: r.settlement_method || undefined,
           transferReference: r.transfer_reference || undefined,
           driverName: r.driver_name || 'José Guajiro',
+          driverId: r.driver_id || undefined,
+          driverEmail: r.driver_email || undefined,
+          driverPhone: r.driver_phone || undefined,
+          driverType: r.driver_type || (r.carrier_tracking_url ? 'corporate' : 'individual'),
+          trackingGuideNumber: r.tracking_guide_number || undefined,
+          carrierTrackingUrl: r.carrier_tracking_url || undefined,
+          driverCollectionEvidence: r.driver_collection_evidence || undefined,
           settlementNotes: r.settlement_notes || undefined,
         }));
         memoryOrders = mappedOrders;
@@ -830,6 +883,13 @@ export async function saveOrder(order: Order): Promise<void> {
         settlement_method: order.settlementMethod || null,
         transfer_reference: order.transferReference || null,
         driver_name: order.driverName || 'José Guajiro',
+        driver_id: order.driverId || null,
+        driver_email: order.driverEmail || null,
+        driver_phone: order.driverPhone || null,
+        driver_type: order.driverType || 'individual',
+        tracking_guide_number: order.trackingGuideNumber || null,
+        carrier_tracking_url: order.carrierTrackingUrl || null,
+        driver_collection_evidence: order.driverCollectionEvidence || null,
         settlement_notes: order.settlementNotes || null,
       };
 
@@ -897,6 +957,13 @@ export async function updateOrderStatusInDb(
     settlementMethod?: 'EFECTIVO_EN_TIENDA' | 'TRANSFERENCIA_TIENDA';
     transferReference?: string;
     driverName?: string;
+    driverId?: string;
+    driverEmail?: string;
+    driverPhone?: string;
+    driverType?: 'individual' | 'corporate';
+    trackingGuideNumber?: string;
+    carrierTrackingUrl?: string;
+    driverCollectionEvidence?: string;
     settlementNotes?: string;
   },
 ): Promise<void> {
@@ -917,6 +984,13 @@ export async function updateOrderStatusInDb(
       if (updates.settlementMethod) supaUpdates.settlement_method = updates.settlementMethod;
       if (updates.transferReference) supaUpdates.transfer_reference = updates.transferReference;
       if (updates.driverName) supaUpdates.driver_name = updates.driverName;
+      if (updates.driverId) supaUpdates.driver_id = updates.driverId;
+      if (updates.driverEmail) supaUpdates.driver_email = updates.driverEmail;
+      if (updates.driverPhone) supaUpdates.driver_phone = updates.driverPhone;
+      if (updates.driverType) supaUpdates.driver_type = updates.driverType;
+      if (updates.trackingGuideNumber) supaUpdates.tracking_guide_number = updates.trackingGuideNumber;
+      if (updates.carrierTrackingUrl) supaUpdates.carrier_tracking_url = updates.carrierTrackingUrl;
+      if (updates.driverCollectionEvidence) supaUpdates.driver_collection_evidence = updates.driverCollectionEvidence;
       if (updates.settlementNotes) supaUpdates.settlement_notes = updates.settlementNotes;
       
       const { error } = await supabase.from('orders').update(supaUpdates).eq('id', orderId);
@@ -973,6 +1047,178 @@ export async function settleOrderInDb(
   });
 
   return memoryOrders.find(o => o.id === orderId) || null;
+}
+
+/**
+ * =========================================================================
+ * GESTIÓN DE REPARTIDORES Y TRANSPORTADORAS CORPORATIVAS
+ * =========================================================================
+ */
+
+export async function getDrivers(): Promise<User[]> {
+  const all = await getUsers();
+  return all.filter(u => u.role === 'driver');
+}
+
+export async function createDriverUser(
+  operatorAdmin: { id?: string; email: string; name: string },
+  driverData: {
+    fullName: string;
+    email: string;
+    password?: string;
+    phone: string;
+    city?: string;
+    cedulaOrNit: string;
+    driverType: 'individual' | 'corporate';
+    companyName?: string;
+    vehicleType?: string;
+    plateOrNit?: string;
+    carrierTrackingUrl?: string;
+  }
+): Promise<{ success: boolean; user?: User; message?: string }> {
+  try {
+    const normEmail = driverData.email.trim().toLowerCase();
+    const existing = await findUserByEmail(normEmail);
+    if (existing) {
+      return { success: false, message: 'El correo electrónico ya se encuentra registrado.' };
+    }
+
+    const newDriver: User = {
+      id: `USR-DRIVER-${Date.now().toString().slice(-6)}`,
+      fullName: driverData.fullName.trim(),
+      cedula: driverData.cedulaOrNit.trim(),
+      email: normEmail,
+      phone: driverData.phone.trim(),
+      city: driverData.city?.trim() || 'Riohacha',
+      password: driverData.password?.trim() || 'repartidor2026',
+      role: 'driver',
+      driverType: driverData.driverType,
+      companyName: driverData.companyName?.trim(),
+      vehicleType: driverData.vehicleType?.trim(),
+      plateOrNit: driverData.plateOrNit?.trim(),
+      carrierTrackingUrl: driverData.carrierTrackingUrl?.trim(),
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('users').upsert({
+          id: newDriver.id,
+          full_name: newDriver.fullName,
+          cedula: newDriver.cedula,
+          email: newDriver.email,
+          phone: newDriver.phone,
+          city: newDriver.city,
+          password: newDriver.password,
+          role: 'driver',
+        });
+      } catch (_) {}
+    }
+
+    memoryUsers = [newDriver, ...memoryUsers];
+    notifyDatabaseChange();
+
+    await logAdminActivity({
+      adminId: operatorAdmin.id,
+      adminEmail: operatorAdmin.email,
+      adminName: operatorAdmin.name,
+      actionType: 'DRIVER_CREATE',
+      entityType: 'LOGISTICA',
+      entityId: newDriver.email,
+      details: `${operatorAdmin.name} registró al ${newDriver.driverType === 'corporate' ? 'aliado logístico corporativo' : 'repartidor'}: ${newDriver.fullName} (${newDriver.email}).`,
+    });
+
+    return { success: true, user: newDriver };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Error al registrar repartidor.' };
+  }
+}
+
+export async function updateDriverUser(
+  operatorAdmin: { id?: string; email: string; name: string },
+  driverId: string,
+  updates: Partial<User>
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const target = memoryUsers.find(u => u.id === driverId);
+    if (!target) return { success: false, message: 'Repartidor no encontrado.' };
+
+    const updated = { ...target, ...updates };
+    memoryUsers = memoryUsers.map(u => u.id === driverId ? updated : u);
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('users').update({
+          full_name: updated.fullName,
+          phone: updated.phone,
+          city: updated.city,
+          password: updated.password,
+        }).eq('id', driverId);
+      } catch (_) {}
+    }
+
+    notifyDatabaseChange();
+
+    await logAdminActivity({
+      adminId: operatorAdmin.id,
+      adminEmail: operatorAdmin.email,
+      adminName: operatorAdmin.name,
+      actionType: 'DRIVER_UPDATE',
+      entityType: 'LOGISTICA',
+      entityId: driverId,
+      details: `${operatorAdmin.name} actualizó los datos de logística de ${updated.fullName}.`,
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Error al actualizar datos del repartidor.' };
+  }
+}
+
+export async function assignOrderToDriver(
+  orderId: string,
+  driverData: {
+    driverId: string;
+    driverName: string;
+    driverEmail: string;
+    driverPhone: string;
+    driverType: 'individual' | 'corporate';
+    trackingGuideNumber?: string;
+    carrierTrackingUrl?: string;
+  },
+  adminResponsible: string
+): Promise<void> {
+  const isCorp = driverData.driverType === 'corporate';
+  const statusMessage = isCorp
+    ? `¡Pedido Despachado con ${driverData.driverName}! Guía de transporte: ${driverData.trackingGuideNumber || 'En asignación'}.`
+    : `¡Pedido Despachado por ${adminResponsible}! Repartidor ${driverData.driverName} va en camino a tu dirección.`;
+
+  await updateOrderStatusInDb(orderId, {
+    statusCode: 'DISPATCHED',
+    status: statusMessage,
+    eta: isCorp ? 'En tránsito con transportadora (1 a 3 días hábiles)' : 'En ruta (aprox. 15-25 min)',
+    dispatchedAt: Date.now(),
+    adminResponsible,
+    driverName: driverData.driverName,
+    driverId: driverData.driverId,
+    driverEmail: driverData.driverEmail,
+    driverPhone: driverData.driverPhone,
+    driverType: driverData.driverType,
+    trackingGuideNumber: driverData.trackingGuideNumber,
+    carrierTrackingUrl: driverData.carrierTrackingUrl,
+  });
+
+  await saveNotificationToDb({
+    id: `notif-disp-${orderId}-${Date.now()}`,
+    orderId: orderId,
+    title: '📦 ¡Tu pedido ha sido despachado!',
+    message: isCorp
+      ? `Tu pedido #${orderId} ha sido despachado a través de ${driverData.driverName}. Guía de envío: ${driverData.trackingGuideNumber || 'Generada'}. ¡Puedes hacerle seguimiento en línea!`
+      : `Tu pedido #${orderId} ha sido asignado al repartidor ${driverData.driverName} (Tel: ${driverData.driverPhone}). ¡Ahora puedes seguirlo en vivo!`,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    read: false,
+  });
 }
 
 export async function updateOrderRatingInDb(
