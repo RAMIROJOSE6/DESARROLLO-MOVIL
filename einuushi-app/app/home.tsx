@@ -34,6 +34,7 @@ import {
   sendChatMessage,
   markChatMessagesAsRead,
   toggleProductFavoriteInDb,
+  logAdminActivity,
   ChatMessage,
   Category
 } from '../services/database';
@@ -277,7 +278,17 @@ export default function HomeScreen() {
       const userEmail = effectiveUser?.email;
       const storedOrders = userEmail ? await getOrders(userEmail) : [];
       if (storedOrders && storedOrders.length > 0) {
-        setOrders(storedOrders);
+        // Detectar si algún pedido fue marcado como ARRIVED o DELIVERED externamente
+        setOrders(prevOrders => {
+          storedOrders.forEach(so => {
+            const prev = prevOrders.find(o => o.id === so.id);
+            if (prev && prev.statusCode === 'DISPATCHED' && so.statusCode === 'ARRIVED') {
+              notifyOrderArrival(so);
+            }
+          });
+          return storedOrders;
+        });
+
         setOrderCounter(storedOrders.length + 1);
         setActiveTrackingOrder((prev: any) => {
           if (!prev) return null;
@@ -376,17 +387,69 @@ export default function HomeScreen() {
 
 
 
+  // 🛵 MONITOREO CONTINUO EN TIEMPO REAL: Si un pedido despachado ya cumplió su tiempo estimado de llegada
+  useEffect(() => {
+    const arrivalInterval = setInterval(() => {
+      const now = Date.now();
+      setOrders(prevOrders => {
+        let hasChanges = false;
+        const updated = prevOrders.map(order => {
+          if (order.statusCode === 'DISPATCHED' && order.dispatchedAt) {
+            const timeSinceDispatch = now - order.dispatchedAt;
+            // Si pasaron más de 18 segundos desde que el admin lo despachó, marcar como llegado
+            if (timeSinceDispatch >= 18000) {
+              hasChanges = true;
+              notifyOrderArrival(order);
+              updateOrderStatusInDb(order.id, {
+                status: '🛵 ¡El repartidor ha llegado a tu dirección!',
+                statusCode: 'ARRIVED',
+                eta: 'El repartidor está esperando en la puerta',
+              }).catch(e => console.warn('DB update order ARRIVED error:', e));
+
+              return {
+                ...order,
+                status: '🛵 ¡El repartidor ha llegado a tu dirección!',
+                statusCode: 'ARRIVED',
+                eta: 'El repartidor está esperando en la puerta',
+              };
+            }
+          }
+          return order;
+        });
+
+        if (hasChanges) {
+          setActiveTrackingOrder((prev: any) => {
+            if (prev && prev.statusCode === 'DISPATCHED') {
+              return {
+                ...prev,
+                status: '🛵 ¡El repartidor ha llegado a tu dirección!',
+                statusCode: 'ARRIVED',
+                eta: 'El repartidor está esperando en la puerta',
+              };
+            }
+            return prev;
+          });
+          setSimulationProgress(100);
+        }
+
+        return hasChanges ? updated : prevOrders;
+      });
+    }, 2000);
+
+    return () => clearInterval(arrivalInterval);
+  }, []);
+
+  // Animación suave de la barra de progreso en vivo cuando el modal de seguimiento está abierto
   useEffect(() => {
     let timer: any;
     if (isTrackingModalVisible) {
-      if (activeTrackingOrder?.statusCode === 'DELIVERED') {
-        setSimulationProgress(100);
-        setDeliveryRating(activeTrackingOrder.rating || 0);
-      } else if (activeTrackingOrder?.statusCode === 'ARRIVED') {
+      if (activeTrackingOrder?.statusCode === 'DELIVERED' || activeTrackingOrder?.statusCode === 'ARRIVED') {
         setSimulationProgress(100);
         setDeliveryRating(activeTrackingOrder.rating || 0);
       } else if (activeTrackingOrder?.statusCode === 'DISPATCHED') {
-        setSimulationProgress(prev => (prev < 10 ? 10 : prev));
+        const elapsed = Date.now() - (activeTrackingOrder.dispatchedAt || (Date.now() - 3000));
+        const calcProgress = Math.min(100, Math.max(10, Math.floor((elapsed / 18000) * 100)));
+        setSimulationProgress(calcProgress);
         setDeliveryRating(activeTrackingOrder.rating || 0);
 
         timer = setInterval(() => {
@@ -395,15 +458,13 @@ export default function HomeScreen() {
               clearInterval(timer);
               return 100;
             }
-            if (prev < 40) return prev + 20;
-            if (prev < 80) return prev + 25;
-            return 100;
+            return Math.min(100, prev + 15);
           });
-        }, 3000);
+        }, 1500);
       }
     }
     return () => clearInterval(timer);
-  }, [isTrackingModalVisible, activeTrackingOrder?.id, activeTrackingOrder?.statusCode]);
+  }, [isTrackingModalVisible, activeTrackingOrder?.id, activeTrackingOrder?.statusCode, activeTrackingOrder?.dispatchedAt]);
 
   useEffect(() => {
     if (simulationProgress === 100 && activeTrackingOrder && activeTrackingOrder.statusCode === 'DISPATCHED') {
@@ -908,6 +969,16 @@ export default function HomeScreen() {
       eta: 'Entrega finalizada',
       receivedAt: formattedReceivedAt,
     }).catch(err => console.warn('Error updating order status in SQLite Drizzle:', err));
+
+    // Registrar trazabilidad para el administrador
+    logAdminActivity({
+      adminEmail: effectiveUser?.email || 'cliente@einuushi.com',
+      adminName: effectiveUser?.fullName || 'Cliente Einuushi',
+      actionType: 'DELIVERY_CONFIRMED',
+      entityType: 'PEDIDO',
+      entityId: orderId,
+      details: `El cliente confirmó la recepción y pago del pedido #${orderId} el ${formattedReceivedAt}. Venta cargada a estadísticas del administrador.`,
+    }).catch(e => console.warn('Error logging admin activity:', e));
 
     setOrders(prevOrders =>
       prevOrders.map(ord => {
@@ -1883,19 +1954,25 @@ export default function HomeScreen() {
 
                     <Text style={styles.etaText}>⏱️ {order.eta}</Text>
 
-                    {/* Aviso cuando el repartidor llega a la dirección */}
-                    {order.statusCode === 'ARRIVED' && (
-                      <View style={styles.orderArrivedNoticeBox}>
-                        <Ionicons name="bicycle" size={20} color="#166534" style={{marginRight: 8}} />
+                    {/* Aviso cuando el repartidor llega a la dirección o si va en ruta */}
+                    {(order.statusCode === 'ARRIVED' || order.statusCode === 'DISPATCHED') && (
+                      <View style={[styles.orderArrivedNoticeBox, order.statusCode === 'DISPATCHED' && { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                        <Ionicons name="bicycle" size={20} color={order.statusCode === 'ARRIVED' ? "#166534" : "#1D4ED8"} style={{marginRight: 8}} />
                         <View style={{flex: 1}}>
-                          <Text style={styles.orderArrivedNoticeTitle}>¡El repartidor ha llegado a tu dirección!</Text>
-                          <Text style={styles.orderArrivedNoticeText}>José Guajiro está en tu puerta con tu pedido. Por favor confirma la recepción:</Text>
+                          <Text style={[styles.orderArrivedNoticeTitle, order.statusCode === 'DISPATCHED' && { color: '#1E40AF' }]}>
+                            {order.statusCode === 'ARRIVED' ? '¡El repartidor ha llegado a tu dirección! 🛵' : '🛵 Repartidor en camino a tu domicilio'}
+                          </Text>
+                          <Text style={[styles.orderArrivedNoticeText, order.statusCode === 'DISPATCHED' && { color: '#1E3A8A' }]}>
+                            {order.statusCode === 'ARRIVED' 
+                              ? 'José Guajiro está en tu puerta esperando la entrega. Por favor confirma la recepción y pago:'
+                              : 'José Guajiro está en tu zona. Si ya recibiste tu paquete, confirma la entrega y pago:'}
+                          </Text>
                         </View>
                       </View>
                     )}
 
                     {/* Botón para Marcar el Pedido como Recibido */}
-                    {order.statusCode === 'ARRIVED' && (
+                    {(order.statusCode === 'ARRIVED' || order.statusCode === 'DISPATCHED') && (
                       <TouchableOpacity 
                         style={styles.markReceivedMainButton}
                         onPress={() => handleMarkOrderAsReceived(order.id)}
@@ -2221,7 +2298,7 @@ export default function HomeScreen() {
               </View>
 
               {/* Botón de Confirmación cuando el repartidor llega a la dirección */}
-              {activeTrackingOrder?.statusCode === 'ARRIVED' && (
+              {(activeTrackingOrder?.statusCode === 'ARRIVED' || simulationProgress >= 100) && activeTrackingOrder?.statusCode !== 'DELIVERED' && (
                 <View style={styles.orderArrivedActionCard}>
                   <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 6}}>
                     <Ionicons name="bicycle" size={24} color="#166534" style={{marginRight: 8}} />
@@ -2235,9 +2312,19 @@ export default function HomeScreen() {
                     onPress={() => handleMarkOrderAsReceived(activeTrackingOrder.id)}
                   >
                     <Ionicons name="checkmark-done-circle" size={18} color="#FFFFFF" style={{marginRight: 6}} />
-                    <Text style={styles.markReceivedMainButtonText}>Marcar Pedido como Recibido a Satisfacción ✅</Text>
+                    <Text style={styles.markReceivedMainButtonText}>Marcar Pedido como Recibido y Pagado a Satisfacción 🎉</Text>
                   </TouchableOpacity>
                 </View>
+              )}
+
+              {activeTrackingOrder?.statusCode === 'DISPATCHED' && simulationProgress < 100 && (
+                <TouchableOpacity 
+                  style={[styles.markReceivedMainButton, { backgroundColor: '#1E2B58', marginTop: 10 }]}
+                  onPress={() => handleMarkOrderAsReceived(activeTrackingOrder.id)}
+                >
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" style={{marginRight: 6}} />
+                  <Text style={styles.markReceivedMainButtonText}>¿Ya llegó el repartidor? Marcar Recibido y Pagado ✅</Text>
+                </TouchableOpacity>
               )}
 
               {/* Sistema de Calificación de 5 Estrellas (SIEMPRE VISIBLE) */}

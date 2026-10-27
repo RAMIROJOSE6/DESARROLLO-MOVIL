@@ -123,13 +123,27 @@ export function useAdmin() {
     initSession();
   }, [refreshAll]);
 
-  // Sincronización en tiempo real para chat, pedidos, logs y cotizaciones cada 3s
+  // Sincronización en tiempo real para chat, pedidos, logs y cotizaciones cada 2s
   useEffect(() => {
     if (!adminUser) return;
     const pollInterval = setInterval(() => {
       refreshAll();
-    }, 3000);
-    return () => clearInterval(pollInterval);
+    }, 2000);
+
+    // Escucha inmediata de eventos de actualización en la base de datos
+    const onDbUpdate = () => {
+      refreshAll();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('einuushi_db_updated', onDbUpdate);
+    }
+
+    return () => {
+      clearInterval(pollInterval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('einuushi_db_updated', onDbUpdate);
+      }
+    };
   }, [adminUser, refreshAll]);
 
   // Login de Administrador
@@ -225,6 +239,54 @@ export function useAdmin() {
               status: `¡Pedido Despachado por ${adminUser?.fullName || 'Administrador'}! Repartidor José Guajiro va en camino.`,
               eta: 'En ruta (aprox. 15-25 min)',
               dispatchedAt: Date.now(),
+              adminResponsible: adminLabel,
+            }
+          : o
+      )
+    );
+    await refreshAll();
+  };
+
+  // Notificar llegada del repartidor a la dirección del cliente en tiempo real
+  const markOrderArrived = async (orderId: string) => {
+    const target = orders.find(o => o.id === orderId);
+    if (!target) return;
+    const adminLabel = adminUser ? `${adminUser.fullName} (${adminUser.email})` : 'Administrador';
+
+    await updateOrderStatusInDb(orderId, {
+      statusCode: 'ARRIVED',
+      status: '🛵 ¡El repartidor ha llegado a tu dirección!',
+      eta: 'El repartidor está esperando en la puerta',
+      adminResponsible: adminLabel,
+    });
+
+    await saveNotificationToDb({
+      id: `notif-${orderId}-${Date.now()}`,
+      orderId: orderId,
+      title: `¡Tu pedido #${orderId} ya llegó a tu dirección! 🛵`,
+      message: `El repartidor José Guajiro está en tu puerta esperando para entregarte tu paquete. Por favor confirma la recepción y pago en la app.`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      read: false,
+    });
+
+    await logAdminActivity({
+      adminId: adminUser?.id,
+      adminEmail: adminUser?.email || 'admin@einuushi.com',
+      adminName: adminUser?.fullName || 'Administrador',
+      actionType: 'ORDER_ARRIVED',
+      entityType: 'PEDIDO',
+      entityId: orderId,
+      details: `${adminUser?.fullName || 'Administrador'} notificó la llegada del pedido #${orderId} a la dirección del cliente ${target.client?.name || 'Cliente'}.`,
+    });
+
+    setOrders(prev =>
+      prev.map(o =>
+        o.id === orderId
+          ? {
+              ...o,
+              statusCode: 'ARRIVED',
+              status: '🛵 ¡El repartidor ha llegado a tu dirección!',
+              eta: 'El repartidor está esperando en la puerta',
               adminResponsible: adminLabel,
             }
           : o
@@ -644,6 +706,7 @@ export function useAdmin() {
     refreshAll,
     confirmPayment,
     dispatchOrder,
+    markOrderArrived,
     markOrderDelivered,
     updateStock,
     toggleDiscount,

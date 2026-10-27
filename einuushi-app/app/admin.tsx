@@ -59,6 +59,7 @@ export default function AdminScreen() {
     refreshAll,
     confirmPayment,
     dispatchOrder,
+    markOrderArrived,
     markOrderDelivered,
     updateStock,
     toggleDiscount,
@@ -1508,6 +1509,7 @@ export default function AdminScreen() {
                 { key: 'ALL', label: 'Todos' },
                 { key: 'PENDING', label: 'Pendientes' },
                 { key: 'DISPATCHED', label: 'En Ruta' },
+                { key: 'ARRIVED', label: 'En Destino' },
                 { key: 'DELIVERED', label: 'Entregados' },
               ].map(f => (
                 <TouchableOpacity
@@ -1537,6 +1539,8 @@ export default function AdminScreen() {
                           styles.statusBadgeBox,
                           order.statusCode === 'DELIVERED'
                             ? { backgroundColor: '#DCFCE7' }
+                            : order.statusCode === 'ARRIVED'
+                            ? { backgroundColor: '#E0E7FF' }
                             : order.statusCode === 'DISPATCHED'
                             ? { backgroundColor: '#FEF3C7' }
                             : { backgroundColor: '#FEE2E2' },
@@ -1547,6 +1551,8 @@ export default function AdminScreen() {
                             styles.statusBadgeBoxText,
                             order.statusCode === 'DELIVERED'
                               ? { color: '#166534' }
+                              : order.statusCode === 'ARRIVED'
+                              ? { color: '#3730A3' }
                               : order.statusCode === 'DISPATCHED'
                               ? { color: '#B45309' }
                               : { color: '#991B1B' },
@@ -1554,6 +1560,8 @@ export default function AdminScreen() {
                         >
                           {order.statusCode === 'DELIVERED'
                             ? 'Entregado'
+                            : order.statusCode === 'ARRIVED'
+                            ? 'En Destino 🛵'
                             : order.statusCode === 'DISPATCHED'
                             ? 'En Reparto'
                             : 'Pendiente Despacho'}
@@ -1642,13 +1650,35 @@ export default function AdminScreen() {
                     )}
 
                     {order.statusCode === 'DISPATCHED' && (
+                      <>
+                        <TouchableOpacity
+                          style={styles.arrivedNoticeButton}
+                          onPress={() => markOrderArrived(order.id)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="location" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                          <Text style={styles.actionBtnText}>Llegó a Destino</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.deliverButton}
+                          onPress={() => markOrderDelivered(order.id)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="flag" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                          <Text style={styles.actionBtnText}>Marcar Entregado</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+
+                    {order.statusCode === 'ARRIVED' && (
                       <TouchableOpacity
                         style={styles.deliverButton}
                         onPress={() => markOrderDelivered(order.id)}
                         activeOpacity={0.8}
                       >
-                        <Ionicons name="flag" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
-                        <Text style={styles.actionBtnText}>Marcar Entregado</Text>
+                        <Ionicons name="checkmark-done" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.actionBtnText}>Confirmar Entrega</Text>
                       </TouchableOpacity>
                     )}
 
@@ -4204,6 +4234,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#8B5CF6',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  arrivedNoticeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#059669',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
