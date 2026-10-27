@@ -111,6 +111,9 @@ export default function AdminScreen() {
     }
   };
 
+  // Sub-pestaña activa dentro de la pestaña Configuración & Trazabilidad
+  const [settingsSubTab, setSettingsSubTab] = useState<'profile' | 'admins' | 'logistics' | 'audit'>('profile');
+
   // Filtro de Artículos en Inventario (Solo Admin)
   const [inventoryFilter, setInventoryFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
@@ -2547,12 +2550,97 @@ export default function AdminScreen() {
               <View>
                 <Text style={styles.sectionHeaderTitle}>Configuración, Seguridad y Trazabilidad</Text>
                 <Text style={styles.sectionHeaderSubtitle}>
-                  Administra tus credenciales, autoriza nuevos administradores e inspecciona la bitácora de movimientos
+                  Administra credenciales, autoriza nuevos administradores, gestiona transportistas y audita movimientos
                 </Text>
               </View>
             </View>
 
-            {/* SECCIÓN 1: MI PERFIL Y CREDENCIALES */}
+            {/* BARRA DE SUB-PESTAÑAS DE CONFIGURACIÓN */}
+            <View style={styles.settingsSubTabsContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.settingsSubTabsScroll}>
+                <TouchableOpacity
+                  style={[styles.settingsSubTabBtn, settingsSubTab === 'profile' && styles.settingsSubTabBtnActive]}
+                  onPress={() => setSettingsSubTab('profile')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="person-circle"
+                    size={18}
+                    color={settingsSubTab === 'profile' ? '#FFFFFF' : '#1E2B58'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.settingsSubTabBtnText, settingsSubTab === 'profile' && styles.settingsSubTabBtnTextActive]}>
+                    Mi Perfil
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.settingsSubTabBtn, settingsSubTab === 'admins' && styles.settingsSubTabBtnActive]}
+                  onPress={() => setSettingsSubTab('admins')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="shield-checkmark"
+                    size={17}
+                    color={settingsSubTab === 'admins' ? '#FFFFFF' : '#1E2B58'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.settingsSubTabBtnText, settingsSubTab === 'admins' && styles.settingsSubTabBtnTextActive]}>
+                    Equipo Administrador
+                  </Text>
+                  <View style={[styles.settingsSubTabBadge, settingsSubTab === 'admins' && { backgroundColor: '#C5A880' }]}>
+                    <Text style={[styles.settingsSubTabBadgeText, settingsSubTab === 'admins' && { color: '#1E2B58' }]}>
+                      {(users || []).filter(u => u.role === 'admin' || u.role === 'superadmin' || u.id === 'USR-ADMIN-01' || u.email?.toLowerCase() === 'admin@einuushi.com').length}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.settingsSubTabBtn, settingsSubTab === 'logistics' && styles.settingsSubTabBtnActive]}
+                  onPress={() => setSettingsSubTab('logistics')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="bicycle"
+                    size={17}
+                    color={settingsSubTab === 'logistics' ? '#FFFFFF' : '#1E2B58'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.settingsSubTabBtnText, settingsSubTab === 'logistics' && styles.settingsSubTabBtnTextActive]}>
+                    Repartidores & Transportadoras
+                  </Text>
+                  <View style={[styles.settingsSubTabBadge, settingsSubTab === 'logistics' && { backgroundColor: '#C5A880' }]}>
+                    <Text style={[styles.settingsSubTabBadgeText, settingsSubTab === 'logistics' && { color: '#1E2B58' }]}>
+                      {(drivers || []).length}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.settingsSubTabBtn, settingsSubTab === 'audit' && styles.settingsSubTabBtnActive]}
+                  onPress={() => setSettingsSubTab('audit')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="finger-print"
+                    size={17}
+                    color={settingsSubTab === 'audit' ? '#FFFFFF' : '#1E2B58'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.settingsSubTabBtnText, settingsSubTab === 'audit' && styles.settingsSubTabBtnTextActive]}>
+                    Bitácora & Trazabilidad
+                  </Text>
+                  <View style={[styles.settingsSubTabBadge, settingsSubTab === 'audit' && { backgroundColor: '#C5A880' }]}>
+                    <Text style={[styles.settingsSubTabBadgeText, settingsSubTab === 'audit' && { color: '#1E2B58' }]}>
+                      {(activityLogs || []).length}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+
+            {/* SUB-PESTAÑA 1: MI PERFIL Y CREDENCIALES */}
+            {settingsSubTab === 'profile' && (
             <View style={styles.settingsCard}>
               <View style={styles.settingsCardHeader}>
                 <View style={styles.settingsIconCircle}>
@@ -2651,9 +2739,13 @@ export default function AdminScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+            )}
 
-            {/* SECCIÓN 2: CREAR NUEVO USUARIO ADMINISTRADOR (EXCLUSIVO SUPERADMIN) */}
-            <View style={styles.settingsCard}>
+            {/* SUB-PESTAÑA 2: GESTIÓN DEL EQUIPO DE ADMINISTRADORES */}
+            {settingsSubTab === 'admins' && (
+              <>
+                {/* SECCIÓN 2: CREAR NUEVO USUARIO ADMINISTRADOR (EXCLUSIVO SUPERADMIN) */}
+                <View style={styles.settingsCard}>
               <View style={styles.settingsCardHeader}>
                 <View style={[styles.settingsIconCircle, { backgroundColor: '#FEF3C7' }]}>
                   <Ionicons name="person-add" size={22} color="#B45309" />
@@ -2866,8 +2958,11 @@ export default function AdminScreen() {
                 })}
               </View>
             </View>
+            </>
+            )}
 
-            {/* SECCIÓN 3B: GESTIÓN DE REPARTIDORES Y TRANSPORTADORAS */}
+            {/* SUB-PESTAÑA 3: GESTIÓN DE REPARTIDORES Y TRANSPORTADORAS */}
+            {settingsSubTab === 'logistics' && (
             <View style={styles.settingsCard}>
               <View style={styles.settingsCardHeader}>
                 <View style={[styles.settingsIconCircle, { backgroundColor: '#EFF6FF' }]}>
@@ -2989,8 +3084,10 @@ export default function AdminScreen() {
                 )}
               </View>
             </View>
+            )}
 
-            {/* SECCIÓN 4: BITÁCORA DE TRAZABILIDAD Y AUDITORÍA EN VIVO */}
+            {/* SUB-PESTAÑA 4: BITÁCORA DE TRAZABILIDAD Y AUDITORÍA EN VIVO */}
+            {settingsSubTab === 'audit' && (
             <View style={styles.settingsCard}>
               <View style={styles.settingsCardHeader}>
                 <View style={[styles.settingsIconCircle, { backgroundColor: '#F0FDF4' }]}>
@@ -3121,6 +3218,7 @@ export default function AdminScreen() {
               })()}
 
             </View>
+            )}
 
           </View>
         )}
@@ -6662,5 +6760,56 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  settingsSubTabsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 6,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  settingsSubTabsScroll: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    paddingHorizontal: 2,
+  },
+  settingsSubTabBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+  },
+  settingsSubTabBtnActive: {
+    backgroundColor: '#1E2B58',
+  },
+  settingsSubTabBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  settingsSubTabBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  settingsSubTabBadge: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    marginLeft: 6,
+  },
+  settingsSubTabBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#64748B',
   },
 });
