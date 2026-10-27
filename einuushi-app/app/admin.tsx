@@ -61,6 +61,7 @@ export default function AdminScreen() {
     dispatchOrder,
     markOrderArrived,
     markOrderDelivered,
+    settleOrderPazYSalvo,
     updateStock,
     toggleDiscount,
     addProduct,
@@ -127,6 +128,13 @@ export default function AdminScreen() {
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('ALL');
 
   // Modales
+  const [isSettlementModalVisible, setIsSettlementModalVisible] = useState(false);
+  const [selectedOrderForSettlement, setSelectedOrderForSettlement] = useState<Order | null>(null);
+  const [settlementType, setSettlementType] = useState<'EFECTIVO_EN_TIENDA' | 'TRANSFERENCIA_TIENDA'>('EFECTIVO_EN_TIENDA');
+  const [settlementTransferRef, setSettlementTransferRef] = useState('');
+  const [settlementNotes, setSettlementNotes] = useState('');
+  const [isSubmittingSettlement, setIsSubmittingSettlement] = useState(false);
+
   const [isNewProductModalVisible, setIsNewProductModalVisible] = useState(false);
   const [isNewCategoryModalVisible, setIsNewCategoryModalVisible] = useState(false);
   const [isQuoteModalVisible, setIsQuoteModalVisible] = useState(false);
@@ -798,8 +806,57 @@ export default function AdminScreen() {
   // Pedidos filtrados
   const filteredOrders = orders.filter(o => {
     if (orderStatusFilter === 'ALL') return true;
+    if (orderStatusFilter === 'PENDING_SETTLEMENT') return o.settlementStatus === 'PENDING_SETTLEMENT';
+    if (orderStatusFilter === 'SETTLED') return o.settlementStatus === 'SETTLED';
     return o.statusCode === orderStatusFilter;
   });
+
+  // Abrir modal de liquidación y Paz y Salvo
+  const openSettlementModal = (order: Order) => {
+    setSelectedOrderForSettlement(order);
+    const isTransfer = (order.client.payment || '').toLowerCase().includes('transfer') || (order.client.payment || '').toLowerCase().includes('qr');
+    setSettlementType(isTransfer ? 'TRANSFERENCIA_TIENDA' : 'EFECTIVO_EN_TIENDA');
+    setSettlementTransferRef(order.transferReference || '');
+    setSettlementNotes(order.settlementNotes || '');
+    setIsSettlementModalVisible(true);
+  };
+
+  // Confirmar liquidación y otorgar Paz y Salvo
+  const handleConfirmSettlement = async () => {
+    if (!selectedOrderForSettlement) return;
+    if (settlementType === 'TRANSFERENCIA_TIENDA' && !settlementTransferRef.trim()) {
+      if (Platform.OS === 'web') {
+        window.alert('Por favor ingrese el número de comprobante o referencia de la transferencia bancaria.');
+      } else {
+        Alert.alert('Comprobante requerido', 'Por favor ingrese el número de comprobante o referencia de la transferencia bancaria.');
+      }
+      return;
+    }
+
+    setIsSubmittingSettlement(true);
+    try {
+      await settleOrderPazYSalvo(
+        selectedOrderForSettlement.id,
+        settlementType,
+        settlementTransferRef,
+        settlementNotes
+      );
+      setIsSettlementModalVisible(false);
+      const successMsg = settlementType === 'EFECTIVO_EN_TIENDA'
+        ? `¡Pedido #${selectedOrderForSettlement.id} en Paz y Salvo! Se registró la recepción de dinero en efectivo en la tienda por el repartidor ${selectedOrderForSettlement.driverName || 'José Guajiro'}.`
+        : `¡Pedido #${selectedOrderForSettlement.id} en Paz y Salvo! Se registró la transferencia #${settlementTransferRef} a la cuenta de la tienda.`;
+      if (Platform.OS === 'web') {
+        window.alert(successMsg);
+      } else {
+        Alert.alert('Paz y Salvo Registrado ✅', successMsg);
+      }
+    } catch (err: any) {
+      console.error('Error settling order:', err);
+      Alert.alert('Error', 'No se pudo registrar la liquidación del pedido.');
+    } finally {
+      setIsSubmittingSettlement(false);
+    }
+  };
 
   // Agrupar mensajes de chat por usuario
   const chatUsersMap = new Map<string, { email: string; name: string; lastMessage: string; unreadCount: number }>();
@@ -1366,6 +1423,47 @@ export default function AdminScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* ARQUEO DE CAJA Y LIQUIDACIÓN CON REPARTIDORES (PAZ Y SALVO) */}
+            <View style={styles.settlementArqueoCard}>
+              <View style={styles.cardHeaderRow}>
+                <Ionicons name="wallet-outline" size={22} color="#1E2B58" style={{ marginRight: 8 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cardHeaderTitle, { color: '#1E2B58' }]}>Arqueo de Caja & Liquidación de Repartidores</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>
+                    Control de dinero recaudado por domiciliarios vs ventas en Paz y Salvo en tienda
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.settlementStatsRow}>
+                <View style={[styles.settlementStatBox, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Ionicons name="checkmark-circle" size={16} color="#16A34A" style={{ marginRight: 5 }} />
+                    <Text style={[styles.settlementStatLabel, { color: '#166534' }]}>En Paz y Salvo (Tienda)</Text>
+                  </View>
+                  <Text style={[styles.settlementStatValue, { color: '#15803D' }]}>
+                    $ {(analytics?.settledRevenue || 0).toLocaleString('es-CO')}
+                  </Text>
+                  <Text style={[styles.settlementStatSub, { color: '#166534' }]}>
+                    Dinero en caja física o transferencias verificadas
+                  </Text>
+                </View>
+
+                <View style={[styles.settlementStatBox, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Ionicons name="bicycle" size={16} color="#D97706" style={{ marginRight: 5 }} />
+                    <Text style={[styles.settlementStatLabel, { color: '#92400E' }]}>Con Repartidores (Por Liquidar)</Text>
+                  </View>
+                  <Text style={[styles.settlementStatValue, { color: '#B45309' }]}>
+                    $ {(analytics?.pendingSettlementRevenue || 0).toLocaleString('es-CO')}
+                  </Text>
+                  <Text style={[styles.settlementStatSub, { color: '#92400E' }]}>
+                    {analytics?.pendingSettlementCount || 0} pedido(s) pendientes de entrega de dinero en tienda
+                  </Text>
+                </View>
+              </View>
+            </View>
+
             {/* PRODUCTOS MÁS PEDIDOS */}
             <View style={styles.analyticsCard}>
               <View style={styles.cardHeaderRow}>
@@ -1511,6 +1609,8 @@ export default function AdminScreen() {
                 { key: 'DISPATCHED', label: 'En Ruta' },
                 { key: 'ARRIVED', label: 'En Destino' },
                 { key: 'DELIVERED', label: 'Entregados' },
+                { key: 'PENDING_SETTLEMENT', label: '🛵 Dinero con Repartidor' },
+                { key: 'SETTLED', label: '✅ Paz y Salvo' },
               ].map(f => (
                 <TouchableOpacity
                   key={f.key}
@@ -1605,6 +1705,53 @@ export default function AdminScreen() {
                         </Text>
                       </View>
                     )}
+
+                    {/* ESTADO FINANCIERO: PAZ Y SALVO EN TIENDA VS DINERO EN PODER DEL REPARTIDOR */}
+                    {order.settlementStatus === 'PENDING_SETTLEMENT' && (
+                      <View style={styles.orderSettlementPendingBanner}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                          <Ionicons name="warning" size={16} color="#B45309" style={{ marginRight: 6 }} />
+                          <Text style={styles.orderSettlementPendingTitle}>DINERO EN PODER DEL REPARTIDOR (Pendiente Paz y Salvo)</Text>
+                        </View>
+                        <Text style={styles.orderSettlementPendingDesc}>
+                          🛵 Repartidor: <Text style={{ fontWeight: 'bold' }}>{order.driverName || 'José Guajiro'}</Text> tiene el dinero ($ {(order.total || 0).toLocaleString('es-CO')} COP).
+                          {' '}El pedido quedará en Paz y Salvo cuando entregue el efectivo en tienda o registre la transferencia con comprobante.
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.settleActionButton}
+                          onPress={() => openSettlementModal(order)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                          <Text style={styles.settleActionButtonText}>Liquidar y Otorgar Paz y Salvo en Tienda</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {order.settlementStatus === 'SETTLED' && (
+                      <View style={styles.orderSettledSuccessBanner}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                          <Ionicons name="checkmark-done-circle" size={16} color="#15803D" style={{ marginRight: 6 }} />
+                          <Text style={styles.orderSettledSuccessTitle}>PAZ Y SALVO EN TIENDA REGISTRADO ✅</Text>
+                        </View>
+                        <Text style={styles.orderSettledSuccessDetail}>
+                          • Medio: <Text style={{ fontWeight: 'bold' }}>{order.settlementMethod === 'EFECTIVO_EN_TIENDA' ? 'Efectivo recibido en caja física de la tienda' : 'Transferencia bancaria a cuenta de la tienda'}</Text>
+                        </Text>
+                        {order.transferReference ? (
+                          <Text style={styles.orderSettledSuccessDetail}>
+                            • Nº Comprobante / Transferencia: <Text style={{ fontWeight: 'bold', color: '#1E2B58' }}>{order.transferReference}</Text>
+                          </Text>
+                        ) : null}
+                        <Text style={styles.orderSettledSuccessDetail}>
+                          • Liquidado por: <Text style={{ fontWeight: 'bold' }}>{order.settledBy || order.adminResponsible || 'Administración'}</Text> ({order.settledAt || order.receivedAt || order.date})
+                        </Text>
+                        {order.settlementNotes ? (
+                          <Text style={styles.orderSettledSuccessDetail}>
+                            • Evidencia: <Text style={{ fontStyle: 'italic' }}>{order.settlementNotes}</Text>
+                          </Text>
+                        ) : null}
+                      </View>
+                    )}
                   </View>
 
                   {/* DESGLOSE DE ARTÍCULOS */}
@@ -1679,6 +1826,29 @@ export default function AdminScreen() {
                       >
                         <Ionicons name="checkmark-done" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
                         <Text style={styles.actionBtnText}>Confirmar Entrega</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* BOTÓN DE LIQUIDACIÓN Y PAZ Y SALVO */}
+                    {order.settlementStatus === 'PENDING_SETTLEMENT' && (
+                      <TouchableOpacity
+                        style={styles.settleCompactButton}
+                        onPress={() => openSettlementModal(order)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="cash" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.actionBtnText}>Dar Paz y Salvo</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {order.settlementStatus === 'SETTLED' && (
+                      <TouchableOpacity
+                        style={[styles.settleCompactButton, { backgroundColor: '#059669' }]}
+                        onPress={() => openSettlementModal(order)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="shield-checkmark" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.actionBtnText}>Ver Paz y Salvo</Text>
                       </TouchableOpacity>
                     )}
 
@@ -3166,6 +3336,157 @@ export default function AdminScreen() {
             <TouchableOpacity style={styles.saveModalBtn} onPress={handleSendQuoteResponse} activeOpacity={0.8}>
               <Text style={styles.saveModalBtnText}>Enviar Cotización Formal al Cliente</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL: LIQUIDACIÓN Y PAZ Y SALVO EN TIENDA                        */}
+      {/* ================================================================= */}
+      <Modal
+        visible={isSettlementModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsSettlementModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 540 }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="shield-checkmark" size={24} color="#10B981" style={{ marginRight: 8 }} />
+                <Text style={styles.modalDialogTitle}>Liquidación y Paz y Salvo</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsSettlementModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+              {/* RESUMEN DEL PEDIDO */}
+              <View style={styles.settleSummaryBox}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <Text style={styles.settleSummaryOrder}>Pedido #{selectedOrderForSettlement?.id}</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>{selectedOrderForSettlement?.date}</Text>
+                </View>
+                <Text style={styles.settleSummaryClient}>
+                  👤 Cliente: <Text style={{ fontWeight: 'bold', color: '#1E2B58' }}>{selectedOrderForSettlement?.client.name}</Text>
+                </Text>
+                <Text style={styles.settleSummaryDriver}>
+                  🛵 Repartidor a Cargo: <Text style={{ fontWeight: 'bold', color: '#1E2B58' }}>{selectedOrderForSettlement?.driverName || 'José Guajiro'}</Text>
+                </Text>
+                <View style={styles.settleSummaryTotalRow}>
+                  <Text style={styles.settleSummaryTotalLabel}>Monto a Liquidar:</Text>
+                  <Text style={styles.settleSummaryTotalValue}>$ {(selectedOrderForSettlement?.total || 0).toLocaleString('es-CO')} COP</Text>
+                </View>
+              </View>
+
+              {/* OPCIONES DE LIQUIDACIÓN */}
+              <Text style={styles.settleFieldLabel}>
+                Seleccione la forma como la tienda recibe o verifica el dinero:
+              </Text>
+
+              {/* OPCIÓN 1: EFECTIVO EN TIENDA */}
+              <TouchableOpacity
+                style={[
+                  styles.settleOptionCard,
+                  settlementType === 'EFECTIVO_EN_TIENDA' && styles.settleOptionCardActive
+                ]}
+                onPress={() => setSettlementType('EFECTIVO_EN_TIENDA')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.settleOptionHeader}>
+                  <Ionicons 
+                    name={settlementType === 'EFECTIVO_EN_TIENDA' ? "radio-button-on" : "radio-button-off"} 
+                    size={20} 
+                    color={settlementType === 'EFECTIVO_EN_TIENDA' ? "#10B981" : "#94A3B8"} 
+                    style={{ marginRight: 8 }} 
+                  />
+                  <Text style={[styles.settleOptionTitle, settlementType === 'EFECTIVO_EN_TIENDA' && { color: '#047857' }]}>
+                    💵 Efectivo Entregado por Repartidor en Tienda
+                  </Text>
+                </View>
+                <Text style={styles.settleOptionDesc}>
+                  El repartidor entregó físicamente el dinero en efectivo recibido del cliente en la caja de la tienda.
+                </Text>
+              </TouchableOpacity>
+
+              {/* OPCIÓN 2: TRANSFERENCIA BANCARIA */}
+              <TouchableOpacity
+                style={[
+                  styles.settleOptionCard,
+                  settlementType === 'TRANSFERENCIA_TIENDA' && styles.settleOptionCardActive
+                ]}
+                onPress={() => setSettlementType('TRANSFERENCIA_TIENDA')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.settleOptionHeader}>
+                  <Ionicons 
+                    name={settlementType === 'TRANSFERENCIA_TIENDA' ? "radio-button-on" : "radio-button-off"} 
+                    size={20} 
+                    color={settlementType === 'TRANSFERENCIA_TIENDA' ? "#10B981" : "#94A3B8"} 
+                    style={{ marginRight: 8 }} 
+                  />
+                  <Text style={[styles.settleOptionTitle, settlementType === 'TRANSFERENCIA_TIENDA' && { color: '#047857' }]}>
+                    📲 Transferencia a Cuenta Bancaria de la Tienda
+                  </Text>
+                </View>
+                <Text style={styles.settleOptionDesc}>
+                  El dinero ingresó a la cuenta de la tienda (Bancolombia, Nequi o Daviplata) por parte del repartidor o cliente con soporte de pago.
+                </Text>
+              </TouchableOpacity>
+
+              {/* CAMPO DE NÚMERO DE TRANSFERENCIA / COMPROBANTE */}
+              {settlementType === 'TRANSFERENCIA_TIENDA' && (
+                <View style={{ marginTop: 10 }}>
+                  <Text style={styles.settleFieldLabel}>
+                    Número de Transferencia / Comprobante de Pago * (Obligatorio)
+                  </Text>
+                  <TextInput
+                    style={styles.formTextInput}
+                    placeholder="Ej. 08492015 / Aprobación Bancolombia #5582"
+                    placeholderTextColor="#94A3B8"
+                    value={settlementTransferRef}
+                    onChangeText={setSettlementTransferRef}
+                  />
+                </View>
+              )}
+
+              {/* CAMPO DE NOTA O EVIDENCIA */}
+              <View style={{ marginTop: 10 }}>
+                <Text style={styles.settleFieldLabel}>
+                  Nota o Evidencia de Liquidación (Opcional)
+                </Text>
+                <TextInput
+                  style={[styles.formTextInput, { height: 60, textAlignVertical: 'top' }]}
+                  placeholder="Ej. Efectivo contado en caja física / Comprobante verificado en la app Bancolombia"
+                  placeholderTextColor="#94A3B8"
+                  value={settlementNotes}
+                  onChangeText={setSettlementNotes}
+                  multiline
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActionButtonsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setIsSettlementModalVisible(false)}
+                disabled={isSubmittingSettlement}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalConfirmButton, { backgroundColor: '#10B981' }]}
+                onPress={handleConfirmSettlement}
+                disabled={isSubmittingSettlement}
+              >
+                <Ionicons name="checkmark-done-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.modalConfirmButtonText}>
+                  {isSubmittingSettlement ? 'Registrando...' : 'Confirmar Paz y Salvo'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -5453,5 +5774,213 @@ const styles = StyleSheet.create({
     color: '#334155',
     lineHeight: 16,
     marginTop: 4,
+  },
+
+  // ESTILOS DE ARQUEO DE CAJA, LIQUIDACIÓN Y PAZ Y SALVO
+  settlementArqueoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  settlementStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 12,
+  },
+  settlementStatBox: {
+    flex: 1,
+    minWidth: 200,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+  },
+  settlementStatLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  settlementStatValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginVertical: 4,
+  },
+  settlementStatSub: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  orderSettlementPendingBanner: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+  },
+  orderSettlementPendingTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#B45309',
+  },
+  orderSettlementPendingDesc: {
+    fontSize: 11,
+    color: '#78350F',
+    lineHeight: 15,
+    marginBottom: 8,
+  },
+  settleActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D97706',
+    borderRadius: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
+  },
+  settleActionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  orderSettledSuccessBanner: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+  },
+  orderSettledSuccessTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#15803D',
+  },
+  orderSettledSuccessDetail: {
+    fontSize: 11,
+    color: '#166534',
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  settleCompactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D97706',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  settleSummaryBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  settleSummaryOrder: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  settleSummaryClient: {
+    fontSize: 12,
+    color: '#334155',
+    marginTop: 4,
+  },
+  settleSummaryDriver: {
+    fontSize: 12,
+    color: '#334155',
+    marginTop: 2,
+  },
+  settleSummaryTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 8,
+    marginTop: 8,
+  },
+  settleSummaryTotalLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  settleSummaryTotalValue: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#10B981',
+  },
+  settleFieldLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+    marginBottom: 6,
+  },
+  settleOptionCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 8,
+  },
+  settleOptionCardActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#10B981',
+    borderWidth: 1.5,
+  },
+  settleOptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  settleOptionTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  settleOptionDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
+    marginLeft: 28,
+  },
+  modalActionButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  modalCancelButton: {
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  modalCancelButtonText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#64748B',
+  },
+  modalConfirmButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  modalConfirmButtonText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
 });

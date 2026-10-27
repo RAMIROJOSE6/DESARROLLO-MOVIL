@@ -79,6 +79,13 @@ export interface Order {
   dispatchedAt?: number;
   receivedAt?: string;
   adminResponsible?: string; // Trazabilidad del administrador a cargo
+  settlementStatus?: 'PENDING_SETTLEMENT' | 'SETTLED' | 'NOT_APPLICABLE'; // Paz y salvo de caja
+  settledAt?: string; // Fecha y hora en que la tienda recibió el dinero o verificó transferencia
+  settledBy?: string; // Administrador que dio Paz y Salvo
+  settlementMethod?: 'EFECTIVO_EN_TIENDA' | 'TRANSFERENCIA_TIENDA'; // Medio de liquidación con tienda
+  transferReference?: string; // Número de transferencia / comprobante
+  driverName?: string; // Repartidor responsable (ej: José Guajiro)
+  settlementNotes?: string; // Nota o evidencia de pago
 }
 
 export interface AdminActivityLog {
@@ -163,6 +170,9 @@ export interface StoreAnalytics {
   pendingOrders: number;
   dispatchedOrders: number;
   deliveredOrders: number;
+  settledRevenue: number; // Ventas en Paz y Salvo (recibidas en tienda o cuenta bancaria)
+  pendingSettlementRevenue: number; // Dinero en poder de los repartidores (pendiente Paz y Salvo en tienda)
+  pendingSettlementCount: number; // Cantidad de pedidos pendientes de liquidar
   totalClients: number;
   totalProducts: number;
   topSellingProducts: Array<{
@@ -764,6 +774,17 @@ export async function getOrders(filterUserEmail?: string): Promise<Order[]> {
           dispatchedAt: r.dispatched_at || undefined,
           receivedAt: r.received_at || undefined,
           adminResponsible: r.admin_responsible || undefined,
+          settlementStatus: r.settlement_status || (
+            (r.payment_method && (r.payment_method.toLowerCase().includes('contra') || r.payment_method.toLowerCase().includes('efectivo')))
+              ? (r.status_code === 'DELIVERED' && r.settled_at ? 'SETTLED' : 'PENDING_SETTLEMENT')
+              : 'SETTLED'
+          ),
+          settledAt: r.settled_at || undefined,
+          settledBy: r.settled_by || undefined,
+          settlementMethod: r.settlement_method || undefined,
+          transferReference: r.transfer_reference || undefined,
+          driverName: r.driver_name || 'José Guajiro',
+          settlementNotes: r.settlement_notes || undefined,
         }));
         memoryOrders = mappedOrders;
         return mappedOrders;
@@ -781,7 +802,7 @@ export async function getOrders(filterUserEmail?: string): Promise<Order[]> {
 export async function saveOrder(order: Order): Promise<void> {
   if (isSupabaseConfigured()) {
     try {
-      await supabase.from('orders').upsert({
+      const supaPayload: any = {
         id: order.id,
         user_id: order.userId || null,
         user_email: order.userEmail || null,
@@ -802,7 +823,42 @@ export async function saveOrder(order: Order): Promise<void> {
         items_json: order.items,
         dispatched_at: order.dispatchedAt || null,
         received_at: order.receivedAt || null,
-      });
+        admin_responsible: order.adminResponsible || null,
+        settlement_status: order.settlementStatus || null,
+        settled_at: order.settledAt || null,
+        settled_by: order.settledBy || null,
+        settlement_method: order.settlementMethod || null,
+        transfer_reference: order.transferReference || null,
+        driver_name: order.driverName || 'José Guajiro',
+        settlement_notes: order.settlementNotes || null,
+      };
+
+      const { error } = await supabase.from('orders').upsert(supaPayload);
+      if (error) {
+        // Fallback básico sin columnas adicionales si la tabla Supabase no las tiene todavía
+        await supabase.from('orders').upsert({
+          id: order.id,
+          user_id: order.userId || null,
+          user_email: order.userEmail || null,
+          date: order.date,
+          client_name: order.client.name,
+          client_cedula: order.client.cedula,
+          client_phone: order.client.phone,
+          client_address: order.client.address,
+          payment_method: order.client.payment,
+          payment_status: order.paymentStatus || 'PENDING',
+          subtotal: order.subtotal,
+          shipping: order.shipping,
+          total: order.total,
+          status: order.status,
+          status_code: order.statusCode,
+          eta: order.eta,
+          rating: order.rating || 0,
+          items_json: order.items,
+          dispatched_at: order.dispatchedAt || null,
+          received_at: order.receivedAt || null,
+        });
+      }
 
       // Detalle relacional en order_items
       if (Array.isArray(order.items) && order.items.length > 0) {
@@ -835,6 +891,13 @@ export async function updateOrderStatusInDb(
     dispatchedAt?: number;
     receivedAt?: string;
     adminResponsible?: string;
+    settlementStatus?: 'PENDING_SETTLEMENT' | 'SETTLED' | 'NOT_APPLICABLE';
+    settledAt?: string;
+    settledBy?: string;
+    settlementMethod?: 'EFECTIVO_EN_TIENDA' | 'TRANSFERENCIA_TIENDA';
+    transferReference?: string;
+    driverName?: string;
+    settlementNotes?: string;
   },
 ): Promise<void> {
   if (isSupabaseConfigured()) {
@@ -847,21 +910,69 @@ export async function updateOrderStatusInDb(
       if (updates.paymentStatus) supaUpdates.payment_status = updates.paymentStatus;
       if (updates.dispatchedAt) supaUpdates.dispatched_at = updates.dispatchedAt;
       if (updates.receivedAt) supaUpdates.received_at = updates.receivedAt;
+      if (updates.adminResponsible) supaUpdates.admin_responsible = updates.adminResponsible;
+      if (updates.settlementStatus) supaUpdates.settlement_status = updates.settlementStatus;
+      if (updates.settledAt) supaUpdates.settled_at = updates.settledAt;
+      if (updates.settledBy) supaUpdates.settled_by = updates.settledBy;
+      if (updates.settlementMethod) supaUpdates.settlement_method = updates.settlementMethod;
+      if (updates.transferReference) supaUpdates.transfer_reference = updates.transferReference;
+      if (updates.driverName) supaUpdates.driver_name = updates.driverName;
+      if (updates.settlementNotes) supaUpdates.settlement_notes = updates.settlementNotes;
       
-      // Intentar actualizar admin_responsible en Supabase si la columna existe
-      if (updates.adminResponsible) {
-        const { error } = await supabase.from('orders').update({ ...supaUpdates, admin_responsible: updates.adminResponsible }).eq('id', orderId);
-        if (error) {
-          await supabase.from('orders').update(supaUpdates).eq('id', orderId);
-        }
-      } else {
-        await supabase.from('orders').update(supaUpdates).eq('id', orderId);
+      const { error } = await supabase.from('orders').update(supaUpdates).eq('id', orderId);
+      if (error) {
+        // Fallback a columnas estándar si hay columnas no migradas
+        const baseUpdates: any = {
+          status: updates.status,
+          status_code: updates.statusCode,
+          eta: updates.eta,
+        };
+        if (updates.paymentStatus) baseUpdates.payment_status = updates.paymentStatus;
+        if (updates.dispatchedAt) baseUpdates.dispatched_at = updates.dispatchedAt;
+        if (updates.receivedAt) baseUpdates.received_at = updates.receivedAt;
+        await supabase.from('orders').update(baseUpdates).eq('id', orderId);
       }
     } catch (_) {}
   }
 
   memoryOrders = memoryOrders.map(o => o.id === orderId ? { ...o, ...updates } : o);
   notifyDatabaseChange();
+}
+
+/**
+ * Registra formalmente la liquidación de un pedido y otorga el Paz y Salvo en tienda.
+ * Aplica tanto para efectivo recibido físicamente en tienda como para transferencias verificadas.
+ */
+export async function settleOrderInDb(
+  orderId: string,
+  settlementData: {
+    settlementMethod: 'EFECTIVO_EN_TIENDA' | 'TRANSFERENCIA_TIENDA';
+    transferReference?: string;
+    settledBy: string;
+    settlementNotes?: string;
+  }
+): Promise<Order | null> {
+  const now = new Date();
+  const formattedSettledAt = `${now.toLocaleDateString('es-CO')} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+  const currentOrder = memoryOrders.find(o => o.id === orderId);
+  const updatedStatus = '¡Pedido Entregado y en Paz y Salvo con la Tienda! ✅';
+
+  await updateOrderStatusInDb(orderId, {
+    statusCode: 'DELIVERED',
+    status: updatedStatus,
+    eta: 'Entrega y Liquidación Finalizadas',
+    paymentStatus: 'PAID',
+    settlementStatus: 'SETTLED',
+    settledAt: formattedSettledAt,
+    settledBy: settlementData.settledBy,
+    settlementMethod: settlementData.settlementMethod,
+    transferReference: settlementData.transferReference,
+    settlementNotes: settlementData.settlementNotes,
+    adminResponsible: settlementData.settledBy,
+  });
+
+  return memoryOrders.find(o => o.id === orderId) || null;
 }
 
 export async function updateOrderRatingInDb(
@@ -1486,6 +1597,13 @@ export function calculateAdminAnalytics(
   const totalClients = users.filter(u => u.role !== "admin").length;
   const totalProducts = products.length;
 
+  // Liquidación y Arqueo de Caja (Paz y Salvo vs En Tránsito con repartidores)
+  const settledOrders = deliveredOrders.filter(o => o.settlementStatus === 'SETTLED');
+  const pendingSettlementOrders = orders.filter(o => o.settlementStatus === 'PENDING_SETTLEMENT');
+  const settledRevenue = settledOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+  const pendingSettlementRevenue = pendingSettlementOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+  const pendingSettlementCount = pendingSettlementOrders.length;
+
   const productSalesMap = new Map<string, { id: string; name: string; category: string; categoryId: string; unitsSold: number; totalSold: number; revenue: number }>();
   const salesSourceOrders = deliveredOrders.length > 0 ? deliveredOrders : validOrders;
   for (const ord of salesSourceOrders) {
@@ -1573,6 +1691,9 @@ export function calculateAdminAnalytics(
     pendingOrders,
     dispatchedOrders,
     deliveredOrders: deliveredOrdersCount,
+    settledRevenue,
+    pendingSettlementRevenue,
+    pendingSettlementCount,
     totalClients,
     totalProducts,
     topSellingProducts,

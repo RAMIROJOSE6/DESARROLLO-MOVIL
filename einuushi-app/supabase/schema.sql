@@ -76,6 +76,14 @@ CREATE TABLE IF NOT EXISTS orders (
   items_json JSONB NOT NULL, -- Copia snapshot inmutable de los productos comprados
   dispatched_at BIGINT,
   received_at TEXT,
+  admin_responsible TEXT,
+  settlement_status TEXT NOT NULL DEFAULT 'NOT_APPLICABLE', -- 'PENDING_SETTLEMENT' | 'SETTLED' | 'NOT_APPLICABLE'
+  settled_at TEXT,
+  settled_by TEXT,
+  settlement_method TEXT, -- 'EFECTIVO_EN_TIENDA' | 'TRANSFERENCIA_TIENDA'
+  transfer_reference TEXT, -- Número de comprobante / transferencia
+  driver_name TEXT DEFAULT 'José Guajiro',
+  settlement_notes TEXT,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

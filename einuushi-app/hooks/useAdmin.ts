@@ -18,6 +18,7 @@ import {
   getChatMessages,
   getStoreAnalytics,
   updateOrderStatusInDb,
+  settleOrderInDb,
   saveNotificationToDb,
   updateProductStockInDb,
   updateProduct,
@@ -303,11 +304,23 @@ export function useAdmin() {
     const now = new Date();
     const formattedReceivedAt = `${now.toLocaleDateString('es-CO')} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
+    const isCashOnDelivery = target.client.payment.toLowerCase().includes('contra') || target.client.payment.toLowerCase().includes('efectivo');
+    const isSettledAlready = !isCashOnDelivery && target.settlementStatus === 'SETTLED';
+
+    const newSettlementStatus = isCashOnDelivery 
+      ? 'PENDING_SETTLEMENT' 
+      : (target.settlementStatus || 'SETTLED');
+
+    const statusMessage = isCashOnDelivery
+      ? `¡Pedido Entregado! Dinero recibido por el repartidor José Guajiro (Pendiente entrega en tienda y Paz y Salvo) 🛵`
+      : `¡Pedido Entregado a Satisfacción! Verificado por ${adminUser?.fullName || 'Administrador'} ✅`;
+
     await updateOrderStatusInDb(orderId, {
       statusCode: 'DELIVERED',
-      status: `¡Pedido Entregado a Satisfacción! Verificado por ${adminUser?.fullName || 'Administrador'} ✅`,
+      status: statusMessage,
       eta: 'Entrega finalizada',
-      paymentStatus: 'PAID',
+      paymentStatus: isCashOnDelivery ? 'PENDING' : 'PAID',
+      settlementStatus: newSettlementStatus,
       receivedAt: formattedReceivedAt,
       adminResponsible: adminLabel,
     });
@@ -319,7 +332,7 @@ export function useAdmin() {
       actionType: 'DELIVER_ORDER',
       entityType: 'PEDIDO',
       entityId: orderId,
-      details: `${adminUser?.fullName || 'Administrador'} confirmó la entrega del pedido #${orderId}. Venta cargada al sistema el ${formattedReceivedAt}.`,
+      details: `${adminUser?.fullName || 'Administrador'} confirmó la entrega del pedido #${orderId}. Venta cargada al sistema el ${formattedReceivedAt}.${isCashOnDelivery ? ' Dinero en poder del repartidor José Guajiro (Pendiente Paz y Salvo en tienda).' : ' Pago registrado.'}`,
     });
 
     setOrders(prev =>
@@ -328,10 +341,77 @@ export function useAdmin() {
           ? {
               ...o,
               statusCode: 'DELIVERED',
-              status: `¡Pedido Entregado a Satisfacción! Verificado por ${adminUser?.fullName || 'Administrador'} ✅`,
+              status: statusMessage,
               eta: 'Entrega finalizada',
-              paymentStatus: 'PAID',
+              paymentStatus: isCashOnDelivery ? 'PENDING' : 'PAID',
+              settlementStatus: newSettlementStatus,
               receivedAt: formattedReceivedAt,
+              adminResponsible: adminLabel,
+            }
+          : o
+      )
+    );
+    await refreshAll();
+  };
+
+  // Liquidar formalmente un pedido y emitir Paz y Salvo en tienda
+  const settleOrderPazYSalvo = async (
+    orderId: string,
+    settlementMethod: 'EFECTIVO_EN_TIENDA' | 'TRANSFERENCIA_TIENDA',
+    transferReference?: string,
+    settlementNotes?: string
+  ) => {
+    const target = orders.find(o => o.id === orderId);
+    if (!target) return;
+    const adminLabel = adminUser ? `${adminUser.fullName} (${adminUser.email})` : 'Administrador';
+    const now = new Date();
+    const formattedSettledAt = `${now.toLocaleDateString('es-CO')} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+    await settleOrderInDb(orderId, {
+      settlementMethod,
+      transferReference: transferReference?.trim() || undefined,
+      settledBy: adminLabel,
+      settlementNotes: settlementNotes?.trim() || undefined,
+    });
+
+    const methodDesc = settlementMethod === 'EFECTIVO_EN_TIENDA'
+      ? 'Efectivo recibido en caja física de la tienda por el repartidor José Guajiro'
+      : `Transferencia bancaria a cuenta de la tienda (Comprobante #${transferReference || 'N/A'})`;
+
+    await logAdminActivity({
+      adminId: adminUser?.id,
+      adminEmail: adminUser?.email || 'admin@einuushi.com',
+      adminName: adminUser?.fullName || 'Administrador',
+      actionType: 'PAZ_Y_SALVO',
+      entityType: 'PEDIDO',
+      entityId: orderId,
+      details: `${adminUser?.fullName || 'Administrador'} otorgó PAZ Y SALVO al pedido #${orderId} ($ ${(target.total || 0).toLocaleString('es-CO')} COP). Modalidad: ${methodDesc}.${settlementNotes ? ` Evidencia: ${settlementNotes}` : ''}`,
+    });
+
+    await saveNotificationToDb({
+      id: `notif-settle-${orderId}-${Date.now()}`,
+      orderId: orderId,
+      title: '✅ ¡Pedido en Paz y Salvo!',
+      message: `El pedido #${orderId} ha sido liquidado y se encuentra en Paz y Salvo en tienda. ${methodDesc}.`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      read: false,
+    });
+
+    setOrders(prev =>
+      prev.map(o =>
+        o.id === orderId
+          ? {
+              ...o,
+              statusCode: 'DELIVERED',
+              status: '¡Pedido Entregado y en Paz y Salvo con la Tienda! ✅',
+              eta: 'Entrega y Liquidación Finalizadas',
+              paymentStatus: 'PAID',
+              settlementStatus: 'SETTLED',
+              settledAt: formattedSettledAt,
+              settledBy: adminLabel,
+              settlementMethod,
+              transferReference: transferReference?.trim() || undefined,
+              settlementNotes: settlementNotes?.trim() || undefined,
               adminResponsible: adminLabel,
             }
           : o
@@ -708,6 +788,7 @@ export function useAdmin() {
     dispatchOrder,
     markOrderArrived,
     markOrderDelivered,
+    settleOrderPazYSalvo,
     updateStock,
     toggleDiscount,
     addProduct,
