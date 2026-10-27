@@ -3736,7 +3736,12 @@ export default function AdminScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              persistentScrollbar={true}
+              style={{ maxHeight: 480 }}
+              contentContainerStyle={{ paddingRight: 8, paddingBottom: 20 }}
+            >
               {/* RESUMEN DEL PEDIDO */}
               <View style={styles.settleSummaryBox}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -4403,7 +4408,12 @@ export default function AdminScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              persistentScrollbar={true}
+              style={{ maxHeight: 460 }}
+              contentContainerStyle={{ paddingRight: 8, paddingBottom: 16 }}
+            >
               {/* Resumen del Destino */}
               <View
                 style={{
@@ -4570,7 +4580,12 @@ export default function AdminScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              persistentScrollbar={true}
+              style={{ maxHeight: 480 }}
+              contentContainerStyle={{ paddingRight: 8, paddingBottom: 20 }}
+            >
               {/* Selector de Tipo: Individual vs Corporativa */}
               <View style={{ marginBottom: 14 }}>
                 <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 6 }}>
