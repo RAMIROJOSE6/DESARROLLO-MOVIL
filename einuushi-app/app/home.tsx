@@ -47,6 +47,45 @@ const SUPABASE_FALLBACK_IMAGES: Record<string, string> = {
   sombrero1: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/sombrero1.jpg',
 };
 
+const COUNTRY_OPTIONS = [
+  { label: 'Colombia', value: 'Colombia' },
+  { label: 'Venezuela', value: 'Venezuela' },
+  { label: 'Ecuador', value: 'Ecuador' },
+  { label: 'Panamá', value: 'Panamá' },
+  { label: 'Estados Unidos', value: 'Estados Unidos' },
+];
+
+const DEPARTMENT_OPTIONS = [
+  { label: 'La Guajira', value: 'La Guajira' },
+  { label: 'Cesar', value: 'Cesar' },
+  { label: 'Magdalena', value: 'Magdalena' },
+  { label: 'Atlántico', value: 'Atlántico' },
+  { label: 'Bolívar', value: 'Bolívar' },
+  { label: 'Antioquia', value: 'Antioquia' },
+  { label: 'Bogotá D.C.', value: 'Bogotá D.C.' },
+];
+
+const CITY_OPTIONS = [
+  { label: 'Riohacha ($ 5.000 COP)', value: 'Riohacha' },
+  { label: 'Maicao (Otra ciudad - $ 16.000 COP)', value: 'Maicao' },
+  { label: 'Uribia (Otra ciudad - $ 16.000 COP)', value: 'Uribia' },
+  { label: 'Manaure (Otra ciudad - $ 16.000 COP)', value: 'Manaure' },
+  { label: 'Valledupar (Otra ciudad - $ 16.000 COP)', value: 'Valledupar' },
+  { label: 'Santa Marta (Otra ciudad - $ 16.000 COP)', value: 'Santa Marta' },
+  { label: 'Barranquilla (Otra ciudad - $ 16.000 COP)', value: 'Barranquilla' },
+  { label: 'Cartagena (Otra ciudad - $ 16.000 COP)', value: 'Cartagena' },
+  { label: 'Medellín (Otra ciudad - $ 16.000 COP)', value: 'Medellín' },
+  { label: 'Bogotá (Otra ciudad - $ 16.000 COP)', value: 'Bogotá' },
+];
+
+const PAYMENT_METHOD_OPTIONS = [
+  { label: 'Efectivo contra entrega', value: 'Efectivo contra entrega' },
+  { label: 'Tarjeta débito', value: 'Tarjeta débito' },
+  { label: 'PSE', value: 'PSE' },
+  { label: 'Tarjeta de crédito', value: 'Tarjeta de crédito' },
+  { label: 'Código QR', value: 'Código QR' },
+];
+
 
 
 export default function HomeScreen() {
@@ -103,6 +142,12 @@ export default function HomeScreen() {
   const [clientNeighborhood, setClientNeighborhood] = useState('');
   const [clientStreetAddress, setClientStreetAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Efectivo contra entrega');
+  const [nativePickerModal, setNativePickerModal] = useState<{
+    title: string;
+    options: { label: string; value: string }[];
+    selectedValue: string;
+    onSelect: (val: string) => void;
+  } | null>(null);
 
   // Sincronizar automáticamente datos del cliente si el usuario cambia
   useEffect(() => {
@@ -1572,56 +1617,48 @@ export default function HomeScreen() {
               />
 
               <Text style={styles.formLabel}>País *</Text>
-              <View style={styles.pickerContainer}>
-                <select 
-                  value={clientCountry} 
-                  onChange={(e) => setClientCountry(e.target.value)}
-                  style={styles.htmlSelect}
-                >
-                  <option value="Colombia">Colombia</option>
-                  <option value="Venezuela">Venezuela</option>
-                  <option value="Ecuador">Ecuador</option>
-                  <option value="Panamá">Panamá</option>
-                  <option value="Estados Unidos">Estados Unidos</option>
-                </select>
-              </View>
+              <TouchableOpacity 
+                style={styles.pickerSelector}
+                onPress={() => setNativePickerModal({
+                  title: 'Seleccionar País',
+                  options: COUNTRY_OPTIONS,
+                  selectedValue: clientCountry,
+                  onSelect: (val) => setClientCountry(val),
+                })}
+              >
+                <Text style={styles.pickerSelectorText}>{clientCountry}</Text>
+                <Ionicons name="chevron-down" size={18} color="#64748B" />
+              </TouchableOpacity>
 
               <Text style={styles.formLabel}>Departamento / Estado *</Text>
-              <View style={styles.pickerContainer}>
-                <select 
-                  value={clientDepartment} 
-                  onChange={(e) => setClientDepartment(e.target.value)}
-                  style={styles.htmlSelect}
-                >
-                  <option value="La Guajira">La Guajira</option>
-                  <option value="Cesar">Cesar</option>
-                  <option value="Magdalena">Magdalena</option>
-                  <option value="Atlántico">Atlántico</option>
-                  <option value="Bolívar">Bolívar</option>
-                  <option value="Antioquia">Antioquia</option>
-                  <option value="Bogotá D.C.">Bogotá D.C.</option>
-                </select>
-              </View>
+              <TouchableOpacity 
+                style={styles.pickerSelector}
+                onPress={() => setNativePickerModal({
+                  title: 'Seleccionar Departamento / Estado',
+                  options: DEPARTMENT_OPTIONS,
+                  selectedValue: clientDepartment,
+                  onSelect: (val) => setClientDepartment(val),
+                })}
+              >
+                <Text style={styles.pickerSelectorText}>{clientDepartment}</Text>
+                <Ionicons name="chevron-down" size={18} color="#64748B" />
+              </TouchableOpacity>
 
               <Text style={styles.formLabel}>Ciudad *</Text>
-              <View style={styles.pickerContainer}>
-                <select 
-                  value={clientCity} 
-                  onChange={(e) => setClientCity(e.target.value)}
-                  style={styles.htmlSelect}
-                >
-                  <option value="Riohacha">Riohacha ($ 5.000 COP)</option>
-                  <option value="Maicao">Maicao (Otra ciudad - $ 16.000 COP)</option>
-                  <option value="Uribia">Uribia (Otra ciudad - $ 16.000 COP)</option>
-                  <option value="Manaure">Manaure (Otra ciudad - $ 16.000 COP)</option>
-                  <option value="Valledupar">Valledupar (Otra ciudad - $ 16.000 COP)</option>
-                  <option value="Santa Marta">Santa Marta (Otra ciudad - $ 16.000 COP)</option>
-                  <option value="Barranquilla">Barranquilla (Otra ciudad - $ 16.000 COP)</option>
-                  <option value="Cartagena">Cartagena (Otra ciudad - $ 16.000 COP)</option>
-                  <option value="Medellín">Medellín (Otra ciudad - $ 16.000 COP)</option>
-                  <option value="Bogotá">Bogotá (Otra ciudad - $ 16.000 COP)</option>
-                </select>
-              </View>
+              <TouchableOpacity 
+                style={styles.pickerSelector}
+                onPress={() => setNativePickerModal({
+                  title: 'Seleccionar Ciudad',
+                  options: CITY_OPTIONS,
+                  selectedValue: clientCity,
+                  onSelect: (val) => setClientCity(val),
+                })}
+              >
+                <Text style={styles.pickerSelectorText}>
+                  {CITY_OPTIONS.find(c => c.value === clientCity)?.label || clientCity}
+                </Text>
+                <Ionicons name="chevron-down" size={18} color="#64748B" />
+              </TouchableOpacity>
 
               <Text style={styles.formLabel}>Barrio *</Text>
               <TextInput
@@ -1642,19 +1679,18 @@ export default function HomeScreen() {
               />
 
               <Text style={styles.formLabel}>Medio de Pago *</Text>
-              <View style={styles.pickerContainer}>
-                <select 
-                  value={paymentMethod} 
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  style={styles.htmlSelect}
-                >
-                  <option value="Efectivo contra entrega">Efectivo contra entrega</option>
-                  <option value="Tarjeta débito">Tarjeta débito</option>
-                  <option value="PSE">PSE</option>
-                  <option value="Tarjeta de crédito">Tarjeta de crédito</option>
-                  <option value="Código QR">Código QR</option>
-                </select>
-              </View>
+              <TouchableOpacity 
+                style={styles.pickerSelector}
+                onPress={() => setNativePickerModal({
+                  title: 'Seleccionar Medio de Pago',
+                  options: PAYMENT_METHOD_OPTIONS,
+                  selectedValue: paymentMethod,
+                  onSelect: (val) => setPaymentMethod(val),
+                })}
+              >
+                <Text style={styles.pickerSelectorText}>{paymentMethod}</Text>
+                <Ionicons name="chevron-down" size={18} color="#64748B" />
+              </TouchableOpacity>
 
               <View style={styles.shippingSummaryBox}>
                 <Text style={styles.shippingSummaryText}>📦 Tarifa de envío aplicada:</Text>
@@ -1676,6 +1712,53 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
+          </View>
+        </View>
+      </Modal>
+
+      {/* Selector modal nativo cross-platform para reemplazar selects HTML */}
+      <Modal
+        visible={!!nativePickerModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setNativePickerModal(null)}
+      >
+        <View style={styles.pickerOverlay}>
+          <View style={styles.pickerDialog}>
+            <View style={styles.pickerHeaderRow}>
+              <Text style={styles.pickerDialogTitle}>{nativePickerModal?.title}</Text>
+              <TouchableOpacity onPress={() => setNativePickerModal(null)} style={{ padding: 4 }}>
+                <Ionicons name="close" size={22} color="#1E2B58" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              {nativePickerModal?.options.map((opt) => {
+                const isSelected = opt.value === nativePickerModal.selectedValue;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[
+                      styles.pickerOptionItem,
+                      isSelected && styles.pickerOptionItemSelected,
+                    ]}
+                    onPress={() => {
+                      nativePickerModal.onSelect(opt.value);
+                      setNativePickerModal(null);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.pickerOptionText,
+                        isSelected && styles.pickerOptionTextSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                    {isSelected && <Ionicons name="checkmark-circle" size={20} color="#1E2B58" />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -3400,6 +3483,76 @@ const styles = StyleSheet.create({
     height: 42,
     fontSize: 13,
     color: '#1E293B',
+  },
+  pickerSelector: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    height: 44,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  pickerSelectorText: {
+    fontSize: 13,
+    color: '#1E293B',
+    fontWeight: '500',
+  },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  pickerDialog: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  pickerHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderColor: '#F1F5F9',
+    marginBottom: 8,
+  },
+  pickerDialogTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1E2B58',
+  },
+  pickerOptionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginVertical: 3,
+  },
+  pickerOptionItemSelected: {
+    backgroundColor: '#EFF6FF',
+  },
+  pickerOptionText: {
+    fontSize: 14,
+    color: '#334155',
+  },
+  pickerOptionTextSelected: {
+    fontWeight: 'bold',
+    color: '#1E2B58',
   },
   pickerContainer: {
     backgroundColor: '#F8FAFC',
