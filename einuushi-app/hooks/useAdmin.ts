@@ -18,6 +18,7 @@ import {
   getChatMessages,
   getStoreAnalytics,
   updateOrderStatusInDb,
+  saveNotificationToDb,
   updateProductStockInDb,
   updateProduct,
   createProduct,
@@ -195,6 +196,16 @@ export function useAdmin() {
       adminResponsible: adminLabel,
     });
 
+    // Notificar al cliente en tiempo real que su pedido ya fue despachado para habilitar seguimiento en vivo
+    await saveNotificationToDb({
+      id: `notif-${orderId}-${Date.now()}`,
+      orderId: orderId,
+      title: '🛵 ¡Tu pedido ha sido despachado!',
+      message: `Tu pedido #${orderId} ha sido despachado por administración. El repartidor José Guajiro va en camino a tu dirección. ¡Ahora puedes seguirlo en vivo en el mapa!`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      read: false,
+    });
+
     await logAdminActivity({
       adminId: adminUser?.id,
       adminEmail: adminUser?.email || 'admin@einuushi.com',
@@ -213,6 +224,7 @@ export function useAdmin() {
               statusCode: 'DISPATCHED',
               status: `¡Pedido Despachado por ${adminUser?.fullName || 'Administrador'}! Repartidor José Guajiro va en camino.`,
               eta: 'En ruta (aprox. 15-25 min)',
+              dispatchedAt: Date.now(),
               adminResponsible: adminLabel,
             }
           : o
@@ -221,18 +233,20 @@ export function useAdmin() {
     await refreshAll();
   };
 
-  // Marcar pedido entregado con trazabilidad
+  // Marcar pedido entregado con trazabilidad y carga de venta al sistema con fecha y hora
   const markOrderDelivered = async (orderId: string) => {
     const target = orders.find(o => o.id === orderId);
     if (!target) return;
     const adminLabel = adminUser ? `${adminUser.fullName} (${adminUser.email})` : 'Administrador';
+    const now = new Date();
+    const formattedReceivedAt = `${now.toLocaleDateString('es-CO')} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
     await updateOrderStatusInDb(orderId, {
       statusCode: 'DELIVERED',
       status: `¡Pedido Entregado a Satisfacción! Verificado por ${adminUser?.fullName || 'Administrador'} ✅`,
       eta: 'Entrega finalizada',
       paymentStatus: 'PAID',
-      receivedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      receivedAt: formattedReceivedAt,
       adminResponsible: adminLabel,
     });
 
@@ -243,7 +257,7 @@ export function useAdmin() {
       actionType: 'DELIVER_ORDER',
       entityType: 'PEDIDO',
       entityId: orderId,
-      details: `${adminUser?.fullName || 'Administrador'} confirmó y finalizó la entrega del pedido #${orderId}.`,
+      details: `${adminUser?.fullName || 'Administrador'} confirmó la entrega del pedido #${orderId}. Venta cargada al sistema el ${formattedReceivedAt}.`,
     });
 
     setOrders(prev =>
@@ -255,6 +269,7 @@ export function useAdmin() {
               status: `¡Pedido Entregado a Satisfacción! Verificado por ${adminUser?.fullName || 'Administrador'} ✅`,
               eta: 'Entrega finalizada',
               paymentStatus: 'PAID',
+              receivedAt: formattedReceivedAt,
               adminResponsible: adminLabel,
             }
           : o

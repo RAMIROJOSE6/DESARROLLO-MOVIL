@@ -1476,16 +1476,19 @@ export function calculateAdminAnalytics(
   users: User[],
 ): StoreAnalytics {
   const validOrders = orders.filter(o => o.statusCode !== "CANCELLED");
-  const totalRevenue = validOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+  // Ventas Totales: Solo se cargan y suman al sistema cuando el pedido ha sido entregado (DELIVERED)
+  const deliveredOrders = orders.filter(o => o.statusCode === "DELIVERED");
+  const totalRevenue = deliveredOrders.reduce((sum, o) => sum + (o.total || 0), 0);
   const totalOrders = orders.length;
   const pendingOrders = orders.filter(o => o.statusCode === "PENDING").length;
-  const dispatchedOrders = orders.filter(o => o.statusCode === "DISPATCHED").length;
-  const deliveredOrders = orders.filter(o => o.statusCode === "DELIVERED").length;
+  const dispatchedOrders = orders.filter(o => o.statusCode === "DISPATCHED" || o.statusCode === "ARRIVED").length;
+  const deliveredOrdersCount = deliveredOrders.length;
   const totalClients = users.filter(u => u.role !== "admin").length;
   const totalProducts = products.length;
 
   const productSalesMap = new Map<string, { id: string; name: string; category: string; categoryId: string; unitsSold: number; totalSold: number; revenue: number }>();
-  for (const ord of validOrders) {
+  const salesSourceOrders = deliveredOrders.length > 0 ? deliveredOrders : validOrders;
+  for (const ord of salesSourceOrders) {
     if (Array.isArray(ord.items)) {
       for (const item of ord.items) {
         const cat = item.category || 'General';
@@ -1569,7 +1572,7 @@ export function calculateAdminAnalytics(
     totalOrders,
     pendingOrders,
     dispatchedOrders,
-    deliveredOrders,
+    deliveredOrders: deliveredOrdersCount,
     totalClients,
     totalProducts,
     topSellingProducts,

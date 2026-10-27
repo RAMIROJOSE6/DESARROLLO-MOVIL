@@ -279,6 +279,11 @@ export default function HomeScreen() {
       if (storedOrders && storedOrders.length > 0) {
         setOrders(storedOrders);
         setOrderCounter(storedOrders.length + 1);
+        setActiveTrackingOrder((prev: any) => {
+          if (!prev) return null;
+          const found = storedOrders.find(o => o.id === prev.id);
+          return found || prev;
+        });
       } else {
         setOrders([]);
       }
@@ -369,55 +374,7 @@ export default function HomeScreen() {
     }
   }, [inAppToast]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setOrders(prevOrders =>
-        prevOrders.map(order => {
-          if (order.statusCode === 'PENDING') {
-            const isContra = order.client?.payment?.toLowerCase().includes('contra');
-            const newStatus = isContra ? '¡Pedido Despachado en camino! (Cobro contra entrega)' : '¡Pedido Despachado en camino!';
-            const updated = {
-              ...order,
-              status: newStatus,
-              statusCode: 'DISPATCHED',
-              dispatchedAt: Date.now(),
-              eta: 'En ruta de entrega...'
-            };
-            // Persistir cambio a DISPATCHED en SQLite Drizzle ORM
-            updateOrderStatusInDb(order.id, {
-              status: newStatus,
-              statusCode: 'DISPATCHED',
-              eta: 'En ruta de entrega...'
-            }).catch(e => console.warn('DB update order error:', e));
 
-            return updated;
-          }
-          if (order.statusCode === 'DISPATCHED') {
-            const timeSinceDispatch = Date.now() - (order.dispatchedAt || 0);
-            if (timeSinceDispatch > 22000) {
-              notifyOrderArrival(order);
-              const updated = {
-                ...order,
-                status: '🛵 ¡El repartidor ha llegado a tu dirección!',
-                statusCode: 'ARRIVED',
-                eta: 'El repartidor está esperando en la puerta'
-              };
-              // Persistir cambio a ARRIVED en SQLite Drizzle ORM
-              updateOrderStatusInDb(order.id, {
-                status: '🛵 ¡El repartidor ha llegado a tu dirección!',
-                statusCode: 'ARRIVED',
-                eta: 'El repartidor está esperando en la puerta'
-              }).catch(e => console.warn('DB update order error:', e));
-
-              return updated;
-            }
-          }
-          return order;
-        })
-      );
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     let timer: any;
@@ -860,10 +817,10 @@ export default function HomeScreen() {
         subtotal: subtotalProductsValue,
         shipping: shippingCostValue,
         total: finalTotalValue,
-        status: isContraentrega ? 'Pendiente de despacho en tienda (Pago contra entrega)' : statusText,
+        status: isContraentrega ? 'Pendiente de despacho (Pago contra entrega)' : 'Pendiente de despacho en tienda',
         statusCode: 'PENDING',
         paymentStatus: isContraentrega ? 'PENDING' : 'PAID',
-        eta: 'Tiempo estimado de despacho: 1 min',
+        eta: 'Esperando despacho por parte del administrador',
         rating: 0
       };
 
@@ -905,13 +862,29 @@ export default function HomeScreen() {
       // Persistir nuevo pedido en Base de Datos SQLite con Drizzle ORM (Offline-First)
       saveOrder(newOrder).catch(err => console.warn('Error saving order to SQLite Drizzle:', err));
       
+      // Guardar notificación inicial de pedido registrado en espera de despacho
+      const initialNotif = {
+        id: `notif-${orderId}-${Date.now()}`,
+        orderId: orderId,
+        title: `Pedido ${orderId} registrado con éxito`,
+        message: `Tu pedido #${orderId} ha sido registrado y está en estado Pendiente de despacho. El administrador lo despachará en breve para habilitar el seguimiento en vivo.`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        read: false
+      };
+      saveNotificationToDb(initialNotif).catch(e => console.warn('Error saving notif:', e));
+      setNotifications(prev => [initialNotif, ...prev]);
+      setNotificationsUnreadCount(prev => prev + 1);
+
       setClientName('');
       setClientCedula('');
       setClientPhone('');
       setClientNeighborhood('');
       setClientStreetAddress('');
 
-      showAlert('¡Pedido Registrado!', `¡Pedido ${orderId} registrado con éxito! Pasará a despacho en aproximadamente 1 minuto.`);
+      showAlert(
+        '¡Pedido Registrado con Éxito!',
+        `¡Pedido ${orderId} registrado!\n\nEstado actual: "Pendiente de despacho".\n\nEl administrador despachará tu pedido desde el panel y en ese momento recibirás la notificación para hacerle seguimiento en vivo.`
+      );
       },
       () => {
         if (paymentMethod === 'Código QR') {
@@ -924,12 +897,16 @@ export default function HomeScreen() {
   };
 
   const handleMarkOrderAsReceived = (orderId: string) => {
-    // Persistir estado de recibido y pago completo en SQLite Drizzle ORM
+    const now = new Date();
+    const formattedReceivedAt = `${now.toLocaleDateString('es-CO')} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+    // Persistir estado de recibido y pago completo en SQLite Drizzle ORM con fecha y hora
     updateOrderStatusInDb(orderId, {
       status: '¡Pedido Recibido a Satisfacción por el Cliente! ✅',
       statusCode: 'DELIVERED',
       paymentStatus: 'PAID',
-      eta: 'Entrega finalizada'
+      eta: 'Entrega finalizada',
+      receivedAt: formattedReceivedAt,
     }).catch(err => console.warn('Error updating order status in SQLite Drizzle:', err));
 
     setOrders(prevOrders =>
@@ -941,7 +918,8 @@ export default function HomeScreen() {
             status: '¡Pedido Recibido a Satisfacción por el Cliente! ✅',
             statusCode: 'DELIVERED',
             paymentStatus: 'PAID',
-            eta: isContra ? 'Entrega finalizada (Pagado a satisfacción)' : 'Entrega finalizada'
+            eta: isContra ? 'Entrega finalizada (Pagado a satisfacción)' : 'Entrega finalizada',
+            receivedAt: formattedReceivedAt,
           };
         }
         return ord;
@@ -956,11 +934,17 @@ export default function HomeScreen() {
           status: '¡Pedido Recibido a Satisfacción por el Cliente! ✅',
           statusCode: 'DELIVERED',
           paymentStatus: 'PAID',
-          eta: isContra ? 'Entrega finalizada (Pagado a satisfacción)' : 'Entrega finalizada'
+          eta: isContra ? 'Entrega finalizada (Pagado a satisfacción)' : 'Entrega finalizada',
+          receivedAt: formattedReceivedAt,
         };
       }
       return prev;
     });
+
+    showAlert(
+      '¡Pedido Recibido a Satisfacción!',
+      `Has confirmado la recepción de tu pedido #${orderId}.\n\n📅 Fecha y Hora de Entrega: ${formattedReceivedAt}\n\n¡La venta fue registrada y cargada exitosamente al sistema!`
+    );
 
     setNotifications(prev =>
       prev.map(n => {
@@ -1999,6 +1983,24 @@ export default function HomeScreen() {
                           {order.rating > 0 
                             ? `Calificado con ${order.rating} de 5 estrellas. (Toca para cambiar)` 
                             : 'Toca una estrella para calificar el servicio'}
+                        </Text>
+                      </View>
+                    )}
+
+                    {order.statusCode === 'PENDING' && (
+                      <View style={styles.orderPendingDispatchNotice}>
+                        <Ionicons name="time-outline" size={16} color="#B45309" style={{ marginRight: 6 }} />
+                        <Text style={styles.orderPendingDispatchNoticeText}>
+                          ⏳ Pendiente de despacho: Tu pedido está en preparación en tienda. La administración lo despachará para habilitar el mapa y seguimiento en vivo.
+                        </Text>
+                      </View>
+                    )}
+
+                    {order.statusCode === 'DELIVERED' && order.receivedAt && (
+                      <View style={styles.orderDeliveredNotice}>
+                        <Ionicons name="checkmark-done-circle" size={16} color="#166534" style={{ marginRight: 6 }} />
+                        <Text style={styles.orderDeliveredNoticeText}>
+                          Venta confirmada • Entregado el: {order.receivedAt}
                         </Text>
                       </View>
                     )}
@@ -3745,6 +3747,38 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#854D0E',
+  },
+  orderPendingDispatchNotice: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 8,
+    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  orderPendingDispatchNoticeText: {
+    fontSize: 11,
+    color: '#92400E',
+    fontWeight: '500',
+    flex: 1,
+  },
+  orderDeliveredNotice: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    borderRadius: 8,
+    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  orderDeliveredNoticeText: {
+    fontSize: 11,
+    color: '#166534',
+    fontWeight: '600',
+    flex: 1,
   },
   trackingLiveButton: {
     backgroundColor: '#166534',

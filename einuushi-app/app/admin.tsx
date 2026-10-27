@@ -1587,6 +1587,16 @@ export default function AdminScreen() {
                         )}
                       </Text>
                     </View>
+
+                    {/* CONFIRMACIÓN DE ENTREGA Y CARGA DE VENTA */}
+                    {order.statusCode === 'DELIVERED' && (
+                      <View style={styles.orderDeliveredSuccessBanner}>
+                        <Ionicons name="checkmark-done-circle" size={15} color="#166534" style={{ marginRight: 6 }} />
+                        <Text style={styles.orderDeliveredSuccessText}>
+                          Venta Finalizada y Cargada al Sistema • Fecha y Hora: <Text style={{ fontWeight: 'bold' }}>{order.receivedAt || order.date}</Text>
+                        </Text>
+                      </View>
+                    )}
                   </View>
 
                   {/* DESGLOSE DE ARTÍCULOS */}
@@ -5050,6 +5060,23 @@ const styles = StyleSheet.create({
   orderTraceabilityText: {
     fontSize: 11,
     color: '#1E2B58',
+  },
+  orderDeliveredSuccessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    marginTop: 6,
+  },
+  orderDeliveredSuccessText: {
+    fontSize: 11,
+    color: '#166534',
+    fontWeight: '600',
+    flex: 1,
   },
 
   // CONFIGURACIÓN, MULTI-ADMIN Y AUDITORÍA
