@@ -967,17 +967,15 @@ export default function HomeScreen() {
     const isContra = (currentOrder?.client?.payment || '').toLowerCase().includes('contra') || (currentOrder?.client?.payment || '').toLowerCase().includes('efectivo');
 
     const newSettlementStatus = isContra ? 'PENDING_SETTLEMENT' : (currentOrder?.settlementStatus || 'SETTLED');
-    const statusMsg = isContra
-      ? '¡Pedido Entregado! Pago en efectivo entregado al repartidor José Guajiro (Pendiente Paz y Salvo en tienda).'
-      : '¡Pedido Recibido a Satisfacción por el Cliente! ✅';
+    const statusMsg = '¡Pedido Recibido y Pagado a Satisfacción! ✅';
 
     // Persistir estado de recibido y liquidación en base de datos
     updateOrderStatusInDb(orderId, {
       status: statusMsg,
       statusCode: 'DELIVERED',
-      paymentStatus: isContra ? 'PENDING' : 'PAID',
+      paymentStatus: 'PAID',
       settlementStatus: newSettlementStatus,
-      eta: isContra ? 'Entrega finalizada (Dinero en poder del repartidor)' : 'Entrega finalizada',
+      eta: 'Entrega finalizada',
       receivedAt: formattedReceivedAt,
     }).catch(err => console.warn('Error updating order status in SQLite Drizzle:', err));
 
@@ -988,7 +986,7 @@ export default function HomeScreen() {
       actionType: 'DELIVERY_CONFIRMED',
       entityType: 'PEDIDO',
       entityId: orderId,
-      details: `El cliente confirmó la recepción del pedido #${orderId} el ${formattedReceivedAt}.${isContra ? ' Dinero en efectivo en poder del repartidor José Guajiro (Pendiente entrega en tienda y Paz y Salvo).' : ' Venta finalizada.'}`,
+      details: `El cliente confirmó la recepción y pago del pedido #${orderId} el ${formattedReceivedAt}.${isContra ? ' Dinero en efectivo en poder del repartidor José Guajiro (Pendiente entrega en tienda y Paz y Salvo).' : ' Venta finalizada.'}`,
     }).catch(e => console.warn('Error logging admin activity:', e));
 
     setOrders(prevOrders =>
@@ -998,9 +996,9 @@ export default function HomeScreen() {
             ...ord,
             status: statusMsg,
             statusCode: 'DELIVERED',
-            paymentStatus: isContra ? 'PENDING' : 'PAID',
+            paymentStatus: 'PAID',
             settlementStatus: newSettlementStatus,
-            eta: isContra ? 'Entrega finalizada (Dinero en poder del repartidor)' : 'Entrega finalizada',
+            eta: 'Entrega finalizada',
             receivedAt: formattedReceivedAt,
           };
         }
@@ -1014,9 +1012,9 @@ export default function HomeScreen() {
           ...prev,
           status: statusMsg,
           statusCode: 'DELIVERED',
-          paymentStatus: isContra ? 'PENDING' : 'PAID',
+          paymentStatus: 'PAID',
           settlementStatus: newSettlementStatus,
-          eta: isContra ? 'Entrega finalizada (Dinero en poder del repartidor)' : 'Entrega finalizada',
+          eta: 'Entrega finalizada',
           receivedAt: formattedReceivedAt,
         };
       }
@@ -2045,35 +2043,10 @@ export default function HomeScreen() {
                           : { color: '#166534' }
                       ]}>
                         {order.client?.payment?.toLowerCase().includes('contra')
-                          ? (order.statusCode === 'DELIVERED' ? 'Estado: Pagado al recibir a satisfacción' : 'Estado: Pendiente por pagar al repartidor')
-                          : 'Estado: Pagado con éxito'}
+                          ? (order.statusCode === 'DELIVERED' ? 'Estado: Pagado al recibir a satisfacción ✅' : 'Estado: Pendiente por pagar al repartidor al recibir')
+                          : 'Estado: Pagado con éxito ✅'}
                       </Text>
                     </View>
-
-                    {/* BANNER DE PAZ Y SALVO EN TIENDA */}
-                    {order.settlementStatus === 'SETTLED' ? (
-                      <View style={{ backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#86EFAC', borderRadius: 8, padding: 8, marginTop: 8, flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name="shield-checkmark" size={15} color="#15803D" style={{ marginRight: 6 }} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#15803D' }}>Paz y Salvo Registrado en Tienda ✅</Text>
-                          <Text style={{ fontSize: 10, color: '#166534' }}>
-                            {order.settlementMethod === 'EFECTIVO_EN_TIENDA' 
-                              ? 'Efectivo recibido en caja física de la tienda' 
-                              : `Transferencia verificada en cuenta ${order.transferReference ? `(#${order.transferReference})` : ''}`}
-                          </Text>
-                        </View>
-                      </View>
-                    ) : (order.statusCode === 'DELIVERED' && order.settlementStatus === 'PENDING_SETTLEMENT') ? (
-                      <View style={{ backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 8, padding: 8, marginTop: 8, flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name="time" size={15} color="#B45309" style={{ marginRight: 6 }} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#B45309' }}>Dinero entregado al repartidor 🛵</Text>
-                          <Text style={{ fontSize: 10, color: '#78350F' }}>
-                            La tienda emitirá el Paz y Salvo definitivo cuando el repartidor entregue el dinero o reporte la transferencia.
-                          </Text>
-                        </View>
-                      </View>
-                    ) : null}
 
                     {/* Sistema de Calificación de 5 Estrellas en la Tarjeta */}
                     {(order.statusCode === 'DELIVERED' || order.statusCode === 'ARRIVED') && (
