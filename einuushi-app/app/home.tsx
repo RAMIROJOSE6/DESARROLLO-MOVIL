@@ -1999,32 +1999,59 @@ export default function HomeScreen() {
                         </Text>
                       </View>
                     ) : order.driverName ? (
-                      <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name={order.driverType === 'corporate' ? "business" : "bicycle"} size={16} color="#1E2B58" style={{ marginRight: 6 }} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#1E2B58' }}>
-                            {order.driverType === 'corporate' ? '🚚 Transportadora: ' : '🛵 Repartidor Asignado: '}
-                            {order.driverName}
-                          </Text>
-                          <Text style={{ fontSize: 10, color: '#64748B' }}>
-                            {order.driverType === 'corporate'
-                              ? (order.trackingGuideNumber ? `Guía oficial: #${order.trackingGuideNumber}` : 'Despacho nacional')
-                              : `${order.vehicleType || 'Moto'}${order.plateOrNit ? ` • Placa: ${order.plateOrNit}` : ''} • Tel: ${order.driverPhone || 'En la app'}`}
-                          </Text>
+                      <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 10, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons name={order.driverType === 'corporate' ? "business" : "bicycle"} size={18} color="#1E2B58" style={{ marginRight: 8 }} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58' }}>
+                              {order.driverType === 'corporate' ? '🚚 Transportadora: ' : '🛵 Repartidor Asignado: '}
+                              {order.driverName}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                              {order.driverType === 'corporate'
+                                ? (order.trackingGuideNumber ? `Guía oficial: #${order.trackingGuideNumber}` : 'Despacho nacional')
+                                : `${order.vehicleType || 'Moto'}${order.plateOrNit ? ` • Placa: ${order.plateOrNit}` : ''} • Tel: ${order.driverPhone || 'En la app'}`}
+                            </Text>
+                          </View>
+                          {order.driverType === 'corporate' && order.carrierTrackingUrl && (
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#1E2B58', paddingVertical: 5, paddingHorizontal: 9, borderRadius: 6, flexDirection: 'row', alignItems: 'center' }}
+                              onPress={() => Linking.openURL(order.carrierTrackingUrl!)}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="open-outline" size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
+                              <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>Rastrear</Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
+
+                        {/* Evidencia fotográfica de entrega si está disponible */}
+                        {order.deliveryEvidencePhoto && (
+                          <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' }}>
+                            <Image source={{ uri: order.deliveryEvidencePhoto }} style={{ width: 44, height: 44, borderRadius: 6, marginRight: 8 }} resizeMode="cover" />
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#166534' }}>📸 Evidencia de Entrega Registrada</Text>
+                              <Text style={{ fontSize: 10, color: '#15803D' }}>Fotografía tomada por el repartidor al entregar</Text>
+                            </View>
+                          </View>
+                        )}
                       </View>
                     ) : null}
 
                     {/* Aviso cuando el repartidor llega a la dirección o si va en ruta */}
                     {(order.statusCode === 'ARRIVED' || order.statusCode === 'DISPATCHED') && (
                       <View style={[styles.orderArrivedNoticeBox, order.statusCode === 'DISPATCHED' && { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
-                        <Ionicons name="bicycle" size={20} color={order.statusCode === 'ARRIVED' ? "#166534" : "#1D4ED8"} style={{marginRight: 8}} />
+                        <Ionicons name={order.driverType === 'corporate' ? "business" : "bicycle"} size={20} color={order.statusCode === 'ARRIVED' ? "#166534" : "#1D4ED8"} style={{marginRight: 8}} />
                         <View style={{flex: 1}}>
                           <Text style={[styles.orderArrivedNoticeTitle, order.statusCode === 'DISPATCHED' && { color: '#1E40AF' }]}>
-                            {order.statusCode === 'ARRIVED' ? '¡El repartidor ha llegado a tu dirección! 🛵' : '🛵 Repartidor en camino a tu domicilio'}
+                            {order.driverType === 'corporate'
+                              ? (order.statusCode === 'ARRIVED' ? '¡Tu paquete ha llegado a destino! 📦' : `🚚 En tránsito con ${order.driverName}`)
+                              : (order.statusCode === 'ARRIVED' ? '¡El repartidor ha llegado a tu dirección! 🛵' : '🛵 Repartidor en camino a tu domicilio')}
                           </Text>
                           <Text style={[styles.orderArrivedNoticeText, order.statusCode === 'DISPATCHED' && { color: '#1E3A8A' }]}>
-                            {order.statusCode === 'ARRIVED' 
+                            {order.driverType === 'corporate'
+                              ? `Tu pedido está en tránsito con la transportadora ${order.driverName}.${order.trackingGuideNumber ? ` Guía oficial: #${order.trackingGuideNumber}.` : ''} Si ya lo recibiste, confirma la entrega:`
+                              : order.statusCode === 'ARRIVED' 
                               ? `${order.driverName || 'El repartidor'} está en tu puerta esperando la entrega. Por favor confirma la recepción y pago:`
                               : `${order.driverName || 'El repartidor'} está en tu zona. Si ya recibiste tu paquete, confirma la entrega y pago:`}
                           </Text>
@@ -2380,6 +2407,43 @@ export default function HomeScreen() {
                       </TouchableOpacity>
                     )}
                   </View>
+
+                  {/* Tarjeta de Guía Oficial para Envíos con Transportadora */}
+                  {activeTrackingOrder?.driverType === 'corporate' && activeTrackingOrder?.trackingGuideNumber && (
+                    <View style={{ backgroundColor: '#EEF2FF', borderRadius: 8, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: '#C7D2FE' }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <Text style={{ fontSize: 10, color: '#4338CA', fontWeight: 'bold' }}>GUÍA OFICIAL REGISTRADA POR TIENDA</Text>
+                          <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1E1B4B', marginTop: 2 }}>
+                            #{activeTrackingOrder.trackingGuideNumber}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#6366F1', marginTop: 2 }}>
+                            Transportadora: {activeTrackingOrder.driverName}
+                          </Text>
+                        </View>
+                        {activeTrackingOrder.carrierTrackingUrl && (
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#4338CA', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, flexDirection: 'row', alignItems: 'center' }}
+                            onPress={() => Linking.openURL(activeTrackingOrder.carrierTrackingUrl!)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="open-outline" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' }}>Rastrear Online</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Evidencia fotográfica si el pedido ya fue entregado */}
+                  {activeTrackingOrder?.deliveryEvidencePhoto && (
+                    <View style={{ backgroundColor: '#F0FDF4', borderRadius: 8, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#166534', marginBottom: 6 }}>
+                        📸 Evidencia Fotográfica de Entrega:
+                      </Text>
+                      <Image source={{ uri: activeTrackingOrder.deliveryEvidencePhoto }} style={{ width: '100%', height: 140, borderRadius: 6 }} resizeMode="cover" />
+                    </View>
+                  )}
 
                   <View style={styles.progressBarContainer}>
                     <View style={[styles.progressBarFill, { width: `${simulationProgress}%` }]} />

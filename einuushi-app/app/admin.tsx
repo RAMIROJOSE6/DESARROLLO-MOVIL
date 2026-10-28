@@ -918,6 +918,9 @@ export default function AdminScreen() {
       return;
     }
 
+    const isCorporate = matchedDriver.driverType === 'corporate';
+    const finalGuide = isCorporate ? (customGuideNumber.trim() || `GUIA-${Date.now().toString().slice(-6)}`) : undefined;
+
     const driverInfo = {
       driverId: matchedDriver.id,
       driverName: matchedDriver.fullName,
@@ -926,15 +929,15 @@ export default function AdminScreen() {
       driverType: (matchedDriver.driverType || 'individual') as 'individual' | 'corporate',
       vehicleType: matchedDriver.vehicleType,
       plateOrNit: matchedDriver.plateOrNit,
-      trackingGuideNumber: matchedDriver.driverType === 'corporate' ? customGuideNumber.trim() : undefined,
-      carrierTrackingUrl: matchedDriver.carrierTrackingUrl,
+      trackingGuideNumber: finalGuide,
+      carrierTrackingUrl: isCorporate ? (matchedDriver.carrierTrackingUrl || 'https://www.servientrega.com') : undefined,
     };
 
     try {
       await dispatchOrder(selectedOrderToDispatch.id, driverInfo);
       setIsDispatchModalVisible(false);
-      const msg = matchedDriver.driverType === 'corporate'
-        ? `¡Pedido #${selectedOrderToDispatch.id} despachado a través de ${matchedDriver.fullName}! Guía: ${customGuideNumber}`
+      const msg = isCorporate
+        ? `¡Pedido #${selectedOrderToDispatch.id} despachado a través de ${matchedDriver.fullName}! Guía: ${finalGuide}`
         : `¡Pedido #${selectedOrderToDispatch.id} despachado y asignado al repartidor ${matchedDriver.fullName}!`;
       if (Platform.OS === 'web') {
         window.alert(msg);
@@ -3785,6 +3788,17 @@ export default function AdminScreen() {
                 </View>
               </View>
 
+              {/* EVIDENCIA FOTOGRÁFICA DE ENTREGA ADJUNTA */}
+              {selectedOrderForSettlement?.deliveryEvidencePhoto && (
+                <View style={{ marginBottom: 12, padding: 8, backgroundColor: '#F0FDF4', borderRadius: 8, borderWidth: 1, borderColor: '#BBF7D0', flexDirection: 'row', alignItems: 'center' }}>
+                  <Image source={{ uri: selectedOrderForSettlement.deliveryEvidencePhoto }} style={{ width: 52, height: 52, borderRadius: 6, marginRight: 10 }} resizeMode="cover" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#166534' }}>📸 Evidencia de Entrega Capturada</Text>
+                    <Text style={{ fontSize: 10, color: '#15803D' }}>Fotografía tomada por el repartidor en el domicilio</Text>
+                  </View>
+                </View>
+              )}
+
               {/* OPCIONES DE LIQUIDACIÓN */}
               <Text style={styles.settleFieldLabel}>
                 Seleccione la forma como la tienda recibe o verifica el dinero:
@@ -4503,67 +4517,89 @@ export default function AdminScreen() {
               </Text>
 
               {/* Filtros de selección de repartidor */}
-              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-                <TouchableOpacity
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 10,
-                    borderRadius: 16,
-                    backgroundColor: dispatchDriverFilter === 'suggested' ? '#1E2B58' : '#F1F5F9',
-                  }}
-                  onPress={() => setDispatchDriverFilter('suggested')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: dispatchDriverFilter === 'suggested' ? '#FFFFFF' : '#475569' }}>
-                    🎯 Sugeridos
-                  </Text>
-                </TouchableOpacity>
+              {(() => {
+                const city = (selectedOrderToDispatch?.city || '').toLowerCase().trim();
+                const isLocal = !city || city.includes('riohacha') || city.includes('guajira');
 
-                <TouchableOpacity
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 10,
-                    borderRadius: 16,
-                    backgroundColor: dispatchDriverFilter === 'local' ? '#1E2B58' : '#F1F5F9',
-                  }}
-                  onPress={() => setDispatchDriverFilter('local')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: dispatchDriverFilter === 'local' ? '#FFFFFF' : '#475569' }}>
-                    🛵 Locales ({drivers.filter(d => d.driverType !== 'corporate').length})
-                  </Text>
-                </TouchableOpacity>
+                const localDrivers = drivers.filter(d => d.driverType !== 'corporate');
+                const corpDrivers = drivers.filter(d => d.driverType === 'corporate');
 
-                <TouchableOpacity
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 10,
-                    borderRadius: 16,
-                    backgroundColor: dispatchDriverFilter === 'corporate' ? '#1E2B58' : '#F1F5F9',
-                  }}
-                  onPress={() => setDispatchDriverFilter('corporate')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: dispatchDriverFilter === 'corporate' ? '#FFFFFF' : '#475569' }}>
-                    🚚 Transportadoras ({drivers.filter(d => d.driverType === 'corporate').length})
-                  </Text>
-                </TouchableOpacity>
+                const handleSelectTab = (tab: 'suggested' | 'local' | 'corporate' | 'all') => {
+                  setDispatchDriverFilter(tab);
+                  let targetList = drivers;
+                  if (tab === 'local') targetList = localDrivers;
+                  else if (tab === 'corporate') targetList = corpDrivers;
+                  else if (tab === 'suggested') targetList = isLocal ? localDrivers : corpDrivers;
 
-                <TouchableOpacity
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 10,
-                    borderRadius: 16,
-                    backgroundColor: dispatchDriverFilter === 'all' ? '#1E2B58' : '#F1F5F9',
-                  }}
-                  onPress={() => setDispatchDriverFilter('all')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: dispatchDriverFilter === 'all' ? '#FFFFFF' : '#475569' }}>
-                    🌐 Todos ({drivers.length})
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  if (targetList.length > 0 && !targetList.some(d => d.id === selectedDriverId)) {
+                    setSelectedDriverId(targetList[0].id);
+                  }
+                };
+
+                return (
+                  <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                    <TouchableOpacity
+                      style={{
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        borderRadius: 16,
+                        backgroundColor: dispatchDriverFilter === 'suggested' ? '#1E2B58' : '#F1F5F9',
+                      }}
+                      onPress={() => handleSelectTab('suggested')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: dispatchDriverFilter === 'suggested' ? '#FFFFFF' : '#475569' }}>
+                        🎯 Sugeridos
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        borderRadius: 16,
+                        backgroundColor: dispatchDriverFilter === 'local' ? '#1E2B58' : '#F1F5F9',
+                      }}
+                      onPress={() => handleSelectTab('local')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: dispatchDriverFilter === 'local' ? '#FFFFFF' : '#475569' }}>
+                        🛵 Locales ({localDrivers.length})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        borderRadius: 16,
+                        backgroundColor: dispatchDriverFilter === 'corporate' ? '#1E2B58' : '#F1F5F9',
+                      }}
+                      onPress={() => handleSelectTab('corporate')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: dispatchDriverFilter === 'corporate' ? '#FFFFFF' : '#475569' }}>
+                        🚚 Transportadoras ({corpDrivers.length})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        borderRadius: 16,
+                        backgroundColor: dispatchDriverFilter === 'all' ? '#1E2B58' : '#F1F5F9',
+                      }}
+                      onPress={() => handleSelectTab('all')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: dispatchDriverFilter === 'all' ? '#FFFFFF' : '#475569' }}>
+                        🌐 Todos ({drivers.length})
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })()}
 
               {(() => {
                 const city = (selectedOrderToDispatch?.city || '').toLowerCase().trim();
@@ -4578,17 +4614,21 @@ export default function AdminScreen() {
                   return true;
                 });
 
-                const displayList = filteredDrivers.length > 0 ? filteredDrivers : drivers;
-
-                if (!displayList || displayList.length === 0) {
+                if (filteredDrivers.length === 0) {
                   return (
-                    <Text style={{ fontStyle: 'italic', color: '#EF4444', marginBottom: 12 }}>
-                      No hay repartidores registrados en esta categoría. Registra uno en Configuración.
-                    </Text>
+                    <View style={{ padding: 16, backgroundColor: '#F8FAFC', borderRadius: 8, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Ionicons name="information-circle-outline" size={24} color="#64748B" style={{ marginBottom: 4 }} />
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#475569', textAlign: 'center' }}>
+                        No hay opciones registradas en esta categoría.
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 2 }}>
+                        Puedes registrar repartidores o empresas transportadoras desde la pestaña Configuración.
+                      </Text>
+                    </View>
                   );
                 }
 
-                return displayList.map((drv: any) => {
+                return filteredDrivers.map((drv: any) => {
                   const isSelected = selectedDriverId === drv.id;
                   const isCorp = drv.driverType === 'corporate';
                   return (
@@ -4630,7 +4670,7 @@ export default function AdminScreen() {
                             {drv.fullName}
                           </Text>
                           <Text style={{ fontSize: 10, color: isCorp ? '#4338CA' : '#D97706', fontWeight: 'bold' }}>
-                            {isCorp ? 'CORPORATIVO' : 'LOCAL'}
+                            {isCorp ? 'TRANSPORTADORA' : 'LOCAL'}
                           </Text>
                         </View>
                         <Text style={{ fontSize: 11, color: '#64748B' }}>
@@ -4647,22 +4687,48 @@ export default function AdminScreen() {
                 });
               })()}
 
-              {/* Número de Guía o Código de Tracking */}
-              <View style={{ marginTop: 10, marginBottom: 16 }}>
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
-                  Número de Guía / Código de Despacho:
-                </Text>
-                <TextInput
-                  style={[styles.modalInput, { backgroundColor: '#F8FAFC' }]}
-                  placeholder="Ej: ENV-982341 o Servientrega 892341829"
-                  placeholderTextColor="#94A3B8"
-                  value={customGuideNumber}
-                  onChangeText={setCustomGuideNumber}
-                />
-                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
-                  Este número se enviará al cliente para consultar y rastrear el paquete en vivo.
-                </Text>
-              </View>
+              {/* Condicional de Número de Guía: SÓLO para Transportadoras */}
+              {(() => {
+                const currentSelectedDriver = drivers.find(d => d.id === selectedDriverId);
+                const isCorporateCarrier = currentSelectedDriver?.driverType === 'corporate';
+
+                if (isCorporateCarrier) {
+                  return (
+                    <View style={{ marginTop: 10, marginBottom: 16, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <Ionicons name="barcode-outline" size={18} color="#1E2B58" style={{ marginRight: 6 }} />
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58' }}>
+                          Número de Guía de la Transportadora ({currentSelectedDriver?.fullName || 'Oficial'}):
+                        </Text>
+                      </View>
+                      <TextInput
+                        style={[styles.modalInput, { backgroundColor: '#FFFFFF', marginBottom: 4 }]}
+                        placeholder="Ej: 2198304918 o ENV-982341"
+                        placeholderTextColor="#94A3B8"
+                        value={customGuideNumber}
+                        onChangeText={setCustomGuideNumber}
+                      />
+                      <Text style={{ fontSize: 11, color: '#64748B' }}>
+                        📦 Esta guía se registrará en el sistema y se le reflejará al cliente en su vista móvil con acceso a rastreo en línea.
+                      </Text>
+                    </View>
+                  );
+                }
+
+                return (
+                  <View style={{ marginTop: 8, marginBottom: 16, backgroundColor: '#F0FDF4', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#BBF7D0', flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="checkmark-circle" size={22} color="#16A34A" style={{ marginRight: 10 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#166534' }}>
+                        Entrega Local Directa — Sin Número de Guía
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#15803D', marginTop: 2 }}>
+                        Los envíos locales se entregan de forma directa por {currentSelectedDriver?.fullName || 'el repartidor local'}. No requieren número de guía.
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })()}
             </ScrollView>
 
             <View style={styles.modalActionButtonsRow}>

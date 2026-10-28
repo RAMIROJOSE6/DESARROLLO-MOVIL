@@ -100,6 +100,7 @@ export interface Order {
   plateOrNit?: string; // Placa de vehículo o NIT corporativo
   trackingGuideNumber?: string; // Número de guía de envío de la transportadora
   carrierTrackingUrl?: string; // Enlace web de rastreo del paquete
+  deliveryEvidencePhoto?: string; // Foto de evidencia tomada por el repartidor al entregar
   driverCollectionEvidence?: string; // Nota/evidencia de cobro tomada por el repartidor
   settlementNotes?: string; // Nota o evidencia de pago
 }
@@ -343,6 +344,40 @@ const INITIAL_USERS: User[] = [
     isActive: true,
     createdAt: new Date().toISOString(),
   },
+  {
+    id: "USR-DRIVER-03",
+    fullName: "Coordinadora Mercantil",
+    companyName: "Coordinadora Mercantil S.A.",
+    cedula: "890900135-2",
+    email: "envios@coordinadora.com",
+    phone: "018000915555",
+    city: "Nacional / Internacional",
+    password: "coordinadora2026",
+    role: "driver",
+    driverType: "corporate",
+    vehicleType: "Paquetería y Carga Nacional",
+    plateOrNit: "NIT 890.900.135-2",
+    carrierTrackingUrl: "https://www.coordinadora.com/rastreo/rastreo-de-guia/",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "USR-DRIVER-04",
+    fullName: "Inter Rapidísimo",
+    companyName: "Inter Rapidísimo S.A.",
+    cedula: "800251569-7",
+    email: "envios@interrapidisimo.com",
+    phone: "018000910000",
+    city: "Nacional / Internacional",
+    password: "interrapidisimo2026",
+    role: "driver",
+    driverType: "corporate",
+    vehicleType: "Red Logística Nacional",
+    plateOrNit: "NIT 800.251.569-7",
+    carrierTrackingUrl: "https://www.interrapidisimo.com/sigue-tu-envio/",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  },
 ];
 
 // Memoria volátil en ejecución para sincronización ultrarrápida
@@ -390,12 +425,24 @@ export async function getUsers(): Promise<User[]> {
           password: u.password,
           role: (u.role === 'superadmin' || u.id === 'USR-ADMIN-01' || u.email?.toLowerCase() === 'admin@einuushi.com')
             ? ('superadmin' as const)
-            : ((u.role as "client" | "admin" | "superadmin") || "client"),
+            : ((u.role as "client" | "admin" | "superadmin" | "driver") || "client"),
           avatar: u.avatar || undefined,
+          driverType: u.driver_type || (u.company_name || u.email?.includes('servientrega') || u.email?.includes('coordinadora') || u.email?.includes('interrapidisimo') ? 'corporate' : 'individual'),
+          companyName: u.company_name || undefined,
+          vehicleType: u.vehicle_type || undefined,
+          plateOrNit: u.plate_or_nit || undefined,
+          carrierTrackingUrl: u.carrier_tracking_url || undefined,
+          isActive: u.is_active !== undefined ? u.is_active : true,
           createdAt: u.created_at || new Date().toISOString(),
         }));
-        memoryUsers = mappedUsers;
-        return mappedUsers;
+        
+        // Mantener presentes los usuarios y repartidores semilla esenciales si aún no están en Supabase
+        const existingEmails = new Set(mappedUsers.map(u => u.email.toLowerCase()));
+        const missingSeeds = INITIAL_USERS.filter(seed => !existingEmails.has(seed.email.toLowerCase()));
+        
+        const combined = [...mappedUsers, ...missingSeeds];
+        memoryUsers = combined;
+        return combined;
       }
     } catch (_) {}
   }
@@ -831,13 +878,16 @@ export async function getOrders(filterUserEmail?: string): Promise<Order[]> {
           settledBy: r.settled_by || undefined,
           settlementMethod: r.settlement_method || undefined,
           transferReference: r.transfer_reference || undefined,
-          driverName: r.driver_name || 'José Guajiro',
+          driverName: r.driver_name || undefined,
           driverId: r.driver_id || undefined,
           driverEmail: r.driver_email || undefined,
           driverPhone: r.driver_phone || undefined,
-          driverType: r.driver_type || (r.carrier_tracking_url ? 'corporate' : 'individual'),
+          driverType: r.driver_type || (r.carrier_tracking_url ? 'corporate' : (r.driver_name ? 'individual' : undefined)),
+          vehicleType: r.vehicle_type || undefined,
+          plateOrNit: r.plate_or_nit || undefined,
           trackingGuideNumber: r.tracking_guide_number || undefined,
           carrierTrackingUrl: r.carrier_tracking_url || undefined,
+          deliveryEvidencePhoto: r.delivery_evidence_photo || undefined,
           driverCollectionEvidence: r.driver_collection_evidence || undefined,
           settlementNotes: r.settlement_notes || undefined,
         }));
@@ -967,6 +1017,7 @@ export async function updateOrderStatusInDb(
     plateOrNit?: string;
     trackingGuideNumber?: string;
     carrierTrackingUrl?: string;
+    deliveryEvidencePhoto?: string;
     driverCollectionEvidence?: string;
     settlementNotes?: string;
   },
@@ -994,6 +1045,7 @@ export async function updateOrderStatusInDb(
       if (updates.driverType) supaUpdates.driver_type = updates.driverType;
       if (updates.trackingGuideNumber) supaUpdates.tracking_guide_number = updates.trackingGuideNumber;
       if (updates.carrierTrackingUrl) supaUpdates.carrier_tracking_url = updates.carrierTrackingUrl;
+      if (updates.deliveryEvidencePhoto) supaUpdates.delivery_evidence_photo = updates.deliveryEvidencePhoto;
       if (updates.driverCollectionEvidence) supaUpdates.driver_collection_evidence = updates.driverCollectionEvidence;
       if (updates.settlementNotes) supaUpdates.settlement_notes = updates.settlementNotes;
       
@@ -1061,7 +1113,10 @@ export async function settleOrderInDb(
 
 export async function getDrivers(): Promise<User[]> {
   const all = await getUsers();
-  return all.filter(u => u.role === 'driver');
+  const seedDrivers = INITIAL_USERS.filter(u => u.role === 'driver');
+  const existingEmails = new Set(all.map(u => u.email.toLowerCase()));
+  const missingSeeds = seedDrivers.filter(d => !existingEmails.has(d.email.toLowerCase()));
+  return [...all.filter(u => u.role === 'driver'), ...missingSeeds];
 }
 
 export async function createDriverUser(

@@ -18,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import {
   User,
   Order,
@@ -52,6 +53,7 @@ export default function DriverScreen() {
   const [selectedOrderForDelivery, setSelectedOrderForDelivery] = useState<Order | null>(null);
   const [deliveryTransferRef, setDeliveryTransferRef] = useState('');
   const [deliveryEvidenceNote, setDeliveryEvidenceNote] = useState('');
+  const [deliveryPhotoUri, setDeliveryPhotoUri] = useState<string | null>(null);
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
 
   // Modal: Reportar Entrega de Dinero a la Tienda
@@ -240,7 +242,73 @@ export default function DriverScreen() {
     setSelectedOrderForDelivery(order);
     setDeliveryTransferRef(order.transferReference || '');
     setDeliveryEvidenceNote('');
+    setDeliveryPhotoUri(order.deliveryEvidencePhoto || null);
     setIsDeliverModalVisible(true);
+  };
+
+  // Tomar Foto con Cámara para Evidencia
+  const handleTakeEvidencePhoto = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (e: any) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              if (event.target?.result) {
+                setDeliveryPhotoUri(event.target.result as string);
+              }
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+        input.click();
+      } else {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          showNotification('Permiso Requerido', 'Se requiere acceso a la cámara para tomar la foto de evidencia.');
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          quality: 0.7,
+        });
+        if (!result.canceled && result.assets[0]?.uri) {
+          setDeliveryPhotoUri(result.assets[0].uri);
+        }
+      }
+    } catch (err) {
+      showNotification('Error', 'No se pudo abrir la cámara.');
+    }
+  };
+
+  // Seleccionar Foto de Evidencia desde la Galería
+  const handlePickEvidenceGallery = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        handleTakeEvidencePhoto();
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          showNotification('Permiso Requerido', 'Se requiere acceso a la galería para seleccionar la foto.');
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          quality: 0.7,
+        });
+        if (!result.canceled && result.assets[0]?.uri) {
+          setDeliveryPhotoUri(result.assets[0].uri);
+        }
+      }
+    } catch (err) {
+      showNotification('Error', 'No se pudo abrir la galería.');
+    }
   };
 
   // Confirmar Entrega Realizada y Recaudo
@@ -267,6 +335,7 @@ export default function DriverScreen() {
         eta: 'Entrega finalizada',
         paymentStatus: 'PAID',
         receivedAt: formattedDate,
+        deliveryEvidencePhoto: deliveryPhotoUri || undefined,
         driverCollectionEvidence: evidence,
         transferReference: deliveryTransferRef.trim() || selectedOrderForDelivery.transferReference,
         settlementStatus: isContraentrega ? 'PENDING_SETTLEMENT' : 'SETTLED',
@@ -794,6 +863,17 @@ export default function DriverScreen() {
                   </View>
                 )}
 
+                {/* Evidencia Fotográfica de Entrega si existe */}
+                {order.deliveryEvidencePhoto && (
+                  <View style={{ marginTop: 8, padding: 8, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' }}>
+                    <Image source={{ uri: order.deliveryEvidencePhoto }} style={{ width: 48, height: 48, borderRadius: 6, marginRight: 10 }} resizeMode="cover" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#1E2B58' }}>📸 Evidencia Fotográfica Registrada</Text>
+                      <Text style={{ fontSize: 10, color: '#64748B' }}>Foto capturada al entregar el pedido</Text>
+                    </View>
+                  </View>
+                )}
+
                 {/* ACCIONES DEL REPARTIDOR EN LA RUTA */}
                 <View style={styles.driverActionsRow}>
                   {order.statusCode === 'PENDING' && (
@@ -930,6 +1010,65 @@ export default function DriverScreen() {
                   onChangeText={setDeliveryEvidenceNote}
                   multiline
                 />
+              </View>
+
+              {/* FOTO DE EVIDENCIA DE ENTREGA */}
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.modalFieldLabel}>📸 Foto de Evidencia de Entrega (Opcional):</Text>
+                {deliveryPhotoUri ? (
+                  <View style={{ marginTop: 6, position: 'relative', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#CBD5E1' }}>
+                    <Image source={{ uri: deliveryPhotoUri }} style={{ width: '100%', height: 160, borderRadius: 8 }} resizeMode="cover" />
+                    <TouchableOpacity
+                      style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(239, 68, 68, 0.9)', borderRadius: 16, paddingVertical: 4, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center' }}
+                      onPress={() => setDeliveryPhotoUri(null)}
+                    >
+                      <Ionicons name="trash" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' }}>Quitar Foto</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#EFF6FF',
+                        borderColor: '#BFDBFE',
+                        borderWidth: 1,
+                        borderRadius: 8,
+                        paddingVertical: 10,
+                        paddingHorizontal: 8,
+                        alignItems: 'center',
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                      }}
+                      onPress={handleTakeEvidencePhoto}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="camera" size={18} color="#1D4ED8" style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E40AF' }}>Tomar Foto</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#F8FAFC',
+                        borderColor: '#CBD5E1',
+                        borderWidth: 1,
+                        borderRadius: 8,
+                        paddingVertical: 10,
+                        paddingHorizontal: 8,
+                        alignItems: 'center',
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                      }}
+                      onPress={handlePickEvidenceGallery}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="images" size={18} color="#475569" style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#475569' }}>Galería</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             </ScrollView>
 
