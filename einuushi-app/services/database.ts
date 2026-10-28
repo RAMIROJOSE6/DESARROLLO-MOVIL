@@ -312,72 +312,6 @@ const INITIAL_USERS: User[] = [
     role: "superadmin",
     createdAt: new Date().toISOString(),
   },
-  {
-    id: "USR-DRIVER-01",
-    fullName: "José Guajiro",
-    cedula: "1124555888",
-    email: "jose.guajiro@einuushi.com",
-    phone: "+57 300 444 5566",
-    city: "Riohacha",
-    password: "repartidor2026",
-    role: "driver",
-    driverType: "individual",
-    vehicleType: "Motocicleta Yamaha XTZ 125",
-    plateOrNit: "Placa GUA-42E",
-    isActive: true,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "USR-DRIVER-02",
-    fullName: "Servientrega Express",
-    companyName: "Servientrega S.A.",
-    cedula: "860512330-3",
-    email: "envios@servientrega.com",
-    phone: "018000912345",
-    city: "Nacional / Internacional",
-    password: "servientrega2026",
-    role: "driver",
-    driverType: "corporate",
-    vehicleType: "Logística y Encomiendas Nacionales",
-    plateOrNit: "NIT 860.512.330-3",
-    carrierTrackingUrl: "https://www.servientrega.com/wps/portal/rastreo-envio",
-    isActive: true,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "USR-DRIVER-03",
-    fullName: "Coordinadora Mercantil",
-    companyName: "Coordinadora Mercantil S.A.",
-    cedula: "890900135-2",
-    email: "envios@coordinadora.com",
-    phone: "018000915555",
-    city: "Nacional / Internacional",
-    password: "coordinadora2026",
-    role: "driver",
-    driverType: "corporate",
-    vehicleType: "Paquetería y Carga Nacional",
-    plateOrNit: "NIT 890.900.135-2",
-    carrierTrackingUrl: "https://www.coordinadora.com/rastreo/rastreo-de-guia/",
-    isActive: true,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "USR-DRIVER-04",
-    fullName: "Inter Rapidísimo",
-    companyName: "Inter Rapidísimo S.A.",
-    cedula: "800251569-7",
-    email: "envios@interrapidisimo.com",
-    phone: "018000910000",
-    city: "Nacional / Internacional",
-    password: "interrapidisimo2026",
-    role: "driver",
-    driverType: "corporate",
-    vehicleType: "Red Logística Nacional",
-    plateOrNit: "NIT 800.251.569-7",
-    carrierTrackingUrl: "https://www.interrapidisimo.com/sigue-tu-envio/",
-    isActive: true,
-    createdAt: new Date().toISOString(),
-  },
 ];
 
 // Memoria volátil en ejecución para sincronización ultrarrápida
@@ -427,7 +361,7 @@ export async function getUsers(): Promise<User[]> {
             ? ('superadmin' as const)
             : ((u.role as "client" | "admin" | "superadmin" | "driver") || "client"),
           avatar: u.avatar || undefined,
-          driverType: u.driver_type || (u.company_name || u.email?.includes('servientrega') || u.email?.includes('coordinadora') || u.email?.includes('interrapidisimo') ? 'corporate' : 'individual'),
+          driverType: u.driver_type || (u.company_name ? 'corporate' : 'individual'),
           companyName: u.company_name || undefined,
           vehicleType: u.vehicle_type || undefined,
           plateOrNit: u.plate_or_nit || undefined,
@@ -934,11 +868,11 @@ export async function saveOrder(order: Order): Promise<void> {
         settled_by: order.settledBy || null,
         settlement_method: order.settlementMethod || null,
         transfer_reference: order.transferReference || null,
-        driver_name: order.driverName || 'José Guajiro',
+        driver_name: order.driverName || null,
         driver_id: order.driverId || null,
         driver_email: order.driverEmail || null,
         driver_phone: order.driverPhone || null,
-        driver_type: order.driverType || 'individual',
+        driver_type: order.driverType || null,
         tracking_guide_number: order.trackingGuideNumber || null,
         carrier_tracking_url: order.carrierTrackingUrl || null,
         driver_collection_evidence: order.driverCollectionEvidence || null,
@@ -1113,10 +1047,7 @@ export async function settleOrderInDb(
 
 export async function getDrivers(): Promise<User[]> {
   const all = await getUsers();
-  const seedDrivers = INITIAL_USERS.filter(u => u.role === 'driver');
-  const existingEmails = new Set(all.map(u => u.email.toLowerCase()));
-  const missingSeeds = seedDrivers.filter(d => !existingEmails.has(d.email.toLowerCase()));
-  return [...all.filter(u => u.role === 'driver'), ...missingSeeds];
+  return all.filter(u => u.role === 'driver');
 }
 
 export async function createDriverUser(
@@ -1162,7 +1093,7 @@ export async function createDriverUser(
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('users').upsert({
+        const supaPayload: any = {
           id: newDriver.id,
           full_name: newDriver.fullName,
           cedula: newDriver.cedula,
@@ -1171,7 +1102,27 @@ export async function createDriverUser(
           city: newDriver.city,
           password: newDriver.password,
           role: 'driver',
-        });
+        };
+        if (newDriver.driverType) supaPayload.driver_type = newDriver.driverType;
+        if (newDriver.companyName) supaPayload.company_name = newDriver.companyName;
+        if (newDriver.vehicleType) supaPayload.vehicle_type = newDriver.vehicleType;
+        if (newDriver.plateOrNit) supaPayload.plate_or_nit = newDriver.plateOrNit;
+        if (newDriver.carrierTrackingUrl) supaPayload.carrier_tracking_url = newDriver.carrierTrackingUrl;
+
+        const { error: upsertErr } = await supabase.from('users').upsert(supaPayload);
+        if (upsertErr) {
+          // Fallback a columnas base de la tabla users si columnas extendidas no existen
+          await supabase.from('users').upsert({
+            id: newDriver.id,
+            full_name: newDriver.fullName,
+            cedula: newDriver.cedula,
+            email: newDriver.email,
+            phone: newDriver.phone,
+            city: newDriver.city,
+            password: newDriver.password,
+            role: 'driver',
+          });
+        }
       } catch (_) {}
     }
 

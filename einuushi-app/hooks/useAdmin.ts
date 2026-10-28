@@ -223,7 +223,7 @@ export function useAdmin() {
     if (!target) return;
     const adminLabel = adminUser ? `${adminUser.fullName} (${adminUser.email})` : 'Administrador';
 
-    const dName = driverInfo?.driverName || target.driverName || 'José Guajiro';
+    const dName = driverInfo?.driverName || target.driverName || 'Repartidor Asignado';
     const isCorp = driverInfo?.driverType === 'corporate' || target.driverType === 'corporate';
     const guide = driverInfo?.trackingGuideNumber || target.trackingGuideNumber;
     const vehicleDesc = driverInfo?.vehicleType ? `${driverInfo.vehicleType}${driverInfo.plateOrNit ? ` (Placa ${driverInfo.plateOrNit})` : ''}` : '';
@@ -355,11 +355,13 @@ export function useAdmin() {
       adminResponsible: adminLabel,
     });
 
+    const courierName = target.driverName || 'El repartidor asignado';
+
     await saveNotificationToDb({
       id: `notif-${orderId}-${Date.now()}`,
       orderId: orderId,
       title: `¡Tu pedido #${orderId} ya llegó a tu dirección! 🛵`,
-      message: `El repartidor José Guajiro está en tu puerta esperando para entregarte tu paquete. Por favor confirma la recepción y pago en la app.`,
+      message: `${courierName} está en tu puerta esperando para entregarte tu paquete. Por favor confirma la recepción y pago en la app.`,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       read: false,
     });
@@ -405,8 +407,10 @@ export function useAdmin() {
       ? 'PENDING_SETTLEMENT' 
       : (target.settlementStatus || 'SETTLED');
 
+    const courierName = target.driverName || 'el repartidor asignado';
+
     const statusMessage = isCashOnDelivery
-      ? `¡Pedido Entregado! Dinero recibido por el repartidor José Guajiro (Pendiente entrega en tienda y Paz y Salvo) 🛵`
+      ? `¡Pedido Entregado! Dinero recibido por ${courierName} (Pendiente entrega en tienda y Paz y Salvo) 🛵`
       : `¡Pedido Entregado a Satisfacción! Verificado por ${adminUser?.fullName || 'Administrador'} ✅`;
 
     await updateOrderStatusInDb(orderId, {
@@ -426,7 +430,7 @@ export function useAdmin() {
       actionType: 'DELIVER_ORDER',
       entityType: 'PEDIDO',
       entityId: orderId,
-      details: `${adminUser?.fullName || 'Administrador'} confirmó la entrega del pedido #${orderId}. Venta cargada al sistema el ${formattedReceivedAt}.${isCashOnDelivery ? ' Dinero en poder del repartidor José Guajiro (Pendiente Paz y Salvo en tienda).' : ' Pago registrado.'}`,
+      details: `${adminUser?.fullName || 'Administrador'} confirmó la entrega del pedido #${orderId}. Venta cargada al sistema el ${formattedReceivedAt}.${isCashOnDelivery ? ` Dinero en poder de ${courierName} (Pendiente Paz y Salvo en tienda).` : ' Pago registrado.'}`,
     });
 
     setOrders(prev =>
@@ -469,7 +473,7 @@ export function useAdmin() {
     });
 
     const methodDesc = settlementMethod === 'EFECTIVO_EN_TIENDA'
-      ? 'Efectivo recibido en caja física de la tienda por el repartidor José Guajiro'
+      ? `Efectivo recibido en caja física de la tienda por el repartidor ${target.driverName || 'asignado'}`
       : `Transferencia bancaria a cuenta de la tienda (Comprobante #${transferReference || 'N/A'})`;
 
     await logAdminActivity({

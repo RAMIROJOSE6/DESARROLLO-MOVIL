@@ -556,33 +556,6 @@ export default function DriverScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Accesos rápidos de prueba */}
-            <View style={styles.quickAccessBox}>
-              <Text style={styles.quickAccessTitle}>Cuentas demo de prueba rápida:</Text>
-
-              <TouchableOpacity
-                style={styles.quickAccessBtn}
-                onPress={() => {
-                  setEmailInput('jose.guajiro@einuushi.com');
-                  setPasswordInput('repartidor2026');
-                }}
-              >
-                <Ionicons name="bicycle-outline" size={16} color="#1E2B58" style={{ marginRight: 6 }} />
-                <Text style={styles.quickAccessBtnText}>🛵 José Guajiro (Repartidor Local)</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.quickAccessBtn, { borderColor: '#3B82F6', marginTop: 6 }]}
-                onPress={() => {
-                  setEmailInput('envios@servientrega.com');
-                  setPasswordInput('servientrega2026');
-                }}
-              >
-                <Ionicons name="business-outline" size={16} color="#2563EB" style={{ marginRight: 6 }} />
-                <Text style={[styles.quickAccessBtnText, { color: '#2563EB' }]}>🚚 Servientrega (Transportadora Corporativa)</Text>
-              </TouchableOpacity>
-            </View>
-
             {/* Regresar al inicio de sesión principal */}
             <TouchableOpacity
               style={styles.backToStoreBtn}
