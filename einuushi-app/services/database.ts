@@ -305,12 +305,12 @@ const INITIAL_USERS: User[] = [
     id: "USR-ADMIN-01",
     fullName: "Administrador Einuushi",
     cedula: "1124000000",
-    email: "admin@einuushi.com",
-    phone: "3009998877",
+    email: "shailynvangrieken2016@gmail.com",
+    phone: "3042039297",
     city: "Riohacha",
-    password: "admin2026",
+    password: "admin",
     role: "superadmin",
-    createdAt: new Date().toISOString(),
+    createdAt: "2026-10-22T15:31:02.976344+00:00",
   },
 ];
 
@@ -357,7 +357,7 @@ export async function getUsers(): Promise<User[]> {
           phone: u.phone,
           city: u.city,
           password: u.password,
-          role: (u.role === 'superadmin' || u.id === 'USR-ADMIN-01' || u.email?.toLowerCase() === 'admin@einuushi.com')
+          role: (u.role === 'superadmin' || u.id === 'USR-ADMIN-01' || u.email?.toLowerCase() === 'shailynvangrieken2016@gmail.com')
             ? ('superadmin' as const)
             : (u.role === 'driver' || u.id?.startsWith('USR-DRIVER')
               ? ('driver' as const)
@@ -372,13 +372,8 @@ export async function getUsers(): Promise<User[]> {
           createdAt: u.created_at || new Date().toISOString(),
         }));
         
-        // Mantener presentes los usuarios y repartidores semilla esenciales si aún no están en Supabase
-        const existingEmails = new Set(mappedUsers.map(u => u.email.toLowerCase()));
-        const missingSeeds = INITIAL_USERS.filter(seed => !existingEmails.has(seed.email.toLowerCase()));
-        
-        const combined = [...mappedUsers, ...missingSeeds];
-        memoryUsers = combined;
-        return combined;
+        memoryUsers = mappedUsers;
+        return mappedUsers;
       }
     } catch (_) {}
   }
@@ -689,7 +684,7 @@ export function isSuperAdmin(user?: { email?: string; role?: string; id?: string
   const email = (user.email || '').trim().toLowerCase();
   const role = (user.role || '').trim().toLowerCase();
   const id = (user.id || '').trim();
-  return role === 'superadmin' || id === 'USR-ADMIN-01' || email === 'admin@einuushi.com';
+  return role === 'superadmin' || email === 'shailynvangrieken2016@gmail.com' || (id === 'USR-ADMIN-01' && email !== 'admin@einuushi.com');
 }
 
 export async function saveAdminSession(adminUser: User): Promise<void> {
@@ -1950,12 +1945,7 @@ export function calculateAdminAnalytics(
   const pendingOrders = orders.filter(o => o.statusCode === "PENDING").length;
   const dispatchedOrders = orders.filter(o => o.statusCode === "DISPATCHED" || o.statusCode === "ARRIVED").length;
   const deliveredOrdersCount = deliveredOrders.length;
-  const totalClients = users.filter(u => {
-    if (u.role && (u.role as string) !== 'client') return false;
-    if (u.id?.startsWith('USR-DRIVER') || u.id?.startsWith('USR-ADMIN') || u.id === 'USR-ADMIN-01') return false;
-    if (u.email?.toLowerCase() === 'admin@einuushi.com') return false;
-    return true;
-  }).length;
+  const totalClients = users.filter(u => (u.role === 'client' || (!u.role && !u.id?.startsWith('USR-DRIVER') && !u.id?.startsWith('USR-ADMIN'))) && !u.id?.startsWith('USR-DRIVER') && u.id !== 'USR-ADMIN-01').length;
   const totalProducts = products.length;
 
   // Liquidación y Arqueo de Caja (Paz y Salvo vs En Tránsito con repartidores)
@@ -2175,18 +2165,30 @@ export async function getAdminActivityLogs(limit = 100): Promise<AdminActivityLo
 
 export async function getAdminUsers(viewerAdmin?: { email?: string; id?: string; role?: string } | null): Promise<User[]> {
   const allUsers = await getUsers();
+  const seenEmails = new Set<string>();
+  const seenIds = new Set<string>();
+
   const admins = allUsers
     .filter(u => u.role === 'admin' || u.role === 'superadmin' || isSuperAdmin(u))
     .map(u => ({
       ...u,
       role: isSuperAdmin(u) ? ('superadmin' as const) : ('admin' as const),
-    }));
+    }))
+    .filter(u => {
+      const email = (u.email || '').toLowerCase().trim();
+      if (!email || seenEmails.has(email) || seenIds.has(u.id)) {
+        return false;
+      }
+      seenEmails.add(email);
+      seenIds.add(u.id);
+      return true;
+    });
 
   // Si el usuario observador es un administrador regular, se oculta completamente al Superadministrador
   // y solo se permite visualizar los datos propios de su cuenta
   if (viewerAdmin && !isSuperAdmin(viewerAdmin)) {
     const normViewerEmail = (viewerAdmin.email || '').toLowerCase().trim();
-    return admins.filter(u => !isSuperAdmin(u) && (u.id === viewerAdmin.id || u.email.toLowerCase() === normViewerEmail));
+    return admins.filter(u => !isSuperAdmin(u) && (u.id === viewerAdmin.id || u.email?.toLowerCase() === normViewerEmail));
   }
 
   if (admins.length === 0) {

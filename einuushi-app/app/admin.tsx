@@ -2614,7 +2614,7 @@ export default function AdminScreen() {
                   </Text>
                   <View style={[styles.settingsSubTabBadge, settingsSubTab === 'admins' && { backgroundColor: '#C5A880' }]}>
                     <Text style={[styles.settingsSubTabBadgeText, settingsSubTab === 'admins' && { color: '#1E2B58' }]}>
-                      {(users || []).filter(u => u.role === 'admin' || u.role === 'superadmin' || u.id === 'USR-ADMIN-01' || u.email?.toLowerCase() === 'admin@einuushi.com').length}
+                      {adminUsers.length}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -2935,10 +2935,10 @@ export default function AdminScreen() {
                   ? adminUsers
                   : adminUsers.filter(adm => adminUser && (adm.id === adminUser.id || adm.email?.toLowerCase() === adminUser.email?.toLowerCase()) && !isSuperAdmin(adm))
                 ).map(adm => {
-                  const isCurrent = adminUser && (adm.id === adminUser.id || adm.email?.toLowerCase() === adminUser.email?.toLowerCase());
-                  const isAdmSuper = adm.role === 'superadmin' || adm.id === 'USR-ADMIN-01' || adm.email?.toLowerCase() === 'admin@einuushi.com';
+                  const isCurrent = adminUser && (adm.email?.toLowerCase() === adminUser.email?.toLowerCase());
+                  const isAdmSuper = isSuperAdmin(adm);
                   return (
-                    <View key={adm.id} style={[styles.adminUserCard, isCurrent && styles.adminUserCardCurrent]}>
+                    <View key={`${adm.id || 'adm'}_${adm.email}`} style={[styles.adminUserCard, isCurrent && styles.adminUserCardCurrent]}>
                       <View style={[styles.adminAvatarBox, isAdmSuper && { backgroundColor: '#FEF3C7' }]}>
                         <Ionicons name={isAdmSuper ? "shield" : "shield-half"} size={20} color={isAdmSuper ? "#D97706" : "#1E2B58"} />
                       </View>
