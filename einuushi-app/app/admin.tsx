@@ -2474,7 +2474,7 @@ export default function AdminScreen() {
                       key={conv.email}
                       style={[
                         styles.convItem,
-                        selectedChatUserEmail?.toLowerCase() === conv.email.toLowerCase() && styles.convItemActive,
+                        selectedChatUserEmail?.toLowerCase() === conv.email?.toLowerCase() && styles.convItemActive,
                       ]}
                       onPress={() => {
                         setSelectedChatUserEmail(conv.email);
@@ -2933,10 +2933,10 @@ export default function AdminScreen() {
               <View style={styles.adminListContainer}>
                 {(isSuperAdminUser
                   ? adminUsers
-                  : adminUsers.filter(adm => adminUser && (adm.id === adminUser.id || adm.email.toLowerCase() === adminUser.email.toLowerCase()) && !isSuperAdmin(adm))
+                  : adminUsers.filter(adm => adminUser && (adm.id === adminUser.id || adm.email?.toLowerCase() === adminUser.email?.toLowerCase()) && !isSuperAdmin(adm))
                 ).map(adm => {
-                  const isCurrent = adminUser && (adm.id === adminUser.id || adm.email.toLowerCase() === adminUser.email.toLowerCase());
-                  const isAdmSuper = adm.role === 'superadmin' || adm.id === 'USR-ADMIN-01' || adm.email.toLowerCase() === 'admin@einuushi.com';
+                  const isCurrent = adminUser && (adm.id === adminUser.id || adm.email?.toLowerCase() === adminUser.email?.toLowerCase());
+                  const isAdmSuper = adm.role === 'superadmin' || adm.id === 'USR-ADMIN-01' || adm.email?.toLowerCase() === 'admin@einuushi.com';
                   return (
                     <View key={adm.id} style={[styles.adminUserCard, isCurrent && styles.adminUserCardCurrent]}>
                       <View style={[styles.adminAvatarBox, isAdmSuper && { backgroundColor: '#FEF3C7' }]}>
@@ -3165,7 +3165,7 @@ export default function AdminScreen() {
                 const filteredLogs = activityLogs.filter(item => {
                   // Si no es Superadministrador, no puede ver registros ni movimientos del Superadministrador
                   if (!isSuperAdminUser) {
-                    const isMyOwnLog = adminUser && (item.adminId === adminUser.id || item.adminEmail.toLowerCase() === adminUser.email.toLowerCase());
+                    const isMyOwnLog = adminUser && (item.adminId === adminUser.id || item.adminEmail?.toLowerCase() === adminUser.email?.toLowerCase());
                     if (!isMyOwnLog) return false;
                   }
                   const matchCat = auditFilterType === 'ALL' || item.entityType === auditFilterType;
