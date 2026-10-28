@@ -32,6 +32,13 @@ const SUPABASE_FALLBACK_IMAGES: Record<string, string> = {
 
 type AdminTab = 'analytics' | 'orders' | 'inventory' | 'quotes' | 'chat' | 'settings';
 
+export const isPureClientUser = (u: User) => {
+  if (u.role && (u.role as string) !== 'client') return false;
+  if (u.id?.startsWith('USR-DRIVER') || u.id?.startsWith('USR-ADMIN') || u.id === 'USR-ADMIN-01') return false;
+  if (u.email?.toLowerCase() === 'admin@einuushi.com') return false;
+  return true;
+};
+
 export default function AdminScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -1557,7 +1564,7 @@ export default function AdminScreen() {
                     <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: 'bold' }}>{isSuperAdminUser ? 'Ver' : 'Privado'}</Text>
                   </View>
                 </View>
-                <Text style={styles.kpiValue}>{analytics?.totalClients || (users?.filter(u => u.role !== 'admin').length || 0)}</Text>
+                <Text style={styles.kpiValue}>{analytics?.totalClients || (users?.filter(isPureClientUser).length || 0)}</Text>
                 <Text style={styles.kpiLabel}>Clientes Registrados</Text>
                 <Text style={{ fontSize: 10, color: isSuperAdminUser ? '#7C3AED' : '#64748B', marginTop: 4, fontWeight: '600' }}>
                   {isSuperAdminUser ? 'Toca para ver lista ➔' : 'Solo Superadministrador'}
@@ -3969,7 +3976,7 @@ export default function AdminScreen() {
                     Directorio de Clientes Registrados
                   </Text>
                   <Text style={{ fontSize: 11, color: '#C5A880' }}>
-                    Base de Datos en Supabase • Solo Clientes ({(users || []).filter(u => u.role !== 'admin' && u.role !== 'superadmin' && u.id !== 'USR-ADMIN-01' && u.email?.toLowerCase() !== 'admin@einuushi.com').length} registrados)
+                    Base de Datos en Supabase • Solo Clientes ({(users || []).filter(isPureClientUser).length} registrados)
                   </Text>
                 </View>
               </View>
@@ -4015,7 +4022,7 @@ export default function AdminScreen() {
             <ScrollView style={{ flex: 1, padding: 16, backgroundColor: '#F1F5F9' }}>
               {(() => {
                 const query = usersSearchQuery.trim().toLowerCase();
-                const clientUsers = (users || []).filter(u => u.role !== 'admin' && u.role !== 'superadmin' && u.id !== 'USR-ADMIN-01' && u.email?.toLowerCase() !== 'admin@einuushi.com');
+                const clientUsers = (users || []).filter(isPureClientUser);
                 const filtered = clientUsers.filter(u => {
                   if (!query) return true;
                   return (
@@ -4194,7 +4201,7 @@ export default function AdminScreen() {
               borderColor: '#E2E8F0',
             }}>
               <Text style={{ fontSize: 12, color: '#64748B' }}>
-                Total: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{(users || []).filter(u => u.role !== 'admin' && u.role !== 'superadmin' && u.id !== 'USR-ADMIN-01' && u.email?.toLowerCase() !== 'admin@einuushi.com').length}</Text> clientes en Supabase
+                Total: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{(users || []).filter(isPureClientUser).length}</Text> clientes en Supabase
               </Text>
               <TouchableOpacity
                 onPress={() => setIsUsersModalVisible(false)}

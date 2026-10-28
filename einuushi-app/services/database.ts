@@ -359,7 +359,9 @@ export async function getUsers(): Promise<User[]> {
           password: u.password,
           role: (u.role === 'superadmin' || u.id === 'USR-ADMIN-01' || u.email?.toLowerCase() === 'admin@einuushi.com')
             ? ('superadmin' as const)
-            : ((u.role as "client" | "admin" | "superadmin" | "driver") || "client"),
+            : (u.role === 'driver' || u.id?.startsWith('USR-DRIVER')
+              ? ('driver' as const)
+              : ((u.role as "client" | "admin" | "superadmin" | "driver") || "client")),
           avatar: u.avatar || undefined,
           driverType: u.driver_type || (u.company_name ? 'corporate' : 'individual'),
           companyName: u.company_name || undefined,
@@ -1140,7 +1142,7 @@ export async function settleOrderInDb(
 
 export async function getDrivers(): Promise<User[]> {
   const all = await getUsers();
-  return all.filter(u => u.role === 'driver');
+  return all.filter(u => u.role === 'driver' || u.id?.startsWith('USR-DRIVER'));
 }
 
 export async function createDriverUser(
@@ -1948,7 +1950,12 @@ export function calculateAdminAnalytics(
   const pendingOrders = orders.filter(o => o.statusCode === "PENDING").length;
   const dispatchedOrders = orders.filter(o => o.statusCode === "DISPATCHED" || o.statusCode === "ARRIVED").length;
   const deliveredOrdersCount = deliveredOrders.length;
-  const totalClients = users.filter(u => u.role !== "admin").length;
+  const totalClients = users.filter(u => {
+    if (u.role && (u.role as string) !== 'client') return false;
+    if (u.id?.startsWith('USR-DRIVER') || u.id?.startsWith('USR-ADMIN') || u.id === 'USR-ADMIN-01') return false;
+    if (u.email?.toLowerCase() === 'admin@einuushi.com') return false;
+    return true;
+  }).length;
   const totalProducts = products.length;
 
   // Liquidación y Arqueo de Caja (Paz y Salvo vs En Tránsito con repartidores)
