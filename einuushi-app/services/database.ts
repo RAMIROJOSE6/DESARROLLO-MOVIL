@@ -778,53 +778,115 @@ export async function getOrders(filterUserEmail?: string): Promise<Order[]> {
       }
       const { data, error } = await query;
       if (!error && Array.isArray(data)) {
-        const mappedOrders: Order[] = data.map((r: any) => ({
-          id: r.id,
-          userId: r.user_id || undefined,
-          userEmail: r.user_email || undefined,
-          clientName: r.client_name,
-          date: r.date,
-          client: {
-            name: r.client_name,
-            cedula: r.client_cedula,
-            phone: r.client_phone,
-            address: r.client_address,
-            payment: r.payment_method,
-          },
-          subtotal: r.subtotal,
-          shipping: r.shipping,
-          total: r.total,
-          status: r.status,
-          statusCode: r.status_code,
-          paymentStatus: r.payment_status || 'PENDING',
-          eta: r.eta,
-          rating: r.rating || 0,
-          items: typeof r.items_json === 'string' ? JSON.parse(r.items_json) : (r.items_json || []),
-          dispatchedAt: r.dispatched_at || undefined,
-          receivedAt: r.received_at || undefined,
-          adminResponsible: r.admin_responsible || undefined,
-          settlementStatus: r.settlement_status || (
-            (r.payment_method && (r.payment_method.toLowerCase().includes('contra') || r.payment_method.toLowerCase().includes('efectivo')))
-              ? (r.status_code === 'DELIVERED' && r.settled_at ? 'SETTLED' : 'PENDING_SETTLEMENT')
-              : 'SETTLED'
-          ),
-          settledAt: r.settled_at || undefined,
-          settledBy: r.settled_by || undefined,
-          settlementMethod: r.settlement_method || undefined,
-          transferReference: r.transfer_reference || undefined,
-          driverName: r.driver_name || undefined,
-          driverId: r.driver_id || undefined,
-          driverEmail: r.driver_email || undefined,
-          driverPhone: r.driver_phone || undefined,
-          driverType: r.driver_type || (r.carrier_tracking_url ? 'corporate' : (r.driver_name ? 'individual' : undefined)),
-          vehicleType: r.vehicle_type || undefined,
-          plateOrNit: r.plate_or_nit || undefined,
-          trackingGuideNumber: r.tracking_guide_number || undefined,
-          carrierTrackingUrl: r.carrier_tracking_url || undefined,
-          deliveryEvidencePhoto: r.delivery_evidence_photo || undefined,
-          driverCollectionEvidence: r.driver_collection_evidence || undefined,
-          settlementNotes: r.settlement_notes || undefined,
-        }));
+        const mappedOrders: Order[] = data.map((r: any) => {
+          let parsedItems = [];
+          let logistics: any = {};
+          if (typeof r.items_json === 'string') {
+            try {
+              const raw = JSON.parse(r.items_json);
+              if (Array.isArray(raw)) {
+                parsedItems = raw;
+              } else if (raw && Array.isArray(raw.items)) {
+                parsedItems = raw.items;
+                logistics = raw._logistics || {};
+              }
+            } catch (_) {
+              parsedItems = [];
+            }
+          } else if (Array.isArray(r.items_json)) {
+            parsedItems = r.items_json;
+          } else if (r.items_json && Array.isArray(r.items_json.items)) {
+            parsedItems = r.items_json.items;
+            logistics = r.items_json._logistics || {};
+          }
+
+          // Rescate inteligente de repartidor y administrador si no estaban en columnas individuales de Supabase
+          let resolvedDriverName = r.driver_name || logistics.driverName || undefined;
+          let resolvedAdmin = r.admin_responsible || logistics.adminResponsible || undefined;
+          let resolvedVehicle = r.vehicle_type || logistics.vehicleType || undefined;
+          let resolvedPlate = r.plate_or_nit || logistics.plateOrNit || undefined;
+          let resolvedGuide = r.tracking_guide_number || logistics.trackingGuideNumber || undefined;
+
+          if (!resolvedDriverName && r.status && r.status_code !== 'PENDING') {
+            const mDriver = r.status.match(/Repartidor ([^\(\!\,\.\n]+)/i);
+            if (mDriver && mDriver[1]) {
+              resolvedDriverName = mDriver[1].trim();
+            } else {
+              const mVia = r.status.match(/vía ([^\(\!\,\.\n]+)/i);
+              if (mVia && mVia[1]) {
+                resolvedDriverName = mVia[1].trim();
+              }
+            }
+          }
+
+          if (!resolvedAdmin && r.status && r.status_code !== 'PENDING') {
+            const mAdmin = r.status.match(/Despachado por ([^\(\!\,\.\n]+)/i);
+            if (mAdmin && mAdmin[1]) {
+              resolvedAdmin = mAdmin[1].trim();
+            }
+          }
+
+          if (!resolvedPlate && r.status) {
+            const mPlate = r.status.match(/Placa ([A-Z0-9\-]+)/i);
+            if (mPlate && mPlate[1]) resolvedPlate = mPlate[1].trim();
+          }
+
+          if (!resolvedGuide && r.status) {
+            const mGuide = r.status.match(/Guía: ([A-Z0-9\-]+)/i);
+            if (mGuide && mGuide[1]) resolvedGuide = mGuide[1].trim();
+          }
+
+          const isDelivered = r.status_code === 'DELIVERED';
+          const isContra = (r.payment_method && (r.payment_method.toLowerCase().includes('contra') || r.payment_method.toLowerCase().includes('efectivo')));
+
+          return {
+            id: r.id,
+            userId: r.user_id || undefined,
+            userEmail: r.user_email || undefined,
+            clientName: r.client_name,
+            date: r.date,
+            client: {
+              name: r.client_name,
+              cedula: r.client_cedula,
+              phone: r.client_phone,
+              address: r.client_address,
+              payment: r.payment_method,
+            },
+            subtotal: r.subtotal,
+            shipping: r.shipping,
+            total: r.total,
+            status: r.status,
+            statusCode: r.status_code,
+            paymentStatus: r.payment_status || 'PENDING',
+            eta: r.eta,
+            rating: r.rating || 0,
+            items: parsedItems,
+            dispatchedAt: r.dispatched_at || undefined,
+            receivedAt: r.received_at || undefined,
+            adminResponsible: resolvedAdmin,
+            settlementStatus: r.settlement_status || logistics.settlementStatus || (
+              isContra
+                ? (isDelivered ? (r.settled_at || logistics.settledAt ? 'SETTLED' : 'PENDING_SETTLEMENT') : 'NOT_APPLICABLE')
+                : 'SETTLED'
+            ),
+            settledAt: r.settled_at || logistics.settledAt || undefined,
+            settledBy: r.settled_by || logistics.settledBy || undefined,
+            settlementMethod: r.settlement_method || logistics.settlementMethod || undefined,
+            transferReference: r.transfer_reference || logistics.transferReference || undefined,
+            driverName: resolvedDriverName,
+            driverId: r.driver_id || logistics.driverId || undefined,
+            driverEmail: r.driver_email || logistics.driverEmail || undefined,
+            driverPhone: r.driver_phone || logistics.driverPhone || undefined,
+            driverType: r.driver_type || logistics.driverType || (r.carrier_tracking_url ? 'corporate' : (resolvedDriverName ? 'individual' : undefined)),
+            vehicleType: resolvedVehicle,
+            plateOrNit: resolvedPlate,
+            trackingGuideNumber: resolvedGuide,
+            carrierTrackingUrl: r.carrier_tracking_url || logistics.carrierTrackingUrl || undefined,
+            deliveryEvidencePhoto: r.delivery_evidence_photo || logistics.deliveryEvidencePhoto || undefined,
+            driverCollectionEvidence: r.driver_collection_evidence || logistics.driverCollectionEvidence || undefined,
+            settlementNotes: r.settlement_notes || logistics.settlementNotes || undefined,
+          };
+        });
         memoryOrders = mappedOrders;
         return mappedOrders;
       }
@@ -956,12 +1018,42 @@ export async function updateOrderStatusInDb(
     settlementNotes?: string;
   },
 ): Promise<void> {
+  const current = memoryOrders.find(o => o.id === orderId);
+
+  // Empaquetar datos logísticos dentro de items_json para garantizar persistencia 100% universal en Supabase
+  const packedLogistics = {
+    driverName: updates.driverName ?? current?.driverName,
+    driverId: updates.driverId ?? current?.driverId,
+    driverEmail: updates.driverEmail ?? current?.driverEmail,
+    driverPhone: updates.driverPhone ?? current?.driverPhone,
+    driverType: updates.driverType ?? current?.driverType,
+    vehicleType: updates.vehicleType ?? current?.vehicleType,
+    plateOrNit: updates.plateOrNit ?? current?.plateOrNit,
+    trackingGuideNumber: updates.trackingGuideNumber ?? current?.trackingGuideNumber,
+    carrierTrackingUrl: updates.carrierTrackingUrl ?? current?.carrierTrackingUrl,
+    deliveryEvidencePhoto: updates.deliveryEvidencePhoto ?? current?.deliveryEvidencePhoto,
+    adminResponsible: updates.adminResponsible ?? current?.adminResponsible,
+    settlementStatus: updates.settlementStatus ?? current?.settlementStatus,
+    settledAt: updates.settledAt ?? current?.settledAt,
+    settledBy: updates.settledBy ?? current?.settledBy,
+    settlementMethod: updates.settlementMethod ?? current?.settlementMethod,
+    transferReference: updates.transferReference ?? current?.transferReference,
+    driverCollectionEvidence: updates.driverCollectionEvidence ?? current?.driverCollectionEvidence,
+    settlementNotes: updates.settlementNotes ?? current?.settlementNotes,
+  };
+
+  const packedPayload = {
+    items: current?.items || [],
+    _logistics: packedLogistics,
+  };
+
   if (isSupabaseConfigured()) {
     try {
       const supaUpdates: any = {
         status: updates.status,
         status_code: updates.statusCode,
         eta: updates.eta,
+        items_json: packedPayload,
       };
       if (updates.paymentStatus) supaUpdates.payment_status = updates.paymentStatus;
       if (updates.dispatchedAt) supaUpdates.dispatched_at = updates.dispatchedAt;
@@ -985,11 +1077,12 @@ export async function updateOrderStatusInDb(
       
       const { error } = await supabase.from('orders').update(supaUpdates).eq('id', orderId);
       if (error) {
-        // Fallback a columnas estándar si hay columnas no migradas
+        // Fallback a columnas estándar si hay columnas no migradas, garantizando items_json empaquetado
         const baseUpdates: any = {
           status: updates.status,
           status_code: updates.statusCode,
           eta: updates.eta,
+          items_json: packedPayload,
         };
         if (updates.paymentStatus) baseUpdates.payment_status = updates.paymentStatus;
         if (updates.dispatchedAt) baseUpdates.dispatched_at = updates.dispatchedAt;

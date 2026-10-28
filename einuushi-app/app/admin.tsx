@@ -1883,8 +1883,8 @@ export default function AdminScreen() {
                       </View>
                     )}
 
-                    {/* ESTADO FINANCIERO: PAZ Y SALVO EN TIENDA VS DINERO EN PODER DEL REPARTIDOR */}
-                    {order.settlementStatus === 'PENDING_SETTLEMENT' && (
+                    {/* ESTADO FINANCIERO: PAZ Y SALVO EN TIENDA VS DINERO EN PODER DEL REPARTIDOR (SÓLO TRAS ENTREGA) */}
+                    {order.statusCode === 'DELIVERED' && order.settlementStatus === 'PENDING_SETTLEMENT' && (
                       <View style={styles.orderSettlementPendingBanner}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                           <Ionicons name="warning" size={16} color="#B45309" style={{ marginRight: 6 }} />
@@ -1974,30 +1974,19 @@ export default function AdminScreen() {
                     )}
 
                     {order.statusCode === 'DISPATCHED' && (
-                      <>
-                        <TouchableOpacity
-                          style={styles.arrivedNoticeButton}
-                          onPress={() => markOrderArrived(order.id)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="location" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
-                          <Text style={styles.actionBtnText}>Llegó a Destino</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.deliverButton}
-                          onPress={() => markOrderDelivered(order.id)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="flag" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
-                          <Text style={styles.actionBtnText}>Marcar Entregado</Text>
-                        </TouchableOpacity>
-                      </>
+                      <TouchableOpacity
+                        style={[styles.dispatchButton, { backgroundColor: '#334155' }]}
+                        onPress={() => openDispatchModal(order)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="swap-horizontal" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.actionBtnText}>Reasignar Repartidor</Text>
+                      </TouchableOpacity>
                     )}
 
                     {order.statusCode === 'ARRIVED' && (
                       <TouchableOpacity
-                        style={styles.deliverButton}
+                        style={[styles.deliverButton, { backgroundColor: '#10B981' }]}
                         onPress={() => markOrderDelivered(order.id)}
                         activeOpacity={0.8}
                       >
@@ -2006,8 +1995,8 @@ export default function AdminScreen() {
                       </TouchableOpacity>
                     )}
 
-                    {/* BOTÓN DE LIQUIDACIÓN Y PAZ Y SALVO */}
-                    {order.settlementStatus === 'PENDING_SETTLEMENT' && (
+                    {/* BOTÓN DE LIQUIDACIÓN Y PAZ Y SALVO (SÓLO TRAS ENTREGA EFECTUADA) */}
+                    {order.statusCode === 'DELIVERED' && order.settlementStatus === 'PENDING_SETTLEMENT' && (
                       <TouchableOpacity
                         style={styles.settleCompactButton}
                         onPress={() => openSettlementModal(order)}
