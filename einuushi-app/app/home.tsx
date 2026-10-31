@@ -1147,9 +1147,23 @@ export default function HomeScreen() {
     showAlert('¡Muchas Gracias!', `¡Muchas gracias! Has calificado la entrega con ${stars} de 5 estrellas ⭐.\nTu calificación fue guardada exitosamente.`);
   };
 
+  const handleOpenAlertsModal = () => {
+    setIsAlertsModalVisible(true);
+    setNotificationsUnreadCount(0);
+    setNotifications(prev =>
+      prev.map(n => {
+        if (!n.read) {
+          markNotificationAsReadInDb(n.id).catch(e => console.warn('Error marking notif read in db:', e));
+          return { ...n, read: true };
+        }
+        return n;
+      })
+    );
+  };
+
   const closeTrackingModalAndOpenAlerts = () => {
     setIsTrackingModalVisible(false);
-    setIsAlertsModalVisible(true);
+    handleOpenAlertsModal();
   };
 
   const targetMapAddress = activeTrackingOrder?.client?.address 
@@ -1199,7 +1213,7 @@ export default function HomeScreen() {
                 setActiveTrackingOrder(matched);
                 setIsTrackingModalVisible(true);
               } else {
-                setIsAlertsModalVisible(true);
+                handleOpenAlertsModal();
               }
               setInAppToast(null);
             }}
@@ -1263,16 +1277,13 @@ export default function HomeScreen() {
           {/* Botón de la Campanita */}
           <TouchableOpacity 
             style={styles.iconButton} 
-            onPress={() => {
-              setNotificationsUnreadCount(0);
-              setIsAlertsModalVisible(true);
-            }}
+            onPress={handleOpenAlertsModal}
           >
             <Ionicons name="notifications-outline" size={20} color="#1E2B58" />
-            {(activeOrdersCount > 0 || notificationsUnreadCount > 0) && (
-              <View style={[styles.badge, notificationsUnreadCount > 0 && { backgroundColor: '#DC2626' }]}>
+            {notificationsUnreadCount > 0 && (
+              <View style={[styles.badge, { backgroundColor: '#DC2626' }]}>
                 <Text style={styles.badgeText}>
-                  {notificationsUnreadCount > 0 ? notificationsUnreadCount : activeOrdersCount}
+                  {notificationsUnreadCount}
                 </Text>
               </View>
             )}
@@ -2001,9 +2012,32 @@ export default function HomeScreen() {
               {/* Sección de Notificaciones y Avisos de Llegada */}
               {notifications.length > 0 && (
                 <View style={styles.notificationsSectionBox}>
-                  <View style={styles.notificationsSectionHeader}>
-                    <Ionicons name="notifications" size={16} color="#DC2626" style={{marginRight: 6}} />
-                    <Text style={styles.notificationsSectionTitle}>Avisos de Entrega ({notifications.length})</Text>
+                  <View style={[styles.notificationsSectionHeader, { justifyContent: 'space-between' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="notifications" size={16} color="#DC2626" style={{marginRight: 6}} />
+                      <Text style={styles.notificationsSectionTitle}>Avisos de Entrega ({notifications.length})</Text>
+                    </View>
+                    {notifications.some(n => !n.read) && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setNotificationsUnreadCount(0);
+                          setNotifications(prev =>
+                            prev.map(n => {
+                              if (!n.read) {
+                                markNotificationAsReadInDb(n.id).catch(e => console.warn(e));
+                                return { ...n, read: true };
+                              }
+                              return n;
+                            })
+                          );
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontSize: 11, color: '#2563EB', fontWeight: 'bold' }}>
+                          Marcar leídas
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                   {notifications.map(notif => {
                     const isDispatched = notif.title.toLowerCase().includes('despachado') || notif.message.toLowerCase().includes('camino') || notif.title.toLowerCase().includes('camino');
@@ -2018,6 +2052,11 @@ export default function HomeScreen() {
                         key={notif.id} 
                         style={[styles.notifItemCard, !notif.read && styles.notifItemCardUnread]}
                         onPress={() => {
+                          if (!notif.read) {
+                            markNotificationAsReadInDb(notif.id).catch(e => console.warn(e));
+                            setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+                            setNotificationsUnreadCount(prev => Math.max(0, prev - 1));
+                          }
                           const matched = orders.find(o => o.id === notif.orderId);
                           if (matched) {
                             setActiveTrackingOrder(matched);

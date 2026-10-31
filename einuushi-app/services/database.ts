@@ -1407,7 +1407,10 @@ export async function markNotificationAsReadInDb(
 ): Promise<void> {
   if (isSupabaseConfigured()) {
     try {
-      await supabase.from('notifications').update({ read: 1 }).eq('id', notificationId);
+      const { error } = await supabase.from('notifications').update({ read: 1 }).eq('id', notificationId);
+      if (error) {
+        await supabase.from('notifications').update({ read: true }).eq('id', notificationId);
+      }
     } catch (_) {}
   }
   memoryNotifications = memoryNotifications.map(n => n.id === notificationId ? { ...n, read: true } : n);
