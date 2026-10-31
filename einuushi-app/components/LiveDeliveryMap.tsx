@@ -33,24 +33,47 @@ export const LiveDeliveryMap: React.FC<LiveDeliveryMapProps> = ({
   driverLng,
   height = '100%',
 }) => {
-  // Determinamos posición del repartidor según el estado del pedido
-  // Si está PENDING, está en tienda. Si está ARRIVED/DELIVERED, está en casa del cliente.
-  // Si está DISPATCHED (En ruta), está en tránsito intermedio hacia el destino.
   const isPending = statusCode === 'PENDING';
-  const isArrivedOrDelivered = statusCode === 'ARRIVED' || statusCode === 'DELIVERED';
   const isEnRuta = statusCode === 'DISPATCHED';
+  const isArrived = statusCode === 'ARRIVED';
+  const isDelivered = statusCode === 'DELIVERED';
 
   const storeLat = DEFAULT_STORE_LAT;
   const storeLng = DEFAULT_STORE_LNG;
   const clientLat = DEFAULT_CLIENT_LAT;
   const clientLng = DEFAULT_CLIENT_LNG;
 
-  let currentDriverLat = driverLat ?? (isPending ? storeLat : (isArrivedOrDelivered ? clientLat : 11.5402));
-  let currentDriverLng = driverLng ?? (isPending ? storeLng : (isArrivedOrDelivered ? clientLng : -72.9110));
+  // Si está en ruta o esperando llegada, se ubica la moto
+  let currentDriverLat = driverLat ?? (isPending ? storeLat : (isArrived ? clientLat : 11.5402));
+  let currentDriverLng = driverLng ?? (isPending ? storeLng : (isArrived ? clientLng : -72.9110));
 
   const escapedAddress = (deliveryAddress || 'Riohacha, La Guajira').replace(/'/g, "\\'");
   const escapedDriver = (driverName || 'Repartidor').replace(/'/g, "\\'");
   const escapedVehicle = `${vehicleType || 'Moto'} ${plateOrNit ? `(${plateOrNit})` : ''}`.replace(/'/g, "\\'");
+
+  const statusTitle = isDelivered
+    ? '✅ ¡Pedido Entregado con Éxito!'
+    : (isArrived
+      ? '🛵 ¡Repartidor en la Puerta!'
+      : (isEnRuta
+        ? '🛵 Repartidor en Camino'
+        : '🏪 Pedido en Tienda Einuushi'));
+
+  const statusSub = isDelivered
+    ? 'Entrega finalizada en tu dirección • ¡Gracias por tu compra!'
+    : (isArrived
+      ? `${escapedDriver} está esperando en tu dirección`
+      : (isEnRuta
+        ? `${escapedDriver} • ${escapedVehicle}`
+        : `${escapedAddress}`));
+
+  const statusBadge = isDelivered
+    ? '🎉 Entregado'
+    : (isArrived
+      ? '📍 En Puerta'
+      : (isEnRuta
+        ? '⚡ En Vivo'
+        : '📦 Preparando'));
 
   const leafletHtml = `<!DOCTYPE html>
 <html lang="es">
@@ -70,7 +93,7 @@ export const LiveDeliveryMap: React.FC<LiveDeliveryMapProps> = ({
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     .custom-badge {
-      background: #1E2B58;
+      background: ${isDelivered ? '#166534' : '#1E2B58'};
       color: #FFFFFF;
       padding: 4px 8px;
       border-radius: 12px;
@@ -80,7 +103,7 @@ export const LiveDeliveryMap: React.FC<LiveDeliveryMapProps> = ({
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      border: 1.5px solid #C5A880;
+      border: 1.5px solid ${isDelivered ? '#86EFAC' : '#C5A880'};
       white-space: nowrap;
     }
     .marker-icon-wrapper {
@@ -104,6 +127,11 @@ export const LiveDeliveryMap: React.FC<LiveDeliveryMapProps> = ({
       border-color: #10B981;
       background: #ECFDF5;
     }
+    .delivered-marker {
+      border-color: #166534;
+      background: #DCFCE7;
+      animation: pulseGreen 2s infinite;
+    }
     .store-marker {
       border-color: #1E2B58;
       background: #EEF2FF;
@@ -112,6 +140,11 @@ export const LiveDeliveryMap: React.FC<LiveDeliveryMapProps> = ({
       0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.7); }
       70% { transform: scale(1.08); box-shadow: 0 0 0 10px rgba(217, 119, 6, 0); }
       100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(217, 119, 6, 0); }
+    }
+    @keyframes pulseGreen {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(22, 101, 52, 0.7); }
+      70% { transform: scale(1.08); box-shadow: 0 0 0 10px rgba(22, 101, 52, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(22, 101, 52, 0); }
     }
     .leaflet-popup-content-wrapper {
       border-radius: 10px;
@@ -123,7 +156,7 @@ export const LiveDeliveryMap: React.FC<LiveDeliveryMapProps> = ({
       left: 10px;
       right: 10px;
       z-index: 1000;
-      background: rgba(30, 43, 88, 0.94);
+      background: ${isDelivered ? 'rgba(20, 83, 45, 0.95)' : 'rgba(30, 43, 88, 0.94)'};
       color: #FFFFFF;
       padding: 8px 12px;
       border-radius: 10px;
@@ -131,7 +164,7 @@ export const LiveDeliveryMap: React.FC<LiveDeliveryMapProps> = ({
       align-items: center;
       justify-content: space-between;
       box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-      border: 1px solid #C5A880;
+      border: 1px solid ${isDelivered ? '#86EFAC' : '#C5A880'};
     }
     .status-title {
       font-size: 12px;
@@ -146,36 +179,37 @@ export const LiveDeliveryMap: React.FC<LiveDeliveryMapProps> = ({
 <body>
   <div class="status-panel">
     <div>
-      <div class="status-title">
-        ${isPending ? '🏪 Pedido en Tienda Einuushi' : (isEnRuta ? '🛵 Repartidor en Camino' : '✅ Repartidor en Destino')}
-      </div>
-      <div class="status-sub">
-        ${isEnRuta ? '${escapedDriver} • ${escapedVehicle}' : '${escapedAddress}'}
-      </div>
+      <div class="status-title">${statusTitle}</div>
+      <div class="status-sub">${statusSub}</div>
     </div>
-    <div class="custom-badge">
-      ${isEnRuta ? '⚡ En Vivo' : (isPending ? '📦 Preparando' : '📍 Llegó')}
-    </div>
+    <div class="custom-badge">${statusBadge}</div>
   </div>
 
   <div id="map"></div>
 
   <script>
     try {
+      const isDelivered = ${isDelivered};
+      const isEnRuta = ${isEnRuta};
+      const isArrived = ${isArrived};
+      const isPending = ${isPending};
+
       const storeCoords = [${storeLat}, ${storeLng}];
       const clientCoords = [${clientLat}, ${clientLng}];
       const driverCoords = [${currentDriverLat}, ${currentDriverLng}];
 
+      const initialCenter = isDelivered ? clientCoords : driverCoords;
+
       const map = L.map('map', {
         zoomControl: true,
         attributionControl: false
-      }).setView(driverCoords, 14);
+      }).setView(initialCenter, 14);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19
       }).addTo(map);
 
-      // Iconos personalizados con HTML/CSS
+      // Icono Tienda
       const storeIcon = L.divIcon({
         className: 'custom-div-icon',
         html: '<div class="marker-icon-wrapper store-marker">🏪</div>',
@@ -184,6 +218,7 @@ export const LiveDeliveryMap: React.FC<LiveDeliveryMapProps> = ({
         popupAnchor: [0, -18]
       });
 
+      // Icono Cliente Destino (Normal)
       const clientIcon = L.divIcon({
         className: 'custom-div-icon',
         html: '<div class="marker-icon-wrapper client-marker">📍</div>',
@@ -192,6 +227,16 @@ export const LiveDeliveryMap: React.FC<LiveDeliveryMapProps> = ({
         popupAnchor: [0, -18]
       });
 
+      // Icono Entrega Exitosa (Cuando ya fue entregado)
+      const deliveredIcon = L.divIcon({
+        className: 'custom-div-icon',
+        html: '<div class="marker-icon-wrapper delivered-marker">✅</div>',
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+        popupAnchor: [0, -20]
+      });
+
+      // Icono Repartidor (Solo mientras el pedido esté pendiente de entrega)
       const driverIcon = L.divIcon({
         className: 'custom-div-icon',
         html: '<div class="marker-icon-wrapper driver-marker">🛵</div>',
@@ -205,29 +250,53 @@ export const LiveDeliveryMap: React.FC<LiveDeliveryMapProps> = ({
         .addTo(map)
         .bindPopup('<b>Tienda Einuushi</b><br>Punto de despacho central (Riohacha)');
 
-      // Marcador Cliente Destino
-      L.marker(clientCoords, { icon: clientIcon })
-        .addTo(map)
-        .bindPopup('<b>Destino de Entrega</b><br>${escapedAddress}')
-        .openPopup();
+      if (isDelivered) {
+        // SI YA FUE ENTREGADO: No se muestra la ubicación privada del repartidor.
+        // Se muestra únicamente el punto de destino con la confirmación de Pedido Entregado.
+        L.marker(clientCoords, { icon: deliveredIcon })
+          .addTo(map)
+          .bindPopup('<b>¡Pedido Entregado con Éxito! ✅</b><br>${escapedAddress}<br><i>Entregado por: ${escapedDriver}</i>')
+          .openPopup();
 
-      // Marcador Repartidor
-      const driverMarker = L.marker(driverCoords, { icon: driverIcon })
-        .addTo(map)
-        .bindPopup('<b>${escapedDriver}</b><br>${escapedVehicle}<br><i>${isEnRuta ? 'En tránsito hacia tu casa' : 'En espera'}</i>');
+        // Línea de ruta completada
+        L.polyline([storeCoords, clientCoords], {
+          color: '#166534',
+          weight: 4,
+          opacity: 0.8
+        }).addTo(map);
 
-      // Trazar línea de ruta
-      const routePoints = [storeCoords, driverCoords, clientCoords];
-      L.polyline(routePoints, {
-        color: '#1E2B58',
-        weight: 4,
-        opacity: 0.75,
-        dashArray: '6, 8'
-      }).addTo(map);
+        const bounds = L.latLngBounds([storeCoords, clientCoords]);
+        map.fitBounds(bounds, { padding: [50, 50] });
 
-      // Ajustar vista para abarcar todos los puntos con margen
-      const bounds = L.latLngBounds([storeCoords, clientCoords, driverCoords]);
-      map.fitBounds(bounds, { padding: [50, 50] });
+      } else {
+        // SI AÚN NO HA SIDO ENTREGADO (En ruta o en puerta):
+        // El cliente está a la espera y SÍ ve al repartidor en camino.
+        L.marker(clientCoords, { icon: clientIcon })
+          .addTo(map)
+          .bindPopup('<b>Destino de Entrega</b><br>${escapedAddress}')
+          .openPopup();
+
+        const driverPopupText = isArrived
+          ? '<b>${escapedDriver}</b><br>${escapedVehicle}<br><b style="color:#B45309;">📍 ¡Esperando en tu puerta!</b>'
+          : (isEnRuta
+            ? '<b>${escapedDriver}</b><br>${escapedVehicle}<br><b style="color:#1E2B58;">🛵 En camino a tu dirección</b>'
+            : '<b>${escapedDriver}</b><br>${escapedVehicle}<br><i>En preparación en tienda</i>');
+
+        L.marker(driverCoords, { icon: driverIcon })
+          .addTo(map)
+          .bindPopup(driverPopupText);
+
+        const routePoints = [storeCoords, driverCoords, clientCoords];
+        L.polyline(routePoints, {
+          color: '#1E2B58',
+          weight: 4,
+          opacity: 0.75,
+          dashArray: '6, 8'
+        }).addTo(map);
+
+        const bounds = L.latLngBounds([storeCoords, clientCoords, driverCoords]);
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
 
     } catch (e) {
       console.error('Error renderizando mapa Leaflet:', e);
