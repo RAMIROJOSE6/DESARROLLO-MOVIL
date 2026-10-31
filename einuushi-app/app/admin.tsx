@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -21,7 +21,7 @@ import { WebView } from 'react-native-webview';
 import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 import * as ImagePicker from 'expo-image-picker';
 import { useAdmin } from '../hooks/useAdmin';
-import { Order, Product, Category, CustomQuote, User, isSuperAdmin, parseOrderDate } from '../services/database';
+import { Order, OrderItem, Product, Category, CustomQuote, User, isSuperAdmin, parseOrderDate } from '../services/database';
 
 const SUPABASE_FALLBACK_IMAGES: Record<string, string> = {
   mochila1: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/mochila1.jpg',
@@ -133,6 +133,18 @@ export default function AdminScreen() {
     requestAdminPasswordRecovery,
     verifyAndResetAdminPassword,
   } = useAdmin();
+
+  // Estados de Modales del Panel de Rendimiento (Ventas, Total Pedidos, Pendientes)
+  const [isSalesModalVisible, setIsSalesModalVisible] = useState(false);
+  const [salesSearchQuery, setSalesSearchQuery] = useState('');
+  const [salesPaymentFilter, setSalesPaymentFilter] = useState<'all' | 'cash' | 'transfer' | 'card'>('all');
+
+  const [isTotalOrdersModalVisible, setIsTotalOrdersModalVisible] = useState(false);
+  const [totalOrdersSearchQuery, setTotalOrdersSearchQuery] = useState('');
+  const [totalOrdersStatusFilter, setTotalOrdersStatusFilter] = useState<'all' | 'PENDING' | 'DISPATCHED' | 'ARRIVED' | 'DELIVERED'>('all');
+
+  const [isPendingOrdersModalVisible, setIsPendingOrdersModalVisible] = useState(false);
+  const [pendingOrdersSearchQuery, setPendingOrdersSearchQuery] = useState('');
 
   // Estados de Login Administrativo
   const [adminEmail, setAdminEmail] = useState('');
@@ -1133,6 +1145,95 @@ export default function AdminScreen() {
     return true;
   };
 
+  // Filtros y listados para los modales del Panel de Rendimiento
+  const salesOrders = useMemo(() => {
+    return orders.filter(o => o.statusCode === 'DELIVERED' || o.paymentStatus === 'PAID');
+  }, [orders]);
+
+  const filteredSalesOrders = useMemo(() => {
+    return salesOrders.filter(o => {
+      if (salesPaymentFilter === 'cash') {
+        const p = (o.client?.payment || '').toLowerCase();
+        if (!p.includes('efectivo')) return false;
+      } else if (salesPaymentFilter === 'transfer') {
+        const p = (o.client?.payment || '').toLowerCase();
+        if (!p.includes('transfer') && !p.includes('nequi') && !p.includes('daviplata') && !p.includes('bancolombia') && !p.includes('qr')) return false;
+      } else if (salesPaymentFilter === 'card') {
+        const p = (o.client?.payment || '').toLowerCase();
+        if (!p.includes('tarjeta') && !p.includes('crédito') && !p.includes('credito') && !p.includes('debito')) return false;
+      }
+
+      if (!salesSearchQuery.trim()) return true;
+      const q = salesSearchQuery.toLowerCase();
+      const clientName = (o.client?.name || o.clientName || '').toLowerCase();
+      const clientPhone = (o.client?.phone || '').toLowerCase();
+      const clientCedula = (o.client?.cedula || '').toLowerCase();
+      const clientAddress = (o.client?.address || '').toLowerCase();
+      const driverName = (o.driverName || '').toLowerCase();
+      const paymentMethod = (o.client?.payment || '').toLowerCase();
+      const orderId = (o.id || '').toLowerCase();
+      const itemsMatch = (o.items || []).some((item: OrderItem) => (item.name || '').toLowerCase().includes(q));
+
+      return (
+        orderId.includes(q) ||
+        clientName.includes(q) ||
+        clientPhone.includes(q) ||
+        clientCedula.includes(q) ||
+        clientAddress.includes(q) ||
+        driverName.includes(q) ||
+        paymentMethod.includes(q) ||
+        itemsMatch
+      );
+    });
+  }, [salesOrders, salesPaymentFilter, salesSearchQuery]);
+
+  const filteredTotalOrders = useMemo(() => {
+    return orders.filter(o => {
+      if (totalOrdersStatusFilter !== 'all' && o.statusCode !== totalOrdersStatusFilter) {
+        return false;
+      }
+      if (!totalOrdersSearchQuery.trim()) return true;
+      const q = totalOrdersSearchQuery.toLowerCase();
+      const clientName = (o.client?.name || o.clientName || '').toLowerCase();
+      const clientPhone = (o.client?.phone || '').toLowerCase();
+      const driverName = (o.driverName || '').toLowerCase();
+      const orderId = (o.id || '').toLowerCase();
+      const itemsMatch = (o.items || []).some(item => (item.name || '').toLowerCase().includes(q));
+
+      return (
+        orderId.includes(q) ||
+        clientName.includes(q) ||
+        clientPhone.includes(q) ||
+        driverName.includes(q) ||
+        itemsMatch
+      );
+    });
+  }, [orders, totalOrdersStatusFilter, totalOrdersSearchQuery]);
+
+  const pendingOrdersList = useMemo(() => {
+    return orders.filter(o => o.statusCode === 'PENDING');
+  }, [orders]);
+
+  const filteredPendingOrders = useMemo(() => {
+    return pendingOrdersList.filter(o => {
+      if (!pendingOrdersSearchQuery.trim()) return true;
+      const q = pendingOrdersSearchQuery.toLowerCase();
+      const clientName = (o.client?.name || o.clientName || '').toLowerCase();
+      const clientPhone = (o.client?.phone || '').toLowerCase();
+      const clientAddress = (o.client?.address || '').toLowerCase();
+      const orderId = (o.id || '').toLowerCase();
+      const itemsMatch = (o.items || []).some(item => (item.name || '').toLowerCase().includes(q));
+
+      return (
+        orderId.includes(q) ||
+        clientName.includes(q) ||
+        clientPhone.includes(q) ||
+        clientAddress.includes(q) ||
+        itemsMatch
+      );
+    });
+  }, [pendingOrdersList, pendingOrdersSearchQuery]);
+
   // Pedidos filtrados por Estado Y por Rango de Fecha
   const filteredOrders = orders.filter(o => {
     let matchStatus = true;
@@ -1797,33 +1898,117 @@ export default function AdminScreen() {
               Datos agregados en tiempo real desde la base de datos SQLite con Drizzle ORM
             </Text>
 
-            {/* KPIs CARDS */}
+            {/* KPIs CARDS INTERACTIVAS CON DETALLE */}
             <View style={styles.kpiGrid}>
-              <View style={[styles.kpiCard, { borderColor: '#10B981' }]}>
-                <View style={styles.kpiIconWrapper}>
-                  <Ionicons name="cash-outline" size={24} color="#10B981" />
+              {/* 1. VENTAS TOTALES */}
+              <TouchableOpacity
+                style={[
+                  styles.kpiCard,
+                  {
+                    borderColor: '#10B981',
+                    backgroundColor: '#F0FDF4',
+                    cursor: Platform.OS === 'web' ? 'pointer' : undefined,
+                  } as any
+                ]}
+                onPress={() => setIsSalesModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <View style={[styles.kpiIconWrapper, { backgroundColor: '#DCFCE7' }]}>
+                    <Ionicons name="cash-outline" size={24} color="#10B981" />
+                  </View>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#10B981',
+                    paddingHorizontal: 7,
+                    paddingVertical: 2,
+                    borderRadius: 10,
+                  }}>
+                    <Ionicons name="eye-outline" size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
+                    <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: 'bold' }}>Ver Detalle</Text>
+                  </View>
                 </View>
-                <Text style={styles.kpiValue}>
+                <Text style={[styles.kpiValue, { color: '#047857' }]}>
                   $ {(analytics?.totalRevenue || 0).toLocaleString('es-CO')}
                 </Text>
                 <Text style={styles.kpiLabel}>Ventas Totales (COP)</Text>
-              </View>
+                <Text style={{ fontSize: 10, color: '#059669', marginTop: 4, fontWeight: '600' }}>
+                  Toca para ver ventas detalladas ➔
+                </Text>
+              </TouchableOpacity>
 
-              <View style={[styles.kpiCard, { borderColor: '#3B82F6' }]}>
-                <View style={styles.kpiIconWrapper}>
-                  <Ionicons name="bag-check-outline" size={24} color="#3B82F6" />
+              {/* 2. TOTAL DE PEDIDOS */}
+              <TouchableOpacity
+                style={[
+                  styles.kpiCard,
+                  {
+                    borderColor: '#3B82F6',
+                    backgroundColor: '#EFF6FF',
+                    cursor: Platform.OS === 'web' ? 'pointer' : undefined,
+                  } as any
+                ]}
+                onPress={() => setIsTotalOrdersModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <View style={[styles.kpiIconWrapper, { backgroundColor: '#DBEAFE' }]}>
+                    <Ionicons name="bag-check-outline" size={24} color="#3B82F6" />
+                  </View>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#3B82F6',
+                    paddingHorizontal: 7,
+                    paddingVertical: 2,
+                    borderRadius: 10,
+                  }}>
+                    <Ionicons name="eye-outline" size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
+                    <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: 'bold' }}>Ver Lista</Text>
+                  </View>
                 </View>
-                <Text style={styles.kpiValue}>{analytics?.totalOrders || 0}</Text>
+                <Text style={[styles.kpiValue, { color: '#1D4ED8' }]}>{analytics?.totalOrders || orders.length || 0}</Text>
                 <Text style={styles.kpiLabel}>Total de Pedidos</Text>
-              </View>
+                <Text style={{ fontSize: 10, color: '#2563EB', marginTop: 4, fontWeight: '600' }}>
+                  Toca para ver pedidos ➔
+                </Text>
+              </TouchableOpacity>
 
-              <View style={[styles.kpiCard, { borderColor: '#F59E0B' }]}>
-                <View style={styles.kpiIconWrapper}>
-                  <Ionicons name="hourglass-outline" size={24} color="#F59E0B" />
+              {/* 3. PENDIENTES DE DESPACHO */}
+              <TouchableOpacity
+                style={[
+                  styles.kpiCard,
+                  {
+                    borderColor: '#F59E0B',
+                    backgroundColor: '#FFFBEB',
+                    cursor: Platform.OS === 'web' ? 'pointer' : undefined,
+                  } as any
+                ]}
+                onPress={() => setIsPendingOrdersModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <View style={[styles.kpiIconWrapper, { backgroundColor: '#FEF3C7' }]}>
+                    <Ionicons name="hourglass-outline" size={24} color="#F59E0B" />
+                  </View>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#F59E0B',
+                    paddingHorizontal: 7,
+                    paddingVertical: 2,
+                    borderRadius: 10,
+                  }}>
+                    <Ionicons name="eye-outline" size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
+                    <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: 'bold' }}>Ver Pendientes</Text>
+                  </View>
                 </View>
-                <Text style={styles.kpiValue}>{analytics?.pendingOrders || 0}</Text>
+                <Text style={[styles.kpiValue, { color: '#B45309' }]}>{analytics?.pendingOrders || pendingOrdersList.length || 0}</Text>
                 <Text style={styles.kpiLabel}>Pendientes de Despacho</Text>
-              </View>
+                <Text style={{ fontSize: 10, color: '#D97706', marginTop: 4, fontWeight: '600' }}>
+                  Toca para ver despacho ➔
+                </Text>
+              </TouchableOpacity>
 
               <TouchableOpacity 
                 style={[
@@ -5259,6 +5444,855 @@ export default function AdminScreen() {
           </View>
         </View>
       </Modal>
+      {/* ================================================================= */}
+      {/* 1. MODAL DETALLADO DE VENTAS TOTALES                              */}
+      {/* ================================================================= */}
+      <Modal
+        visible={isSalesModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsSalesModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 760, maxHeight: '92%', padding: 0, overflow: 'hidden' }]}>
+            {/* Header del Modal */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#1E2B58',
+              paddingHorizontal: 20,
+              paddingVertical: 16,
+              borderBottomWidth: 3,
+              borderColor: '#10B981',
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 }}>
+                <View style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  backgroundColor: '#10B981',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: 12,
+                }}>
+                  <Ionicons name="cash" size={24} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF' }}>
+                    Reporte Detallado de Ventas Totales
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#A7F3D0' }}>
+                    Total Facturado: $ {(analytics?.totalRevenue || 0).toLocaleString('es-CO')} COP • {salesOrders.length} ventas completadas
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setIsSalesModalVisible(false)}
+                style={{ padding: 4 }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close-circle" size={26} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Resumen Financiero Rápido */}
+            <View style={{
+              flexDirection: isDesktop ? 'row' : 'column',
+              backgroundColor: '#F8FAFC',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              borderBottomWidth: 1,
+              borderColor: '#E2E8F0',
+              gap: 8,
+            }}>
+              <View style={{ flex: 1, backgroundColor: '#FFFFFF', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                <Text style={{ fontSize: 10, color: '#047857', fontWeight: 'bold' }}>TOTAL RECAUDADO</Text>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#065F46', marginTop: 2 }}>
+                  $ {(analytics?.totalRevenue || 0).toLocaleString('es-CO')} COP
+                </Text>
+                <Text style={{ fontSize: 10, color: '#64748B' }}>En ventas entregadas</Text>
+              </View>
+
+              <View style={{ flex: 1, backgroundColor: '#FFFFFF', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <Text style={{ fontSize: 10, color: '#1E293B', fontWeight: 'bold' }}>PROMEDIO POR VENTA</Text>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#1E2B58', marginTop: 2 }}>
+                  $ {salesOrders.length ? Math.round((analytics?.totalRevenue || 0) / salesOrders.length).toLocaleString('es-CO') : 0} COP
+                </Text>
+                <Text style={{ fontSize: 10, color: '#64748B' }}>Ticket promedio</Text>
+              </View>
+
+              <View style={{ flex: 1, backgroundColor: '#FFFFFF', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#FEF08A' }}>
+                <Text style={{ fontSize: 10, color: '#854D0E', fontWeight: 'bold' }}>EN PAZ Y SALVO</Text>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#713F12', marginTop: 2 }}>
+                  $ {(analytics?.settledRevenue || 0).toLocaleString('es-CO')} COP
+                </Text>
+                <Text style={{ fontSize: 10, color: '#64748B' }}>Liquidado en tienda</Text>
+              </View>
+            </View>
+
+            {/* Barra de Búsqueda y Filtros de Pago */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#F1F5F9',
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                height: 38,
+                marginBottom: 8,
+              }}>
+                <Ionicons name="search-outline" size={16} color="#64748B" style={{ marginRight: 6 }} />
+                <TextInput
+                  placeholder="Buscar venta por cliente, teléfono, cédula, #orden, repartidor..."
+                  placeholderTextColor="#94A3B8"
+                  value={salesSearchQuery}
+                  onChangeText={setSalesSearchQuery}
+                  style={[{ flex: 1, fontSize: 12, color: '#1E293B' }, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+                />
+                {salesSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSalesSearchQuery('')}>
+                    <Ionicons name="close" size={16} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Chips de filtro por medio de pago */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {[
+                  { id: 'all', label: `Todos (${salesOrders.length})` },
+                  { id: 'cash', label: '💵 Efectivo' },
+                  { id: 'transfer', label: '📱 Transferencia / Nequi' },
+                  { id: 'card', label: '💳 Tarjeta' },
+                ].map(chip => (
+                  <TouchableOpacity
+                    key={chip.id}
+                    onPress={() => setSalesPaymentFilter(chip.id as any)}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 14,
+                      backgroundColor: salesPaymentFilter === chip.id ? '#10B981' : '#F1F5F9',
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 11,
+                      fontWeight: 'bold',
+                      color: salesPaymentFilter === chip.id ? '#FFFFFF' : '#475569',
+                    }}>
+                      {chip.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Listado de Ventas Detalladas */}
+            <ScrollView style={{ padding: 16, backgroundColor: '#F8FAFC' }}>
+              {filteredSalesOrders.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <Ionicons name="receipt-outline" size={44} color="#94A3B8" />
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#475569', marginTop: 10 }}>
+                    No se encontraron ventas con los criterios seleccionados
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>
+                    Intenta cambiar los términos de búsqueda o el medio de pago
+                  </Text>
+                </View>
+              ) : (
+                filteredSalesOrders.map((order: Order) => {
+                  const paymentLower = (order.client?.payment || '').toLowerCase();
+                  const isCash = paymentLower.includes('efectivo');
+                  const isTransfer = paymentLower.includes('transfer') || paymentLower.includes('nequi') || paymentLower.includes('daviplata') || paymentLower.includes('bancolombia') || paymentLower.includes('qr');
+                  const isSettled = order.settlementStatus === 'SETTLED';
+
+                  return (
+                    <View
+                      key={order.id}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 12,
+                        padding: 14,
+                        marginBottom: 12,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 2,
+                        elevation: 1,
+                      }}
+                    >
+                      {/* Cabecera de la venta: ID, Fecha y Monto */}
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', borderBottomWidth: 1, borderColor: '#F1F5F9', paddingBottom: 8, marginBottom: 10 }}>
+                        <View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1E2B58' }}>
+                              #{order.id}
+                            </Text>
+                            <View style={{
+                              backgroundColor: '#DCFCE7',
+                              paddingHorizontal: 8,
+                              paddingVertical: 2,
+                              borderRadius: 6,
+                            }}>
+                              <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#15803D' }}>
+                                ✓ VENTA FINALIZADA
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                            📅 {order.receivedAt ? `Entregado: ${order.receivedAt}` : (order.date || order.createdAt || 'Fecha no registrada')}
+                          </Text>
+                        </View>
+
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 16, fontWeight: '900', color: '#10B981' }}>
+                            $ {(order.total || 0).toLocaleString('es-CO')} COP
+                          </Text>
+                          <Text style={{ fontSize: 10, color: '#94A3B8' }}>
+                            Subtotal: $ {(order.subtotal || 0).toLocaleString('es-CO')}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Detalles: Cliente, Pago y Repartidor */}
+                      <View style={{
+                        flexDirection: isDesktop ? 'row' : 'column',
+                        gap: 12,
+                        backgroundColor: '#F8FAFC',
+                        padding: 10,
+                        borderRadius: 8,
+                        marginBottom: 10,
+                      }}>
+                        {/* Datos del Cliente */}
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#64748B', marginBottom: 2 }}>
+                            👤 CLIENTE
+                          </Text>
+                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E293B' }}>
+                            {order.client?.name || order.clientName || 'Cliente anónimo'}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#475569' }}>
+                            🪪 C.C. {order.client?.cedula || 'No registrada'}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#475569' }}>
+                            📞 {order.client?.phone || 'Sin teléfono'}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                            📍 {order.client?.address || 'Dirección no especificada'}{order.city ? ` (${order.city})` : ''}
+                          </Text>
+                        </View>
+
+                        {/* Medio de Pago y Liquidación */}
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#64748B', marginBottom: 2 }}>
+                            💳 MEDIO DE PAGO
+                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                            <Ionicons
+                              name={isCash ? 'cash-outline' : isTransfer ? 'swap-horizontal-outline' : 'card-outline'}
+                              size={15}
+                              color={isCash ? '#10B981' : isTransfer ? '#8B5CF6' : '#3B82F6'}
+                              style={{ marginRight: 5 }}
+                            />
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E293B' }}>
+                              {order.client?.payment || 'Efectivo contra entrega'}
+                            </Text>
+                          </View>
+
+                          <View style={{ marginTop: 6 }}>
+                            <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#64748B' }}>
+                              ESTADO DE CAJA:
+                            </Text>
+                            <Text style={{ fontSize: 11, fontWeight: 'bold', color: isSettled ? '#15803D' : '#D97706' }}>
+                              {isSettled ? '✅ En Paz y Salvo con Tienda' : '⏳ Dinero en poder del Repartidor'}
+                            </Text>
+                            {order.settledBy && (
+                              <Text style={{ fontSize: 10, color: '#64748B' }}>
+                                Liquidado por: {order.settledBy}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+
+                        {/* Repartidor / Transporte Asignado */}
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#64748B', marginBottom: 2 }}>
+                            🏍️ REPARTIDOR / LOGÍSTICA
+                          </Text>
+                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E293B' }}>
+                            {order.driverName || 'Sin repartidor asignado'}
+                          </Text>
+                          {order.driverPhone && (
+                            <Text style={{ fontSize: 11, color: '#475569' }}>
+                              📞 {order.driverPhone}
+                            </Text>
+                          )}
+                          {(order.vehicleType || order.plateOrNit) && (
+                            <Text style={{ fontSize: 11, color: '#64748B' }}>
+                              {order.vehicleType || 'Vehículo'} {order.plateOrNit ? `• ${order.plateOrNit}` : ''}
+                            </Text>
+                          )}
+                          {order.trackingGuideNumber && (
+                            <Text style={{ fontSize: 11, color: '#2563EB', fontWeight: 'bold' }}>
+                              📦 Guía: {order.trackingGuideNumber}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+
+                      {/* Artículos Comprados */}
+                      <View style={{ borderTopWidth: 1, borderColor: '#F1F5F9', paddingTop: 8 }}>
+                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#64748B', marginBottom: 4 }}>
+                          📦 ARTÍCULOS COMPRADOS:
+                        </Text>
+                        <View style={{ gap: 4 }}>
+                          {(order.items || []).map((item: OrderItem, idx: number) => (
+                            <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Text style={{ fontSize: 11, color: '#334155', flex: 1 }}>
+                                • <Text style={{ fontWeight: 'bold' }}>{item.cartQuantity}x</Text> {item.name}
+                              </Text>
+                              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#1E293B' }}>
+                                $ {((item.priceValue || 0) * (item.cartQuantity || 1)).toLocaleString('es-CO')}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+
+                      {/* Botón para ir a ver en pestaña de Pedidos */}
+                      <View style={{ marginTop: 10, flexDirection: 'row', justifyContent: 'flex-end' }}>
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: '#EFF6FF',
+                            paddingHorizontal: 12,
+                            paddingVertical: 5,
+                            borderRadius: 6,
+                            borderWidth: 1,
+                            borderColor: '#BFDBFE',
+                          }}
+                          onPress={() => {
+                            setIsSalesModalVisible(false);
+                            setOrderStatusFilter('ALL');
+                            setActiveTabState('orders');
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="open-outline" size={13} color="#2563EB" style={{ marginRight: 4 }} />
+                          <Text style={{ fontSize: 11, color: '#2563EB', fontWeight: 'bold' }}>
+                            Ver en Pestaña Pedidos
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            {/* Footer del Modal */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              backgroundColor: '#FFFFFF',
+              borderTopWidth: 1,
+              borderColor: '#E2E8F0',
+            }}>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>
+                Mostrando <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{filteredSalesOrders.length}</Text> de {salesOrders.length} ventas
+              </Text>
+              <TouchableOpacity
+                onPress={() => setIsSalesModalVisible(false)}
+                style={{
+                  backgroundColor: '#1E2B58',
+                  paddingHorizontal: 20,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                  Cerrar
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* 2. MODAL DETALLADO DE TOTAL DE PEDIDOS                             */}
+      {/* ================================================================= */}
+      <Modal
+        visible={isTotalOrdersModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsTotalOrdersModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 740, maxHeight: '92%', padding: 0, overflow: 'hidden' }]}>
+            {/* Header del Modal */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#1E2B58',
+              paddingHorizontal: 20,
+              paddingVertical: 16,
+              borderBottomWidth: 3,
+              borderColor: '#3B82F6',
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 }}>
+                <View style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  backgroundColor: '#3B82F6',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: 12,
+                }}>
+                  <Ionicons name="bag-check" size={24} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF' }}>
+                    Directorio Completo de Pedidos
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#BFDBFE' }}>
+                    {orders.length} pedidos registrados en total en el sistema
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setIsTotalOrdersModalVisible(false)}
+                style={{ padding: 4 }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close-circle" size={26} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Barra de Búsqueda y Chips de Estado */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#F1F5F9',
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                height: 38,
+                marginBottom: 8,
+              }}>
+                <Ionicons name="search-outline" size={16} color="#64748B" style={{ marginRight: 6 }} />
+                <TextInput
+                  placeholder="Buscar pedido por ID, cliente, teléfono o repartidor..."
+                  placeholderTextColor="#94A3B8"
+                  value={totalOrdersSearchQuery}
+                  onChangeText={setTotalOrdersSearchQuery}
+                  style={[{ flex: 1, fontSize: 12, color: '#1E293B' }, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+                />
+                {totalOrdersSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setTotalOrdersSearchQuery('')}>
+                    <Ionicons name="close" size={16} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {[
+                  { id: 'all', label: `Todos (${orders.length})` },
+                  { id: 'PENDING', label: `⏳ Pendientes (${orders.filter(o => o.statusCode === 'PENDING').length})` },
+                  { id: 'DISPATCHED', label: `🏍️ En Ruta (${orders.filter(o => o.statusCode === 'DISPATCHED' || o.statusCode === 'ARRIVED').length})` },
+                  { id: 'DELIVERED', label: `✅ Entregados (${orders.filter(o => o.statusCode === 'DELIVERED').length})` },
+                ].map(chip => (
+                  <TouchableOpacity
+                    key={chip.id}
+                    onPress={() => setTotalOrdersStatusFilter(chip.id as any)}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 14,
+                      backgroundColor: totalOrdersStatusFilter === chip.id ? '#3B82F6' : '#F1F5F9',
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 11,
+                      fontWeight: 'bold',
+                      color: totalOrdersStatusFilter === chip.id ? '#FFFFFF' : '#475569',
+                    }}>
+                      {chip.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Listado de Pedidos */}
+            <ScrollView style={{ padding: 16, backgroundColor: '#F8FAFC' }}>
+              {filteredTotalOrders.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <Ionicons name="bag-outline" size={44} color="#94A3B8" />
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#475569', marginTop: 10 }}>
+                    No se encontraron pedidos
+                  </Text>
+                </View>
+              ) : (
+                filteredTotalOrders.map((order: Order) => {
+                  const isPending = order.statusCode === 'PENDING';
+                  const isDelivered = order.statusCode === 'DELIVERED';
+                  const isDispatched = order.statusCode === 'DISPATCHED' || order.statusCode === 'ARRIVED';
+
+                  return (
+                    <View
+                      key={order.id}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 10,
+                        padding: 12,
+                        marginBottom: 10,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1E2B58' }}>
+                            #{order.id}
+                          </Text>
+                          <View style={{
+                            backgroundColor: isDelivered ? '#DCFCE7' : isPending ? '#FEF3C7' : '#DBEAFE',
+                            paddingHorizontal: 7,
+                            paddingVertical: 2,
+                            borderRadius: 6,
+                          }}>
+                            <Text style={{
+                              fontSize: 10,
+                              fontWeight: 'bold',
+                              color: isDelivered ? '#15803D' : isPending ? '#B45309' : '#1D4ED8',
+                            }}>
+                              {order.status || order.statusCode}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1E2B58' }}>
+                          $ {(order.total || 0).toLocaleString('es-CO')} COP
+                        </Text>
+                      </View>
+
+                      <View style={{ marginTop: 6, flexDirection: isDesktop ? 'row' : 'column', justifyContent: 'space-between', gap: 6 }}>
+                        <Text style={{ fontSize: 11, color: '#334155' }}>
+                          👤 <Text style={{ fontWeight: '600' }}>{order.client?.name || order.clientName || 'Cliente'}</Text> • 📞 {order.client?.phone || 'Sin tel'}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#64748B' }}>
+                          📅 {order.date || order.createdAt || 'Sin fecha'}
+                        </Text>
+                      </View>
+
+                      <View style={{ marginTop: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 11, color: '#64748B' }}>
+                          🏍️ Repartidor: <Text style={{ fontWeight: '600', color: '#1E293B' }}>{order.driverName || 'Sin asignar'}</Text>
+                        </Text>
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 6,
+                            backgroundColor: '#EFF6FF',
+                          }}
+                          onPress={() => {
+                            setIsTotalOrdersModalVisible(false);
+                            setActiveTabState('orders');
+                          }}
+                        >
+                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#2563EB' }}>
+                            Gestionar en Pedidos ➔
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            {/* Footer */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              backgroundColor: '#FFFFFF',
+              borderTopWidth: 1,
+              borderColor: '#E2E8F0',
+            }}>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>
+                Mostrando <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{filteredTotalOrders.length}</Text> de {orders.length} pedidos
+              </Text>
+              <TouchableOpacity
+                onPress={() => setIsTotalOrdersModalVisible(false)}
+                style={{
+                  backgroundColor: '#1E2B58',
+                  paddingHorizontal: 20,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                  Cerrar
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* 3. MODAL DE PEDIDOS PENDIENTES DE DESPACHO                         */}
+      {/* ================================================================= */}
+      <Modal
+        visible={isPendingOrdersModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsPendingOrdersModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 740, maxHeight: '92%', padding: 0, overflow: 'hidden' }]}>
+            {/* Header del Modal */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#1E2B58',
+              paddingHorizontal: 20,
+              paddingVertical: 16,
+              borderBottomWidth: 3,
+              borderColor: '#F59E0B',
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 }}>
+                <View style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  backgroundColor: '#F59E0B',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: 12,
+                }}>
+                  <Ionicons name="hourglass" size={24} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF' }}>
+                    Pedidos Pendientes de Despacho
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#FDE68A' }}>
+                    {pendingOrdersList.length} pedidos esperando asignación de repartidor y despacho
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setIsPendingOrdersModalVisible(false)}
+                style={{ padding: 4 }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close-circle" size={26} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Banner de alerta operativa */}
+            <View style={{ backgroundColor: '#FFFBEB', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderColor: '#FDE68A', flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="alert-circle" size={18} color="#D97706" style={{ marginRight: 8 }} />
+              <Text style={{ fontSize: 11, color: '#B45309', flex: 1, fontWeight: '500' }}>
+                <Text style={{ fontWeight: 'bold' }}>Prioridad Operativa:</Text> Asigna un repartidor o transportadora para que los pedidos inicien su ruta hacia el cliente.
+              </Text>
+            </View>
+
+            {/* Barra de Búsqueda */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#F1F5F9',
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                height: 38,
+              }}>
+                <Ionicons name="search-outline" size={16} color="#64748B" style={{ marginRight: 6 }} />
+                <TextInput
+                  placeholder="Buscar pedido pendiente por ID, cliente, dirección..."
+                  placeholderTextColor="#94A3B8"
+                  value={pendingOrdersSearchQuery}
+                  onChangeText={setPendingOrdersSearchQuery}
+                  style={[{ flex: 1, fontSize: 12, color: '#1E293B' }, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+                />
+                {pendingOrdersSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setPendingOrdersSearchQuery('')}>
+                    <Ionicons name="close" size={16} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Listado de Pedidos Pendientes */}
+            <ScrollView style={{ padding: 16, backgroundColor: '#F8FAFC' }}>
+              {filteredPendingOrders.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <Ionicons name="checkmark-done-circle-outline" size={50} color="#10B981" />
+                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1E293B', marginTop: 10 }}>
+                    ¡Al día! No hay pedidos pendientes de despacho
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>
+                    Todos los pedidos han sido asignados o entregados satisfactoriamente.
+                  </Text>
+                </View>
+              ) : (
+                filteredPendingOrders.map((order: Order) => (
+                  <View
+                    key={order.id}
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 12,
+                      padding: 14,
+                      marginBottom: 12,
+                      borderWidth: 1,
+                      borderColor: '#FDE68A',
+                      borderLeftWidth: 4,
+                      borderLeftColor: '#F59E0B',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 2,
+                      elevation: 1,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View>
+                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1E2B58' }}>
+                          #{order.id}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                          📅 Recibido: {order.date || order.createdAt || 'Hoy'}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 15, fontWeight: '900', color: '#F59E0B' }}>
+                        $ {(order.total || 0).toLocaleString('es-CO')} COP
+                      </Text>
+                    </View>
+
+                    <View style={{ backgroundColor: '#F8FAFC', padding: 8, borderRadius: 8, marginVertical: 8 }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#1E293B' }}>
+                        👤 {order.client?.name || order.clientName || 'Cliente'} • 📞 {order.client?.phone || 'Sin tel'}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                        📍 {order.client?.address || 'Dirección no especificada'}{order.city ? ` (${order.city})` : ''}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+                        💳 Medio de Pago: <Text style={{ fontWeight: '600' }}>{order.client?.payment || 'Efectivo'}</Text>
+                      </Text>
+                    </View>
+
+                    {/* Resumen de artículos a empacar */}
+                    <View style={{ marginBottom: 10 }}>
+                      <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#64748B', marginBottom: 2 }}>
+                        PRODUCTOS A ALISTAR:
+                      </Text>
+                      {(order.items || []).map((item, idx) => (
+                        <Text key={idx} style={{ fontSize: 11, color: '#334155' }}>
+                          • <Text style={{ fontWeight: 'bold' }}>{item.cartQuantity}x</Text> {item.name}
+                        </Text>
+                      ))}
+                    </View>
+
+                    {/* Acciones de Despacho */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, borderTopWidth: 1, borderColor: '#F1F5F9', paddingTop: 8 }}>
+                      <TouchableOpacity
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 6,
+                          backgroundColor: '#F1F5F9',
+                        }}
+                        onPress={() => {
+                          setIsPendingOrdersModalVisible(false);
+                          setActiveTabState('orders');
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, color: '#475569', fontWeight: 'bold' }}>
+                          Ver en Pedidos
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          backgroundColor: '#F59E0B',
+                          paddingHorizontal: 14,
+                          paddingVertical: 6,
+                          borderRadius: 6,
+                        }}
+                        onPress={() => {
+                          setIsPendingOrdersModalVisible(false);
+                          openDispatchModal(order);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="send" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={{ fontSize: 11, color: '#FFFFFF', fontWeight: 'bold' }}>
+                          Asignar y Despachar ➔
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            {/* Footer */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              backgroundColor: '#FFFFFF',
+              borderTopWidth: 1,
+              borderColor: '#E2E8F0',
+            }}>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>
+                Pendientes: <Text style={{ fontWeight: 'bold', color: '#B45309' }}>{pendingOrdersList.length}</Text> pedidos
+              </Text>
+              <TouchableOpacity
+                onPress={() => setIsPendingOrdersModalVisible(false)}
+                style={{
+                  backgroundColor: '#1E2B58',
+                  paddingHorizontal: 20,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                  Cerrar
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* MODAL DE DIRECTORIO DE CLIENTES REGISTRADOS (SOLO CLIENTES, ADMINISTRADORES SE GESTIONAN EN CONFIGURACIÓN) */}
       <Modal 
         visible={isUsersModalVisible} 
