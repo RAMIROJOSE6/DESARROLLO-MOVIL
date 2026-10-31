@@ -21,7 +21,7 @@ import { WebView } from 'react-native-webview';
 import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 import * as ImagePicker from 'expo-image-picker';
 import { useAdmin } from '../hooks/useAdmin';
-import { Order, Product, Category, CustomQuote, User, isSuperAdmin } from '../services/database';
+import { Order, Product, Category, CustomQuote, User, isSuperAdmin, parseOrderDate } from '../services/database';
 
 const SUPABASE_FALLBACK_IMAGES: Record<string, string> = {
   mochila1: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/mochila1.jpg',
@@ -143,8 +143,11 @@ export default function AdminScreen() {
   const [editProdDiscount, setEditProdDiscount] = useState('0');
   const [editProdIsDiscount, setEditProdIsDiscount] = useState(false);
 
-  // Filtro de Pedidos
+  // Filtro de Pedidos (Estado y Fecha)
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('ALL');
+  const [orderDatePreset, setOrderDatePreset] = useState<'ALL' | 'TODAY' | 'LAST_7_DAYS' | 'THIS_MONTH' | 'CUSTOM'>('ALL');
+  const [orderStartDate, setOrderStartDate] = useState<string>(''); // YYYY-MM-DD
+  const [orderEndDate, setOrderEndDate] = useState<string>(''); // YYYY-MM-DD
 
   // Modales
   const [isSettlementModalVisible, setIsSettlementModalVisible] = useState(false);
@@ -1034,12 +1037,66 @@ export default function AdminScreen() {
     setReplyMessageText('');
   };
 
-  // Pedidos filtrados
+  // Helper para verificar si un pedido está dentro del rango de fecha seleccionado
+  const isOrderInDateRange = (order: Order) => {
+    if (orderDatePreset === 'ALL') return true;
+
+    const orderDate = parseOrderDate(order);
+    if (!orderDate) return true; // Si no tiene fecha parseable, se mantiene visible
+
+    const now = new Date();
+
+    if (orderDatePreset === 'TODAY') {
+      return (
+        orderDate.getFullYear() === now.getFullYear() &&
+        orderDate.getMonth() === now.getMonth() &&
+        orderDate.getDate() === now.getDate()
+      );
+    }
+
+    if (orderDatePreset === 'LAST_7_DAYS') {
+      const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0);
+      return orderDate >= sevenDaysAgo;
+    }
+
+    if (orderDatePreset === 'THIS_MONTH') {
+      return (
+        orderDate.getFullYear() === now.getFullYear() &&
+        orderDate.getMonth() === now.getMonth()
+      );
+    }
+
+    if (orderDatePreset === 'CUSTOM') {
+      if (orderStartDate) {
+        const startParts = orderStartDate.split('-');
+        if (startParts.length === 3) {
+          const start = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10), 0, 0, 0);
+          if (!isNaN(start.getTime()) && orderDate < start) return false;
+        }
+      }
+      if (orderEndDate) {
+        const endParts = orderEndDate.split('-');
+        if (endParts.length === 3) {
+          const end = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10), 23, 59, 59);
+          if (!isNaN(end.getTime()) && orderDate > end) return false;
+        }
+      }
+      return true;
+    }
+
+    return true;
+  };
+
+  // Pedidos filtrados por Estado Y por Rango de Fecha
   const filteredOrders = orders.filter(o => {
-    if (orderStatusFilter === 'ALL') return true;
-    if (orderStatusFilter === 'PENDING_SETTLEMENT') return o.settlementStatus === 'PENDING_SETTLEMENT';
-    if (orderStatusFilter === 'SETTLED') return o.settlementStatus === 'SETTLED';
-    return o.statusCode === orderStatusFilter;
+    let matchStatus = true;
+    if (orderStatusFilter === 'ALL') matchStatus = true;
+    else if (orderStatusFilter === 'PENDING_SETTLEMENT') matchStatus = o.settlementStatus === 'PENDING_SETTLEMENT';
+    else if (orderStatusFilter === 'SETTLED') matchStatus = o.settlementStatus === 'SETTLED';
+    else matchStatus = o.statusCode === orderStatusFilter;
+
+    if (!matchStatus) return false;
+    return isOrderInDateRange(o);
   });
 
   // Abrir modal de liquidación y Paz y Salvo
@@ -1942,6 +1999,149 @@ export default function AdminScreen() {
                 <Text style={styles.sectionHeaderSubtitle}>
                   Confirma pagos, asigna repartidores y rastrea rutas de entrega en vivo
                 </Text>
+              </View>
+            </View>
+
+            {/* FILTROS DE PERÍODO DE FECHA */}
+            <View style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              padding: 12,
+              marginBottom: 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.03,
+              shadowRadius: 3,
+              elevation: 1,
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="calendar-outline" size={15} color="#1E2B58" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E2B58' }}>
+                    Filtrar por Período de Fecha
+                  </Text>
+                </View>
+
+                {orderDatePreset !== 'ALL' && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setOrderDatePreset('ALL');
+                      setOrderStartDate('');
+                      setOrderEndDate('');
+                    }}
+                    style={{ flexDirection: 'row', alignItems: 'center' }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close-circle-outline" size={13} color="#DC2626" style={{ marginRight: 3 }} />
+                    <Text style={{ fontSize: 11, color: '#DC2626', fontWeight: 'bold' }}>Limpiar Fecha</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Chips Rápidos de Selección de Fecha */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                {[
+                  { key: 'ALL', label: 'Todas las fechas' },
+                  { key: 'TODAY', label: 'Hoy' },
+                  { key: 'LAST_7_DAYS', label: 'Últimos 7 días' },
+                  { key: 'THIS_MONTH', label: 'Este mes' },
+                  { key: 'CUSTOM', label: '📅 Rango personalizado' },
+                ].map(p => (
+                  <TouchableOpacity
+                    key={p.key}
+                    style={[
+                      styles.dateFilterChip,
+                      orderDatePreset === p.key && styles.dateFilterChipActive
+                    ]}
+                    onPress={() => {
+                      setOrderDatePreset(p.key as any);
+                      if (p.key === 'CUSTOM' && !orderStartDate) {
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        setOrderStartDate(todayStr);
+                        setOrderEndDate(todayStr);
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[
+                      styles.dateFilterChipText,
+                      orderDatePreset === p.key && styles.dateFilterChipTextActive
+                    ]}>
+                      {p.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Selector de Rango Personalizado (Desde / Hasta) */}
+              {orderDatePreset === 'CUSTOM' && (
+                <View style={{
+                  flexDirection: isDesktop ? 'row' : 'column',
+                  gap: 10,
+                  marginTop: 10,
+                  paddingTop: 10,
+                  borderTopWidth: 1,
+                  borderColor: '#F1F5F9',
+                  alignItems: isDesktop ? 'center' : 'stretch'
+                }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569', marginBottom: 4 }}>
+                      Desde (AAAA-MM-DD):
+                    </Text>
+                    <TextInput
+                      style={{
+                        backgroundColor: '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        borderRadius: 8,
+                        paddingHorizontal: 10,
+                        paddingVertical: 7,
+                        fontSize: 12,
+                        color: '#1E2B58',
+                      }}
+                      placeholder="Ej. 2026-10-01"
+                      value={orderStartDate}
+                      onChangeText={setOrderStartDate}
+                      {...({ type: 'date' } as any)}
+                    />
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569', marginBottom: 4 }}>
+                      Hasta (AAAA-MM-DD):
+                    </Text>
+                    <TextInput
+                      style={{
+                        backgroundColor: '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        borderRadius: 8,
+                        paddingHorizontal: 10,
+                        paddingVertical: 7,
+                        fontSize: 12,
+                        color: '#1E2B58',
+                      }}
+                      placeholder="Ej. 2026-10-31"
+                      value={orderEndDate}
+                      onChangeText={setOrderEndDate}
+                      {...({ type: 'date' } as any)}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {/* Resumen de Resultados Filtrados */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 6, borderTopWidth: 1, borderColor: '#F8FAFC' }}>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>
+                  Mostrando <Text style={{ fontWeight: 'bold', color: '#1E2B58' }}>{filteredOrders.length}</Text> de {orders.length} pedidos
+                </Text>
+                {filteredOrders.length > 0 && (
+                  <Text style={{ fontSize: 11, color: '#059669', fontWeight: 'bold' }}>
+                    Total: $ {filteredOrders.reduce((sum, o) => sum + (o.total || 0), 0).toLocaleString('es-CO')} COP
+                  </Text>
+                )}
               </View>
             </View>
 
@@ -6452,6 +6652,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginBottom: 16,
+  },
+  dateFilterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  dateFilterChipActive: {
+    backgroundColor: '#1E2B58',
+    borderColor: '#1E2B58',
+  },
+  dateFilterChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  dateFilterChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   filterPill: {
     paddingHorizontal: 12,

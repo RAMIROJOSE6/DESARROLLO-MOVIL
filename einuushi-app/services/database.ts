@@ -65,6 +65,7 @@ export interface Order {
   userEmail?: string;
   clientName?: string;
   date: string;
+  createdAt?: string;
   client: {
     name: string;
     cedula: string;
@@ -845,6 +846,7 @@ export async function getOrders(filterUserEmail?: string): Promise<Order[]> {
             userEmail: r.user_email || undefined,
             clientName: r.client_name,
             date: r.date,
+            createdAt: r.created_at || undefined,
             client: {
               name: r.client_name,
               cedula: r.client_cedula,
@@ -2587,4 +2589,33 @@ export async function sendRecoveryCodeEmail(
     console.warn('Error enviando código de recuperación con EmailJS:', error);
     return false;
   }
+}
+
+/**
+ * Helper para parsear la fecha de un pedido en un objeto Date válido
+ */
+export function parseOrderDate(order: { date?: string; createdAt?: string }): Date | null {
+  if (order.createdAt) {
+    const d = new Date(order.createdAt);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (!order.date) return null;
+
+  const direct = new Date(order.date);
+  if (!isNaN(direct.getTime())) return direct;
+
+  const match = order.date.match(/(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{1,4})/);
+  if (match) {
+    let day = parseInt(match[1], 10);
+    let month = parseInt(match[2], 10) - 1;
+    let year = parseInt(match[3], 10);
+    if (match[1].length === 4) {
+      year = parseInt(match[1], 10);
+      month = parseInt(match[2], 10) - 1;
+      day = parseInt(match[3], 10);
+    }
+    const d = new Date(year, month, day);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return null;
 }
