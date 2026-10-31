@@ -103,6 +103,8 @@ export interface Order {
   deliveryEvidencePhoto?: string; // Foto de evidencia tomada por el repartidor al entregar
   driverCollectionEvidence?: string; // Nota/evidencia de cobro tomada por el repartidor
   settlementNotes?: string; // Nota o evidencia de pago
+  driverLat?: number; // Coordenada latitud en vivo del repartidor
+  driverLng?: number; // Coordenada longitud en vivo del repartidor
 }
 
 export interface AdminActivityLog {
@@ -882,6 +884,8 @@ export async function getOrders(filterUserEmail?: string): Promise<Order[]> {
             deliveryEvidencePhoto: r.delivery_evidence_photo || logistics.deliveryEvidencePhoto || undefined,
             driverCollectionEvidence: r.driver_collection_evidence || logistics.driverCollectionEvidence || undefined,
             settlementNotes: r.settlement_notes || logistics.settlementNotes || undefined,
+            driverLat: r.driver_lat || logistics.driverLat || undefined,
+            driverLng: r.driver_lng || logistics.driverLng || undefined,
           };
         });
         memoryOrders = mappedOrders;
@@ -1013,6 +1017,8 @@ export async function updateOrderStatusInDb(
     deliveryEvidencePhoto?: string;
     driverCollectionEvidence?: string;
     settlementNotes?: string;
+    driverLat?: number;
+    driverLng?: number;
   },
 ): Promise<void> {
   const current = memoryOrders.find(o => o.id === orderId);
@@ -1037,6 +1043,8 @@ export async function updateOrderStatusInDb(
     transferReference: updates.transferReference ?? current?.transferReference,
     driverCollectionEvidence: updates.driverCollectionEvidence ?? current?.driverCollectionEvidence,
     settlementNotes: updates.settlementNotes ?? current?.settlementNotes,
+    driverLat: updates.driverLat ?? current?.driverLat,
+    driverLng: updates.driverLng ?? current?.driverLng,
   };
 
   const packedPayload = {
