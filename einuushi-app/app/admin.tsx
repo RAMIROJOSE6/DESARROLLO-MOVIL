@@ -438,13 +438,15 @@ export default function AdminScreen() {
     }
   };
 
-  // Estado para visualizador de foto a pantalla completa (Lightbox)
+  // Estado para visualizador de foto a pantalla completa (Lightbox con soporte multi-foto)
   const [previewImage, setPreviewImage] = useState<{
     source: any;
     title: string;
     price?: string;
     description?: string;
     category?: string;
+    gallery?: any[];
+    currentIndex?: number;
   } | null>(null);
 
   const handleOpenImagePreview = (
@@ -452,10 +454,45 @@ export default function AdminScreen() {
     title: string,
     price?: string,
     description?: string,
-    category?: string
+    category?: string,
+    gallery?: any[],
+    initialIndex?: number
   ) => {
-    if (!source) return;
-    setPreviewImage({ source, title, price, description, category });
+    if (!source && (!gallery || gallery.length === 0)) return;
+    const initialGallery = gallery && gallery.length > 0 ? gallery : (source ? [source] : []);
+    const startIndex = initialIndex !== undefined && initialIndex >= 0 && initialIndex < initialGallery.length
+      ? initialIndex
+      : 0;
+    const initialSource = initialGallery[startIndex] || source;
+    setPreviewImage({
+      source: initialSource,
+      title,
+      price,
+      description,
+      category,
+      gallery: initialGallery,
+      currentIndex: startIndex,
+    });
+  };
+
+  const handleNextPreviewImage = () => {
+    if (!previewImage || !previewImage.gallery || previewImage.gallery.length <= 1) return;
+    const nextIdx = ((previewImage.currentIndex || 0) + 1) % previewImage.gallery.length;
+    setPreviewImage({
+      ...previewImage,
+      currentIndex: nextIdx,
+      source: previewImage.gallery[nextIdx],
+    });
+  };
+
+  const handlePrevPreviewImage = () => {
+    if (!previewImage || !previewImage.gallery || previewImage.gallery.length <= 1) return;
+    const prevIdx = ((previewImage.currentIndex || 0) - 1 + previewImage.gallery.length) % previewImage.gallery.length;
+    setPreviewImage({
+      ...previewImage,
+      currentIndex: prevIdx,
+      source: previewImage.gallery[prevIdx],
+    });
   };
 
   const handleCloseImagePreview = () => {
@@ -2204,6 +2241,23 @@ export default function AdminScreen() {
                     ? Math.round(prod.priceValue * (1 - prod.discountPercent! / 100))
                     : prod.priceValue;
 
+                  // Construir la galería completa de fotos para este producto
+                  const prodGallery: any[] = [];
+                  if (prod.images && Array.isArray(prod.images) && prod.images.length > 0) {
+                    prod.images.forEach(uri => {
+                      const s = resolveProductImage(uri);
+                      if (s) prodGallery.push(s);
+                    });
+                  } else if (prod.imagePath) {
+                    prod.imagePath.split('||').forEach(uri => {
+                      const s = resolveProductImage(uri.trim());
+                      if (s) prodGallery.push(s);
+                    });
+                  }
+                  if (prodGallery.length === 0 && imgSource) {
+                    prodGallery.push(imgSource);
+                  }
+
                   return (
                     <View
                       key={prod.id}
@@ -2213,22 +2267,47 @@ export default function AdminScreen() {
                       ]}
                     >
                       <View style={styles.inventoryImgWrapper}>
+                        {/* Indicador de fotos múltiples si tiene más de 1 */}
+                        {Boolean(prodGallery.length > 1) && (
+                          <View style={{
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            backgroundColor: 'rgba(30, 43, 88, 0.85)',
+                            paddingHorizontal: 7,
+                            paddingVertical: 3,
+                            borderRadius: 10,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: '#C5A880',
+                            zIndex: 10
+                          }}>
+                            <Ionicons name="images" size={11} color="#C5A880" style={{ marginRight: 3 }} />
+                            <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>
+                              {prodGallery.length} fotos
+                            </Text>
+                          </View>
+                        )}
                         {imgSource ? (
                           <TouchableOpacity
                             activeOpacity={0.9}
                             style={styles.adminImgTouchWrapper}
                             onPress={() => handleOpenImagePreview(
-                              imgSource,
+                              imgSource || (prodGallery[0] ?? null),
                               prod.name,
                               `$ ${prod.priceValue.toLocaleString('es-CO')} COP`,
                               prod.ancestralRef,
-                              (prod as any).category || prod.categoryId
+                              (prod as any).category || prod.categoryId,
+                              prodGallery
                             )}
                           >
                             <Image source={imgSource} style={styles.inventoryImg} resizeMode="contain" />
                             <View style={styles.imageZoomBadge}>
                               <Ionicons name="expand-outline" size={11} color="#FFFFFF" />
-                              <Text style={styles.imageZoomBadgeText}>Ampliar</Text>
+                              <Text style={styles.imageZoomBadgeText}>
+                                {prodGallery.length > 1 ? 'Ver fotos' : 'Ampliar'}
+                              </Text>
                             </View>
                           </TouchableOpacity>
                         ) : (
@@ -2252,6 +2331,7 @@ export default function AdminScreen() {
                         </TouchableOpacity>
                       </View>
 
+
                       <View style={styles.inventoryDetailsBox}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                           <Text style={styles.inventoryCategoryBadge}>{prod.categoryId}</Text>
@@ -2268,7 +2348,19 @@ export default function AdminScreen() {
                           )}
                         </View>
 
-                        <Text style={styles.inventoryItemName} numberOfLines={1}>{prod.name}</Text>
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          onPress={() => handleOpenImagePreview(
+                            imgSource || (prodGallery[0] ?? null),
+                            prod.name,
+                            `$ ${prod.priceValue.toLocaleString('es-CO')} COP`,
+                            prod.ancestralRef,
+                            (prod as any).category || prod.categoryId,
+                            prodGallery
+                          )}
+                        >
+                          <Text style={styles.inventoryItemName} numberOfLines={1}>{prod.name}</Text>
+                        </TouchableOpacity>
                         {prod.imageName && (
                           <Text style={styles.inventoryImageNameTag}>📷 {prod.imageName}</Text>
                         )}
@@ -3475,11 +3567,28 @@ export default function AdminScreen() {
                       position: 'relative',
                       alignItems: 'center',
                     }}>
-                      <Image
-                        source={resolveProductImage(imgUri) || { uri: SUPABASE_FALLBACK_IMAGES.mochila1 }}
-                        style={{ width: '100%', height: 110, borderRadius: 8, backgroundColor: '#F8FAFC' }}
-                        resizeMode="cover"
-                      />
+                      <TouchableOpacity
+                        activeOpacity={0.88}
+                        style={{ width: '100%' }}
+                        onPress={() => {
+                          const allGallerySources = imgs.map(resolveProductImage).filter(Boolean);
+                          handleOpenImagePreview(
+                            resolveProductImage(imgUri),
+                            productToManageGallery?.name || 'Artículo',
+                            `$ ${productToManageGallery?.priceValue.toLocaleString('es-CO')} COP`,
+                            productToManageGallery?.ancestralRef,
+                            productToManageGallery?.categoryId,
+                            allGallerySources,
+                            idx
+                          );
+                        }}
+                      >
+                        <Image
+                          source={resolveProductImage(imgUri) || { uri: SUPABASE_FALLBACK_IMAGES.mochila1 }}
+                          style={{ width: '100%', height: 110, borderRadius: 8, backgroundColor: '#F8FAFC' }}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 6 }}>
                         <View style={{ backgroundColor: idx === 0 ? '#1E2B58' : '#E2E8F0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
                           <Text style={{ fontSize: 10, fontWeight: 'bold', color: idx === 0 ? '#FFFFFF' : '#475569' }}>
@@ -4588,12 +4697,8 @@ export default function AdminScreen() {
             </View>
           </SafeAreaView>
 
-          {/* Cuerpo Central con la Imagen */}
-          <TouchableOpacity
-            style={styles.fullImageBody}
-            activeOpacity={1}
-            onPress={handleCloseImagePreview}
-          >
+          {/* Cuerpo Central con la Imagen y Navegación de Galería */}
+          <View style={[styles.fullImageBody, { position: 'relative', justifyContent: 'center', alignItems: 'center' }]}>
             {previewImage?.source && (
               <Image
                 source={previewImage.source}
@@ -4601,7 +4706,135 @@ export default function AdminScreen() {
                 resizeMode="contain"
               />
             )}
-          </TouchableOpacity>
+
+            {/* Botones de navegación izquierda/derecha para galería multi-foto */}
+            {Boolean(previewImage?.gallery && previewImage.gallery.length > 1) && (
+              <>
+                <TouchableOpacity
+                  style={{
+                    position: 'absolute',
+                    left: 14,
+                    backgroundColor: 'rgba(30, 43, 88, 0.85)',
+                    width: 46,
+                    height: 46,
+                    borderRadius: 23,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 1.5,
+                    borderColor: '#C5A880',
+                    zIndex: 20,
+                  }}
+                  onPress={handlePrevPreviewImage}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    position: 'absolute',
+                    right: 14,
+                    backgroundColor: 'rgba(30, 43, 88, 0.85)',
+                    width: 46,
+                    height: 46,
+                    borderRadius: 23,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 1.5,
+                    borderColor: '#C5A880',
+                    zIndex: 20,
+                  }}
+                  onPress={handleNextPreviewImage}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="chevron-forward" size={28} color="#FFFFFF" />
+                </TouchableOpacity>
+
+                {/* Indicador de fotos (ej. Foto 1 de 4) */}
+                <View style={{
+                  position: 'absolute',
+                  bottom: 12,
+                  backgroundColor: 'rgba(0,0,0,0.75)',
+                  paddingHorizontal: 14,
+                  paddingVertical: 6,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: '#C5A880',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6
+                }}>
+                  <Ionicons name="images-outline" size={14} color="#C5A880" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                    Foto {((previewImage?.currentIndex || 0) + 1)} de {previewImage?.gallery?.length || 1}
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
+
+          {/* Carrusel de Miniaturas Inferior */}
+          {Boolean(previewImage?.gallery && previewImage.gallery.length > 1) && (
+            <View style={{
+              paddingVertical: 10,
+              backgroundColor: 'rgba(15, 23, 42, 0.92)',
+              borderTopWidth: 1,
+              borderColor: 'rgba(197, 168, 128, 0.3)'
+            }}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingHorizontal: 16,
+                  alignItems: 'center',
+                  gap: 8,
+                  justifyContent: 'center',
+                  flexGrow: 1
+                }}
+              >
+                {previewImage?.gallery?.map((thumbSrc, tIdx) => {
+                  const isSelected = ((previewImage?.currentIndex) || 0) === tIdx;
+                  return (
+                    <TouchableOpacity
+                      key={tIdx}
+                      onPress={() => {
+                        if (!previewImage) return;
+                        setPreviewImage({
+                          ...previewImage,
+                          currentIndex: tIdx,
+                          source: thumbSrc
+                        });
+                      }}
+                      activeOpacity={0.8}
+                      style={{
+                        position: 'relative',
+                        width: 52,
+                        height: 52,
+                        borderRadius: 8,
+                        borderWidth: isSelected ? 2.5 : 1,
+                        borderColor: isSelected ? '#C5A880' : 'rgba(255,255,255,0.25)',
+                        overflow: 'hidden',
+                        opacity: isSelected ? 1 : 0.65,
+                      }}
+                    >
+                      <Image source={thumbSrc} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                      <View style={{
+                        position: 'absolute',
+                        bottom: 2,
+                        right: 2,
+                        backgroundColor: isSelected ? '#C5A880' : 'rgba(0,0,0,0.65)',
+                        borderRadius: 4,
+                        paddingHorizontal: 4,
+                        paddingVertical: 1
+                      }}>
+                        <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: 'bold' }}>{tIdx + 1}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
 
           {/* Footer Inferior con Detalles y Precio */}
           {(previewImage?.price || previewImage?.description) ? (
@@ -4619,7 +4852,7 @@ export default function AdminScreen() {
                   </Text>
                 ) : null}
                 <Text style={styles.fullImageHint}>
-                  Toca en cualquier parte para cerrar
+                  Toca las flechas o miniaturas para explorar los diferentes ángulos
                 </Text>
               </View>
             </SafeAreaView>

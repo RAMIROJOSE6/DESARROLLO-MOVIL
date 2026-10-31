@@ -1486,9 +1486,29 @@ export default function HomeScreen() {
                 <View style={styles.productImageWrapper}>
                   {/* Etiqueta de Categoría Elegante */}
                   <View style={styles.categoryBadgeOnImage}>
-                        product.category || (product as any).categoryId,
-                        (product as any).gallery
+                    <Text style={styles.categoryBadgeText}>{product.category || (product as any).categoryId}</Text>
                   </View>
+                  {Boolean((product as any).gallery && (product as any).gallery.length > 1) && (
+                    <View style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      backgroundColor: 'rgba(30, 43, 88, 0.85)',
+                      paddingHorizontal: 7,
+                      paddingVertical: 3,
+                      borderRadius: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      borderWidth: 1,
+                      borderColor: '#C5A880',
+                      zIndex: 10
+                    }}>
+                      <Ionicons name="images" size={11} color="#C5A880" style={{ marginRight: 3 }} />
+                      <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>
+                        {(product as any).gallery.length} fotos
+                      </Text>
+                    </View>
+                  )}
 
                   {/* Etiqueta de Descuento si está activo */}
                   {(product as any).isDiscountActive === 1 && (product as any).discountPercent && (product as any).discountPercent > 0 && (
@@ -1506,7 +1526,8 @@ export default function HomeScreen() {
                         product.name,
                         product.price,
                         product.ancestralRef,
-                        product.category || (product as any).categoryId
+                        product.category || (product as any).categoryId,
+                        (product as any).gallery
                       )}
                     >
                       <Image source={product.image} style={styles.productImage} resizeMode="contain" />
@@ -1535,11 +1556,23 @@ export default function HomeScreen() {
                 </View>
 
                 <View style={styles.productInfoContainer}>
-                  <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
-                  
-                  <Text style={styles.ancestralText} numberOfLines={2}>
-                    {product.ancestralRef}
-                  </Text>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => handleOpenImagePreview(
+                      product.image,
+                      product.name,
+                      product.price,
+                      product.ancestralRef,
+                      product.category || (product as any).categoryId,
+                      (product as any).gallery
+                    )}
+                  >
+                    <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
+                    
+                    <Text style={styles.ancestralText} numberOfLines={2}>
+                      {product.ancestralRef}
+                    </Text>
+                  </TouchableOpacity>
 
                   <View style={styles.stockRow}>
                     <Ionicons name="cube-outline" size={12} color="#64748B" />
@@ -3192,6 +3225,70 @@ export default function HomeScreen() {
               </>
             )}
           </View>
+
+          {/* Carrusel de Miniaturas Inferior */}
+          {Boolean(previewImage?.gallery && previewImage.gallery.length > 1) && (
+            <View style={{
+              paddingVertical: 10,
+              backgroundColor: 'rgba(15, 23, 42, 0.92)',
+              borderTopWidth: 1,
+              borderColor: 'rgba(197, 168, 128, 0.3)'
+            }}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingHorizontal: 16,
+                  alignItems: 'center',
+                  gap: 8,
+                  justifyContent: 'center',
+                  flexGrow: 1
+                }}
+              >
+                {previewImage?.gallery?.map((thumbSrc, tIdx) => {
+                  const isSelected = ((previewImage?.currentIndex) || 0) === tIdx;
+                  return (
+                    <TouchableOpacity
+                      key={tIdx}
+                      onPress={() => {
+                        if (!previewImage) return;
+                        setPreviewImage({
+                          ...previewImage,
+                          currentIndex: tIdx,
+                          source: thumbSrc
+                        });
+                      }}
+                      activeOpacity={0.8}
+                      style={{
+                        position: 'relative',
+                        width: 52,
+                        height: 52,
+                        borderRadius: 8,
+                        borderWidth: isSelected ? 2.5 : 1,
+                        borderColor: isSelected ? '#C5A880' : 'rgba(255,255,255,0.25)',
+                        overflow: 'hidden',
+                        opacity: isSelected ? 1 : 0.65,
+                      }}
+                    >
+                      <Image source={thumbSrc} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                      <View style={{
+                        position: 'absolute',
+                        bottom: 2,
+                        right: 2,
+                        backgroundColor: isSelected ? '#C5A880' : 'rgba(0,0,0,0.65)',
+                        borderRadius: 4,
+                        paddingHorizontal: 4,
+                        paddingVertical: 1
+                      }}>
+                        <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: 'bold' }}>{tIdx + 1}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
           {/* Footer Inferior con Detalles y Precio */}
           {(previewImage?.price || previewImage?.description) ? (
             <SafeAreaView style={styles.fullImageFooterSafeArea}>
@@ -3208,7 +3305,7 @@ export default function HomeScreen() {
                   </Text>
                 ) : null}
                 <Text style={styles.fullImageHint}>
-                  Toca en cualquier parte para cerrar
+                  Toca las flechas o miniaturas para ver todos los ángulos del artículo
                 </Text>
               </View>
             </SafeAreaView>
