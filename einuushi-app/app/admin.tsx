@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -130,6 +130,9 @@ export default function AdminScreen() {
   // Modal de Edición de Artículo
   const [isEditProductModalVisible, setIsEditProductModalVisible] = useState(false);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
+  const [productToManageGallery, setProductToManageGallery] = useState<Product | null>(null);
+  const [isGalleryModalVisible, setIsGalleryModalVisible] = useState(false);
+  const [isAddingGalleryPhoto, setIsAddingGalleryPhoto] = useState(false);
   const [editProdName, setEditProdName] = useState('');
   const [editProdCategory, setEditProdCategory] = useState('');
   const [editProdPrice, setEditProdPrice] = useState('');
@@ -466,6 +469,7 @@ export default function AdminScreen() {
   const [newProdStock, setNewProdStock] = useState('5');
   const [newProdImageName, setNewProdImageName] = useState('');
   const [newProdImagePath, setNewProdImagePath] = useState('');
+  const [newProdImages, setNewProdImages] = useState<string[]>([]);
   const [isPickingImage, setIsPickingImage] = useState(false);
   const [newProdAncestral, setNewProdAncestral] = useState('');
   const [newProdDiscount, setNewProdDiscount] = useState('0');
@@ -521,29 +525,35 @@ export default function AdminScreen() {
     return uri;
   };
 
-  // Adjuntar foto desde la galería o archivos
+  // Adjuntar una o varias fotos desde la galería o archivos
   const handlePickProductImage = async () => {
     try {
       setIsPickingImage(true);
 
-      // En Web: Selector nativo de archivos HTML5
+      // En Web: Selector nativo de archivos HTML5 con soporte de selección múltiple
       if (Platform.OS === 'web' && typeof document !== 'undefined') {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
-        input.onchange = (e: any) => {
-          const file = e.target?.files?.[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              const base64Uri = event.target?.result as string;
-              setNewProdImagePath(base64Uri);
-              if (!newProdImageName) {
-                const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/\s+/g, '_').toLowerCase();
-                setNewProdImageName(cleanName);
-              }
-            };
-            reader.readAsDataURL(file);
+        input.multiple = true;
+        input.onchange = async (e: any) => {
+          const files = Array.from(e.target?.files || []) as File[];
+          if (files.length > 0) {
+            const newUris: string[] = [];
+            for (const file of files) {
+              const base64Uri = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (ev) => resolve(ev.target?.result as string);
+                reader.readAsDataURL(file);
+              });
+              newUris.push(base64Uri);
+            }
+            setNewProdImages(prev => [...prev, ...newUris]);
+            setNewProdImagePath(prev => prev || newUris[0]);
+            if (!newProdImageName && files[0]) {
+              const cleanName = files[0].name.replace(/\.[^/.]+$/, '').replace(/\s+/g, '_').toLowerCase();
+              setNewProdImageName(cleanName);
+            }
           }
           setIsPickingImage(false);
         };
@@ -562,19 +572,23 @@ export default function AdminScreen() {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
+        allowsMultipleSelection: true,
         quality: 0.7,
         base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const persistentUri = await ensureBase64DataUrl(asset.uri, asset.base64);
-        setNewProdImagePath(persistentUri);
+        const newUris: string[] = [];
+        for (const asset of result.assets) {
+          const persistentUri = await ensureBase64DataUrl(asset.uri, asset.base64);
+          newUris.push(persistentUri);
+        }
+        setNewProdImages(prev => [...prev, ...newUris]);
+        setNewProdImagePath(prev => prev || newUris[0]);
 
-        if (asset.fileName && !newProdImageName) {
-          const cleanName = asset.fileName.replace(/\.[^/.]+$/, '').replace(/\s+/g, '_').toLowerCase();
+        const firstAsset = result.assets[0];
+        if (firstAsset.fileName && !newProdImageName) {
+          const cleanName = firstAsset.fileName.replace(/\.[^/.]+$/, '').replace(/\s+/g, '_').toLowerCase();
           setNewProdImageName(cleanName);
         } else if (!newProdImageName && newProdName) {
           setNewProdImageName(newProdName.trim().toLowerCase().replace(/\s+/g, '_'));
@@ -582,13 +596,13 @@ export default function AdminScreen() {
       }
     } catch (err) {
       console.warn('Error al seleccionar imagen:', err);
-      Alert.alert('Error', 'No se pudo abrir el selector de fotos.');
+      Alert.alert('Error', 'No se pudo cargar la imagen seleccionada.');
     } finally {
       setIsPickingImage(false);
     }
   };
 
-  // Tomar foto con la cámara
+  // Tomar foto con la cámara y sumarla a las fotos del artículo
   const handleTakePhoto = async () => {
     try {
       setIsPickingImage(true);
@@ -611,19 +625,19 @@ export default function AdminScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         const persistentUri = await ensureBase64DataUrl(asset.uri, asset.base64);
-        setNewProdImagePath(persistentUri);
+        setNewProdImages(prev => [...prev, persistentUri]);
+        setNewProdImagePath(prev => prev || persistentUri);
         if (!newProdImageName) {
           setNewProdImageName(`foto_${Date.now()}`);
         }
       }
     } catch (err) {
-      console.warn('Error al capturar foto:', err);
-      Alert.alert('Error', 'No se pudo abrir la cámara.');
+      console.warn('Error al tomar foto:', err);
+      Alert.alert('Error', 'No se pudo capturar la foto.');
     } finally {
       setIsPickingImage(false);
     }
   };
-
   // Confirmar eliminación permanente de un producto
   const handleConfirmDelete = async () => {
     if (productToDelete) {
@@ -676,58 +690,112 @@ export default function AdminScreen() {
     Alert.alert('¡Artículo Actualizado!', 'El artículo y su categoría han sido modificados exitosamente en la base de datos.');
   };
 
-  // Actualizar la foto de un producto existente
-  const handleUpdateProductPhoto = async (prod: Product) => {
+  // Abrir modal de gestión de fotos y ángulos del artículo
+  const handleOpenGalleryModal = (prod: Product) => {
+    setProductToManageGallery(prod);
+    setIsGalleryModalVisible(true);
+  };
+
+  // Agregar nueva foto a la galería de un producto existente
+  const handleAddPhotoToProduct = async (prod: Product) => {
     try {
+      setIsAddingGalleryPhoto(true);
+
+      let currentImages: string[] = [];
+      if (prod.images && Array.isArray(prod.images) && prod.images.length > 0) {
+        currentImages = [...prod.images];
+      } else if (prod.imagePath) {
+        currentImages = prod.imagePath.split('|').filter(Boolean);
+      }
+
       if (Platform.OS === 'web' && typeof document !== 'undefined') {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
-        input.onchange = (e: any) => {
-          const file = e.target?.files?.[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-              const base64Uri = event.target?.result as string;
-              const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/\s+/g, '_').toLowerCase();
-              await updateProductPhoto(prod.id, base64Uri, cleanName);
-            };
-            reader.readAsDataURL(file);
+        input.multiple = true;
+        input.onchange = async (e: any) => {
+          const files = Array.from(e.target?.files || []) as File[];
+          if (files.length > 0) {
+            const newUris: string[] = [];
+            for (const file of files) {
+              const base64Uri = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (ev) => resolve(ev.target?.result as string);
+                reader.readAsDataURL(file);
+              });
+              newUris.push(base64Uri);
+            }
+            const updatedGallery = [...currentImages, ...newUris];
+            await editProduct(prod.id, {
+              images: updatedGallery,
+              imagePath: updatedGallery[0],
+            });
+            setProductToManageGallery(prev => prev ? { ...prev, images: updatedGallery, imagePath: updatedGallery[0] } : null);
           }
+          setIsAddingGalleryPhoto(false);
         };
+        input.oncancel = () => setIsAddingGalleryPhoto(false);
         input.click();
         return;
       }
 
-      // En Entorno Móvil (Android / iOS):
+      // En Móvil (Android / iOS):
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permiso Requerido', 'Se necesita autorización para acceder a tus fotos.');
+        setIsAddingGalleryPhoto(false);
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
+        allowsMultipleSelection: true,
         quality: 0.7,
         base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const persistentUri = await ensureBase64DataUrl(asset.uri, asset.base64);
-        const cleanName = asset.fileName
-          ? asset.fileName.replace(/\.[^/.]+$/, '').replace(/\s+/g, '_').toLowerCase()
-          : `foto_${Date.now()}`;
-        await updateProductPhoto(prod.id, persistentUri, cleanName);
+        const newUris: string[] = [];
+        for (const asset of result.assets) {
+          const persistentUri = await ensureBase64DataUrl(asset.uri, asset.base64);
+          newUris.push(persistentUri);
+        }
+        const updatedGallery = [...currentImages, ...newUris];
+        await editProduct(prod.id, {
+          images: updatedGallery,
+          imagePath: updatedGallery[0],
+        });
+        setProductToManageGallery(prev => prev ? { ...prev, images: updatedGallery, imagePath: updatedGallery[0] } : null);
       }
     } catch (err) {
-      console.warn('Error al actualizar foto:', err);
-      Alert.alert('Error', 'No se pudo actualizar la foto del producto.');
+      console.warn('Error al agregar foto a la galería:', err);
+      Alert.alert('Error', 'No se pudo adjuntar la foto al artículo.');
+    } finally {
+      setIsAddingGalleryPhoto(false);
     }
   };
 
+  // Eliminar una foto específica de la galería del producto
+  const handleRemovePhotoFromProduct = async (prod: Product, indexToRemove: number) => {
+    let currentImages: string[] = [];
+    if (prod.images && Array.isArray(prod.images) && prod.images.length > 0) {
+      currentImages = [...prod.images];
+    } else if (prod.imagePath) {
+      currentImages = prod.imagePath.split('|').filter(Boolean);
+    }
+
+    if (currentImages.length <= 1) {
+      Alert.alert('Aviso', 'El artículo debe tener al menos una foto principal de referencia.');
+      return;
+    }
+
+    const updated = currentImages.filter((_, idx) => idx !== indexToRemove);
+    await editProduct(prod.id, {
+      images: updated,
+      imagePath: updated[0],
+    });
+    setProductToManageGallery(prev => prev ? { ...prev, images: updated, imagePath: updated[0] } : null);
+  };
   // Helper para resolver imagen de producto (100% URLs de Supabase)
   const resolveProductImage = (path?: string | null) => {
     if (!path) return null;
@@ -748,6 +816,7 @@ export default function AdminScreen() {
     setNewProdStock('5');
     setNewProdImageName('');
     setNewProdImagePath('');
+    setNewProdImages([]);
     setNewProdAncestral('');
     setNewProdDiscount('0');
     setNewProdIsDiscount(false);
@@ -770,7 +839,8 @@ export default function AdminScreen() {
       priceValue: priceNum,
       price: `$ ${priceNum.toLocaleString('es-CO')} COP`,
       icon: 'sparkles-outline',
-      imagePath: newProdImagePath.trim() || 'mochila1',
+      imagePath: (newProdImages.length > 0 ? newProdImages[0] : newProdImagePath.trim()) || 'mochila1',
+      images: newProdImages.length > 0 ? newProdImages : (newProdImagePath.trim() ? [newProdImagePath.trim()] : undefined),
       imageName: newProdImageName.trim() || newProdName.trim(),
       ancestralRef: newProdAncestral.trim() || 'Pieza sagrada elaborada a mano con técnicas tradicionales wayuu.',
       stock: stockNum,
@@ -786,6 +856,7 @@ export default function AdminScreen() {
     setNewProdStock('5');
     setNewProdImageName('');
     setNewProdImagePath('');
+    setNewProdImages([]);
     setNewProdAncestral('');
     setNewProdDiscount('0');
     setNewProdIsDiscount(false);
@@ -2171,11 +2242,13 @@ export default function AdminScreen() {
                         {/* Botón para cambiar foto de este artículo */}
                         <TouchableOpacity
                           style={styles.changePhotoBtn}
-                          onPress={() => handleUpdateProductPhoto(prod)}
+                          onPress={() => handleOpenGalleryModal(prod)}
                           activeOpacity={0.8}
                         >
                           <Ionicons name="camera" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                          <Text style={styles.changePhotoBtnText}>Cambiar Foto</Text>
+                          <Text style={styles.changePhotoBtnText}>
+                            Fotos / Galería {Boolean(prod.images && prod.images.length > 1) ? `(${prod.images?.length})` : ''}
+                          </Text>
                         </TouchableOpacity>
                       </View>
 
@@ -3319,6 +3392,133 @@ export default function AdminScreen() {
       {/* ================================================================= */}
       {/* MODAL: EDITAR ARTÍCULO DEL CATÁLOGO                               */}
       {/* ================================================================= */}
+      {/* MODAL: ADMINISTRADOR DE FOTOS Y ÁNGULOS (GALERÍA MULTI-FOTO)      */}
+      {/* ================================================================= */}
+      <Modal visible={isGalleryModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 560 }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalDialogTitle}>Fotos y Ángulos del Artículo</Text>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>
+                  {productToManageGallery?.name} • ID: {productToManageGallery?.id}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsGalleryModalVisible(false)} style={{ padding: 4 }}>
+                <Ionicons name="close" size={24} color="#1E2B58" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 440 }} showsVerticalScrollIndicator={true}>
+              <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 4 }}>
+                  📸 Gestión de Múltiples Ángulos
+                </Text>
+                <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 16 }}>
+                  Agrega fotos desde diferentes perspectivas (frontal, lateral, detalle del tejido, textura). Los clientes podrán desplazarse entre las fotos tocando sobre el artículo en la tienda.
+                </Text>
+              </View>
+
+              {/* Botón para agregar más fotos */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#1E2B58',
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 16,
+                }}
+                onPress={() => productToManageGallery && handleAddPhotoToProduct(productToManageGallery)}
+                disabled={isAddingGalleryPhoto}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle" size={18} color="#C5A880" style={{ marginRight: 8 }} />
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
+                  {isAddingGalleryPhoto ? 'Subiendo foto a Supabase...' : '+ Adjuntar Nuevo Ángulo / Foto'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Lista de fotos actuales del producto */}
+              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58', marginBottom: 8 }}>
+                Fotos Registradas en la Tienda:
+              </Text>
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                {(() => {
+                  let imgs: string[] = [];
+                  if (productToManageGallery?.images && Array.isArray(productToManageGallery.images) && productToManageGallery.images.length > 0) {
+                    imgs = productToManageGallery.images;
+                  } else if (productToManageGallery?.imagePath) {
+                    imgs = productToManageGallery.imagePath.split('|').filter(Boolean);
+                  }
+
+                  if (imgs.length === 0) {
+                    return (
+                      <View style={{ padding: 20, alignItems: 'center', width: '100%' }}>
+                        <Ionicons name="images-outline" size={32} color="#94A3B8" />
+                        <Text style={{ color: '#64748B', fontSize: 12, marginTop: 4 }}>No hay fotos registradas</Text>
+                      </View>
+                    );
+                  }
+
+                  return imgs.map((imgUri, idx) => (
+                    <View key={idx} style={{
+                      width: '47%',
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 10,
+                      padding: 8,
+                      borderWidth: 1.5,
+                      borderColor: idx === 0 ? '#C5A880' : '#E2E8F0',
+                      position: 'relative',
+                      alignItems: 'center',
+                    }}>
+                      <Image
+                        source={resolveProductImage(imgUri) || { uri: SUPABASE_FALLBACK_IMAGES.mochila1 }}
+                        style={{ width: '100%', height: 110, borderRadius: 8, backgroundColor: '#F8FAFC' }}
+                        resizeMode="cover"
+                      />
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 6 }}>
+                        <View style={{ backgroundColor: idx === 0 ? '#1E2B58' : '#E2E8F0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: idx === 0 ? '#FFFFFF' : '#475569' }}>
+                            {idx === 0 ? '★ Principal' : `Ángulo #${idx + 1}`}
+                          </Text>
+                        </View>
+                        {imgs.length > 1 && (
+                          <TouchableOpacity
+                            onPress={() => productToManageGallery && handleRemovePhotoFromProduct(productToManageGallery, idx)}
+                            style={{ padding: 4 }}
+                          >
+                            <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  ));
+                })()}
+              </View>
+            </ScrollView>
+
+            <View style={{ marginTop: 14, paddingTop: 10, borderTopWidth: 1, borderColor: '#E2E8F0', alignItems: 'flex-end' }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#1E2B58',
+                  paddingVertical: 10,
+                  paddingHorizontal: 20,
+                  borderRadius: 8,
+                }}
+                onPress={() => setIsGalleryModalVisible(false)}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>Listo / Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
       <Modal visible={isEditProductModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalDialog}>
@@ -3511,8 +3711,8 @@ export default function AdminScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Vista previa de la foto adjuntada */}
-              {newProdImagePath ? (
+              {/* Vista previa de las fotos adjuntadas (Galería multi-ángulo) */}
+              {Boolean(newProdImages.length > 0 || newProdImagePath) ? (
                 <View style={{
                   marginBottom: 16,
                   backgroundColor: '#F8FAFC',
@@ -3520,14 +3720,63 @@ export default function AdminScreen() {
                   padding: 12,
                   borderWidth: 1,
                   borderColor: '#E2E8F0',
-                  alignItems: 'center',
-                  position: 'relative'
                 }}>
-                  <Image
-                    source={resolveProductImage(newProdImagePath) || { uri: SUPABASE_FALLBACK_IMAGES.mochila1 }}
-                    style={{ width: 140, height: 140, borderRadius: 10 }}
-                    resizeMode="cover"
-                  />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1E2B58' }}>
+                      Fotos seleccionadas ({newProdImages.length > 0 ? newProdImages.length : 1}):
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setNewProdImages([]);
+                        setNewProdImagePath('');
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, color: '#EF4444', fontWeight: '600' }}>Quitar todas</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView horizontal showsHorizontalScrollIndicator={true} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                    {(newProdImages.length > 0 ? newProdImages : [newProdImagePath]).map((imgUri, idx) => (
+                      <View key={idx} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#CBD5E1' }}>
+                        <Image
+                          source={resolveProductImage(imgUri) || { uri: SUPABASE_FALLBACK_IMAGES.mochila1 }}
+                          style={{ width: 90, height: 90, backgroundColor: '#FFF' }}
+                          resizeMode="cover"
+                        />
+                        <TouchableOpacity
+                          style={{
+                            position: 'absolute',
+                            top: 4,
+                            right: 4,
+                            backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                            borderRadius: 10,
+                            width: 20,
+                            height: 20,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                          onPress={() => {
+                            const filtered = newProdImages.filter((_, i) => i !== idx);
+                            setNewProdImages(filtered);
+                            setNewProdImagePath(filtered[0] || '');
+                          }}
+                        >
+                          <Ionicons name="close" size={13} color="#FFF" />
+                        </TouchableOpacity>
+                        <View style={{
+                          position: 'absolute',
+                          bottom: 2,
+                          left: 2,
+                          backgroundColor: 'rgba(30, 43, 88, 0.85)',
+                          paddingHorizontal: 4,
+                          borderRadius: 4,
+                        }}>
+                          <Text style={{ fontSize: 9, color: '#FFF', fontWeight: 'bold' }}>#{idx + 1}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+
                   <View style={{
                     marginTop: 8,
                     flexDirection: 'row',
@@ -3537,27 +3786,13 @@ export default function AdminScreen() {
                     paddingVertical: 5,
                     borderRadius: 6
                   }}>
-                    <Ionicons name="checkmark-circle" size={15} color="#1E7E34" style={{ marginRight: 4 }} />
+                    <Ionicons name="checkmark-circle" size={14} color="#1E7E34" style={{ marginRight: 4 }} />
                     <Text style={{ color: '#1E7E34', fontSize: 11, fontWeight: 'bold' }}>
-                      Foto adjunta lista para guardar en la BD
+                      Fotos listas para sincronizar con la base de datos
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    style={{
-                      position: 'absolute',
-                      top: 8,
-                      right: 8,
-                      backgroundColor: 'rgba(0,0,0,0.6)',
-                      borderRadius: 12,
-                      padding: 4,
-                    }}
-                    onPress={() => setNewProdImagePath('')}
-                  >
-                    <Ionicons name="close" size={16} color="#FFF" />
-                  </TouchableOpacity>
                 </View>
               ) : null}
-
               <Text style={styles.formInputLabel}>Nombre Personalizado de la Imagen en BD</Text>
               <TextInput
                 style={styles.formTextInput}

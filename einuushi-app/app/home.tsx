@@ -199,13 +199,15 @@ export default function HomeScreen() {
 
   const [categories, setCategories] = useState<Category[]>([]);
 
-  // Estado para visualizador de foto a pantalla completa (Lightbox)
+  // Estado para visualizador de foto a pantalla completa (Lightbox con soporte multi-foto)
   const [previewImage, setPreviewImage] = useState<{
     source: any;
     title: string;
     price?: string;
     description?: string;
     category?: string;
+    gallery?: any[];
+    currentIndex?: number;
   } | null>(null);
 
   const handleOpenImagePreview = (
@@ -213,12 +215,41 @@ export default function HomeScreen() {
     title: string,
     price?: string,
     description?: string,
-    category?: string
+    category?: string,
+    gallery?: any[]
   ) => {
     if (!source) return;
-    setPreviewImage({ source, title, price, description, category });
+    const initialGallery = gallery && gallery.length > 0 ? gallery : [source];
+    setPreviewImage({
+      source: initialGallery[0],
+      title,
+      price,
+      description,
+      category,
+      gallery: initialGallery,
+      currentIndex: 0,
+    });
   };
 
+  const handleNextPreviewImage = () => {
+    if (!previewImage || !previewImage.gallery || previewImage.gallery.length <= 1) return;
+    const nextIdx = ((previewImage.currentIndex || 0) + 1) % previewImage.gallery.length;
+    setPreviewImage({
+      ...previewImage,
+      currentIndex: nextIdx,
+      source: previewImage.gallery[nextIdx],
+    });
+  };
+
+  const handlePrevPreviewImage = () => {
+    if (!previewImage || !previewImage.gallery || previewImage.gallery.length <= 1) return;
+    const prevIdx = ((previewImage.currentIndex || 0) - 1 + previewImage.gallery.length) % previewImage.gallery.length;
+    setPreviewImage({
+      ...previewImage,
+      currentIndex: prevIdx,
+      source: previewImage.gallery[prevIdx],
+    });
+  };
   const handleCloseImagePreview = () => {
     setPreviewImage(null);
   };
@@ -239,21 +270,36 @@ export default function HomeScreen() {
           dbProducts.map(dbp => {
             const prev = prevProducts?.find(p => p.id === dbp.id);
             let localImage = null;
-            if (dbp.imagePath) {
+            let localGallery: any[] = [];
+            const resolveImgSource = (imgPath: string) => {
+              if (!imgPath) return null;
               if (
-                dbp.imagePath.startsWith('http://') ||
-                dbp.imagePath.startsWith('https://') ||
-                dbp.imagePath.startsWith('data:') ||
-                dbp.imagePath.startsWith('file://')
+                imgPath.startsWith('http://') ||
+                imgPath.startsWith('https://') ||
+                imgPath.startsWith('data:') ||
+                imgPath.startsWith('file://')
               ) {
-                localImage = { uri: dbp.imagePath };
-              } else if (SUPABASE_FALLBACK_IMAGES[dbp.imagePath]) {
-                localImage = { uri: SUPABASE_FALLBACK_IMAGES[dbp.imagePath] };
+                return { uri: imgPath };
+              } else if (SUPABASE_FALLBACK_IMAGES[imgPath]) {
+                return { uri: SUPABASE_FALLBACK_IMAGES[imgPath] };
               } else {
-                localImage = { uri: `https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/${dbp.imagePath}.jpg` };
+                return { uri: `https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/${imgPath}.jpg` };
               }
+            };
+
+            if (dbp.images && Array.isArray(dbp.images) && dbp.images.length > 0) {
+              localGallery = dbp.images.map(resolveImgSource).filter(Boolean);
+            } else if (dbp.imagePath) {
+              const splitted = dbp.imagePath.split('||').map((s: string) => s.trim()).filter(Boolean);
+              localGallery = splitted.map(resolveImgSource).filter(Boolean);
             }
 
+            if (localGallery.length > 0) {
+              localImage = localGallery[0];
+            } else if (dbp.imagePath) {
+              localImage = resolveImgSource(dbp.imagePath);
+              if (localImage) localGallery = [localImage];
+            }
             return {
               id: dbp.id,
               name: dbp.name,
@@ -263,6 +309,7 @@ export default function HomeScreen() {
               price: dbp.price,
               icon: dbp.icon,
               image: localImage,
+              gallery: localGallery,
               ancestralRef: dbp.ancestralRef,
               stock: dbp.stock,
               cartQuantity: prev ? prev.cartQuantity : 0,
@@ -1439,7 +1486,8 @@ export default function HomeScreen() {
                 <View style={styles.productImageWrapper}>
                   {/* Etiqueta de Categoría Elegante */}
                   <View style={styles.categoryBadgeOnImage}>
-                    <Text style={styles.categoryBadgeText}>{product.category || (product as any).categoryId}</Text>
+                        product.category || (product as any).categoryId,
+                        (product as any).gallery
                   </View>
 
                   {/* Etiqueta de Descuento si está activo */}
@@ -3069,12 +3117,8 @@ export default function HomeScreen() {
             </View>
           </SafeAreaView>
 
-          {/* Cuerpo Central con la Imagen */}
-          <TouchableOpacity
-            style={styles.fullImageBody}
-            activeOpacity={1}
-            onPress={handleCloseImagePreview}
-          >
+          {/* Cuerpo Central con la Imagen y Navegación de Galería */}
+          <View style={[styles.fullImageBody, { position: 'relative', justifyContent: 'center', alignItems: 'center' }]}>
             {previewImage?.source && (
               <Image
                 source={previewImage.source}
@@ -3082,8 +3126,72 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
             )}
-          </TouchableOpacity>
 
+            {/* Botones de navegación izquierda/derecha para galería multi-foto */}
+            {Boolean(previewImage?.gallery && previewImage.gallery.length > 1) && (
+              <>
+                <TouchableOpacity
+                  style={{
+                    position: 'absolute',
+                    left: 14,
+                    backgroundColor: 'rgba(30, 43, 88, 0.75)',
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 1.5,
+                    borderColor: '#C5A880',
+                    zIndex: 20,
+                  }}
+                  onPress={handlePrevPreviewImage}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    position: 'absolute',
+                    right: 14,
+                    backgroundColor: 'rgba(30, 43, 88, 0.75)',
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 1.5,
+                    borderColor: '#C5A880',
+                    zIndex: 20,
+                  }}
+                  onPress={handleNextPreviewImage}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="chevron-forward" size={26} color="#FFFFFF" />
+                </TouchableOpacity>
+
+                {/* Indicador de fotos (ej. 1 de 4) */}
+                <View style={{
+                  position: 'absolute',
+                  bottom: 12,
+                  backgroundColor: 'rgba(0,0,0,0.7)',
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: '#C5A880',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4
+                }}>
+                  <Ionicons name="images-outline" size={13} color="#C5A880" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' }}>
+                    {((previewImage?.currentIndex || 0) + 1)} / {previewImage?.gallery?.length || 1}
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
           {/* Footer Inferior con Detalles y Precio */}
           {(previewImage?.price || previewImage?.description) ? (
             <SafeAreaView style={styles.fullImageFooterSafeArea}>

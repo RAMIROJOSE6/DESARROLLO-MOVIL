@@ -150,6 +150,7 @@ export interface Product {
   discountPercent?: number;
   isDiscountActive?: number; // 0 = inactivo, 1 = activo
   isActive?: number; // 0 = inactivo, 1 = activo
+  images?: string[]; // Galería de fotos del producto (múltiples ángulos)
 }
 
 export interface CustomQuote {
@@ -1475,22 +1476,31 @@ export async function getProducts(): Promise<Product[]> {
     try {
       const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
       if (!error && Array.isArray(data) && data.length > 0) {
-        const mapped: Product[] = data.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          categoryId: p.category_id,
-          priceValue: p.price_value,
-          price: p.price,
-          icon: p.icon || 'sparkles-outline',
-          imagePath: p.image_path,
-          imageName: p.image_name,
-          ancestralRef: p.ancestral_ref || '',
-          stock: p.stock ?? 0,
-          likes: p.likes ?? 0,
-          discountPercent: p.discount_percent ?? 0,
-          isDiscountActive: p.is_discount_active ?? 0,
-          isActive: p.is_active !== undefined ? p.is_active : 1,
-        }));
+        const mapped: Product[] = data.map((p: any) => {
+          let resolvedImages: string[] = [];
+          if (p.image_path) {
+            resolvedImages = p.image_path.split('||').map((s: string) => s.trim()).filter(Boolean);
+          }
+          const primaryImage = resolvedImages[0] || p.image_path || null;
+
+          return {
+            id: p.id,
+            name: p.name,
+            categoryId: p.category_id,
+            priceValue: p.price_value,
+            price: p.price,
+            icon: p.icon || 'sparkles-outline',
+            imagePath: primaryImage,
+            imageName: p.image_name,
+            ancestralRef: p.ancestral_ref || '',
+            stock: p.stock ?? 0,
+            likes: p.likes ?? 0,
+            discountPercent: p.discount_percent ?? 0,
+            isDiscountActive: p.is_discount_active ?? 0,
+            isActive: p.is_active !== undefined ? p.is_active : 1,
+            images: resolvedImages.length > 0 ? resolvedImages : (primaryImage ? [primaryImage] : []),
+          };
+        });
         memoryProducts = mapped;
         return mapped;
       }
@@ -1505,8 +1515,20 @@ export async function createProduct(
   const nextId = productData.id || String(Date.now());
   let finalImagePath = productData.imagePath;
 
-  // Subir imagen a Supabase Storage y obtener CDN URL
-  if (
+  // Manejo de múltiples fotos al crear el producto
+  let finalImages: string[] = [];
+  if (productData.images && Array.isArray(productData.images) && productData.images.length > 0) {
+    for (let i = 0; i < productData.images.length; i++) {
+      let img = productData.images[i];
+      if (img && !img.startsWith('http') && isSupabaseConfigured()) {
+        try {
+          img = await uploadMediaToSupabase(img, 'products', `${productData.imageName || nextId}_gal_${i}`);
+        } catch (_) {}
+      }
+      finalImages.push(img);
+    }
+    finalImagePath = finalImages[0] || finalImagePath;
+  } else if (
     finalImagePath &&
     !finalImagePath.startsWith('http') &&
     !finalImagePath.startsWith('mochila') &&
@@ -1517,13 +1539,19 @@ export async function createProduct(
   ) {
     try {
       finalImagePath = await uploadMediaToSupabase(finalImagePath, 'products', productData.imageName || nextId);
+      finalImages = [finalImagePath];
     } catch (_) {}
+  } else if (finalImagePath) {
+    finalImages = [finalImagePath];
   }
+
+  const combinedStoredPath = finalImages.length > 0 ? finalImages.join('||') : finalImagePath;
 
   const newProduct: Product = {
     ...productData,
     id: nextId,
     imagePath: finalImagePath,
+    images: finalImages,
     likes: 0,
     discountPercent: productData.discountPercent || 0,
     isDiscountActive: productData.isDiscountActive || 0,
@@ -1539,7 +1567,7 @@ export async function createProduct(
         price_value: newProduct.priceValue,
         price: newProduct.price,
         icon: newProduct.icon || 'sparkles-outline',
-        image_path: newProduct.imagePath || null,
+        image_path: combinedStoredPath || null,
         image_name: newProduct.imageName || null,
         ancestral_ref: newProduct.ancestralRef || '',
         stock: newProduct.stock,
@@ -1567,11 +1595,27 @@ export async function updateProduct(
   productId: string,
   updates: Partial<Product>,
 ): Promise<Product> {
-  let finalPath = updates.imagePath;
-  if (finalPath && !finalPath.startsWith('http') && isSupabaseConfigured()) {
+  // Manejo de galería de imágenes múltiples
+  let combinedImagePath = updates.imagePath;
+  if (updates.images && Array.isArray(updates.images) && updates.images.length > 0) {
+    const uploadedImages: string[] = [];
+    for (let i = 0; i < updates.images.length; i++) {
+      let img = updates.images[i];
+      if (img && !img.startsWith('http') && isSupabaseConfigured()) {
+        try {
+          img = await uploadMediaToSupabase(img, 'products', `${updates.imageName || productId}_gal_${i}`);
+        } catch (_) {}
+      }
+      uploadedImages.push(img);
+    }
+    updates.images = uploadedImages;
+    combinedImagePath = uploadedImages.join('||');
+    updates.imagePath = uploadedImages[0] || combinedImagePath;
+  } else if (combinedImagePath && !combinedImagePath.startsWith('http') && isSupabaseConfigured()) {
     try {
-      finalPath = await uploadMediaToSupabase(finalPath, 'products', updates.imageName || productId);
-      updates.imagePath = finalPath;
+      combinedImagePath = await uploadMediaToSupabase(combinedImagePath, 'products', updates.imageName || productId);
+      updates.imagePath = combinedImagePath;
+      if (!updates.images) updates.images = [combinedImagePath];
     } catch (_) {}
   }
 
@@ -1583,7 +1627,7 @@ export async function updateProduct(
       if (updates.priceValue !== undefined) supaUpdates.price_value = updates.priceValue;
       if (updates.price !== undefined) supaUpdates.price = updates.price;
       if (updates.stock !== undefined) supaUpdates.stock = updates.stock;
-      if (updates.imagePath !== undefined) supaUpdates.image_path = updates.imagePath;
+      if (combinedImagePath !== undefined) supaUpdates.image_path = combinedImagePath;
       if (updates.imageName !== undefined) supaUpdates.image_name = updates.imageName;
       if (updates.discountPercent !== undefined) supaUpdates.discount_percent = updates.discountPercent;
       if (updates.isDiscountActive !== undefined) supaUpdates.is_discount_active = updates.isDiscountActive;
