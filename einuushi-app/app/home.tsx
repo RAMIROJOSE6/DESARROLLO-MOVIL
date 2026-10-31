@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -10,7 +10,9 @@ import {
   Modal,
   Platform,
   Linking,
-  Alert
+  Alert,
+  Animated,
+  PanResponder
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -655,6 +657,38 @@ export default function HomeScreen() {
     const clientEmail = effectiveUser?.email || 'cliente@einuushi.com';
     await markChatMessagesAsRead(clientEmail, 'client');
   };
+
+  // Botón flotante arrastrable (Draggable PanResponder)
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const panOffset = useRef({ x: 0, y: 0 });
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 3 || Math.abs(gestureState.dy) > 3;
+      },
+      onPanResponderGrant: () => {
+        pan.setOffset({
+          x: panOffset.current.x,
+          y: panOffset.current.y
+        });
+        pan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: pan.x, dy: pan.y }],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: (_, gestureState) => {
+        pan.flattenOffset();
+        panOffset.current.x += gestureState.dx;
+        panOffset.current.y += gestureState.dy;
+        if (Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5) {
+          handleOpenChatModal();
+        }
+      }
+    })
+  ).current;
 
   // Enviar mensaje del cliente al Administrador
   const handleSendClientMessage = async () => {
@@ -3352,19 +3386,29 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* Botón Flotante de Chat en Pantalla Principal */}
-      <TouchableOpacity
-        style={styles.floatingChatBtn}
-        onPress={handleOpenChatModal}
-        activeOpacity={0.85}
+      {/* Botón Flotante de Chat en Pantalla Principal (Arrastrable con el dedo / cursor) */}
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={[
+          styles.floatingChatBtn,
+          {
+            transform: [{ translateX: pan.x }, { translateY: pan.y }],
+          }
+        ]}
       >
-        <Ionicons name="chatbubbles" size={24} color="#FFFFFF" />
-        {hasUnreadChat && (
-          <View style={styles.floatingChatBadge}>
-            <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>•</Text>
-          </View>
-        )}
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}
+          onPress={handleOpenChatModal}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="chatbubbles" size={24} color="#FFFFFF" />
+          {hasUnreadChat && (
+            <View style={styles.floatingChatBadge}>
+              <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>•</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </Animated.View>
 
     </View>
   );
@@ -4668,10 +4712,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-    zIndex: 999,
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 10,
+    zIndex: 9999,
   },
   floatingChatBadge: {
     position: 'absolute',
