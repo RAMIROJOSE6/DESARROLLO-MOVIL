@@ -12,7 +12,8 @@ import {
   Linking,
   Alert,
   Animated,
-  PanResponder
+  PanResponder,
+  useWindowDimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -658,9 +659,41 @@ export default function HomeScreen() {
     await markChatMessagesAsRead(clientEmail, 'client');
   };
 
-  // Botón flotante arrastrable (Draggable PanResponder)
+  // Botón flotante arrastrable con límites de pantalla visibles (Clamped Draggable PanResponder)
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+
+  // Límites seguros para que el botón NUNCA se salga del área visible de la pantalla
+  // Posición base de referencia: bottom: 24, right: 20, tamaño: 56x56
+  const BUTTON_SIZE = 56;
+  const MARGIN_RIGHT = 20;
+  const MARGIN_BOTTOM = 24;
+  const PADDING_EDGE = 12; // Margen de separación mínimo del borde visible
+  const TOP_SAFE_HEADER = 85; // Margen de separación del encabezado superior
+
+  const maxX = MARGIN_RIGHT - PADDING_EDGE; // Máximo hacia la derecha (+8px)
+  const minX = -(windowWidth - BUTTON_SIZE - MARGIN_RIGHT - PADDING_EDGE); // Hacia la izquierda
+
+  const maxY = MARGIN_BOTTOM - PADDING_EDGE; // Máximo hacia abajo (+12px del origen)
+  const minY = -(windowHeight - BUTTON_SIZE - MARGIN_BOTTOM - TOP_SAFE_HEADER); // Hacia arriba
+
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const panOffset = useRef({ x: 0, y: 0 });
+  const boundsRef = useRef({ minX, maxX, minY, maxY });
+
+  useEffect(() => {
+    boundsRef.current = { minX, maxX, minY, maxY };
+    // Si la posición previa excede los límites (o el usuario lo arrastró fuera), recuperarlo al área visible
+    const safeX = Math.min(Math.max(panOffset.current.x, minX), maxX);
+    const safeY = Math.min(Math.max(panOffset.current.y, minY), maxY);
+    if (panOffset.current.x !== safeX || panOffset.current.y !== safeY) {
+      panOffset.current = { x: safeX, y: safeY };
+      Animated.spring(pan, {
+        toValue: { x: safeX, y: safeY },
+        useNativeDriver: false,
+        friction: 6,
+      }).start();
+    }
+  }, [minX, maxX, minY, maxY]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -675,14 +708,32 @@ export default function HomeScreen() {
         });
         pan.setValue({ x: 0, y: 0 });
       },
-      onPanResponderMove: Animated.event(
-        [null, { dx: pan.x, dy: pan.y }],
-        { useNativeDriver: false }
-      ),
+      onPanResponderMove: (_, gestureState) => {
+        const { minX: bMinX, maxX: bMaxX, minY: bMinY, maxY: bMaxY } = boundsRef.current;
+        const rawX = panOffset.current.x + gestureState.dx;
+        const rawY = panOffset.current.y + gestureState.dy;
+
+        // Limitar en tiempo real durante el arrastre
+        const clampedX = Math.min(Math.max(rawX, bMinX), bMaxX);
+        const clampedY = Math.min(Math.max(rawY, bMinY), bMaxY);
+
+        pan.setValue({
+          x: clampedX - panOffset.current.x,
+          y: clampedY - panOffset.current.y
+        });
+      },
       onPanResponderRelease: (_, gestureState) => {
+        const { minX: bMinX, maxX: bMaxX, minY: bMinY, maxY: bMaxY } = boundsRef.current;
         pan.flattenOffset();
-        panOffset.current.x += gestureState.dx;
-        panOffset.current.y += gestureState.dy;
+
+        const rawX = panOffset.current.x + gestureState.dx;
+        const rawY = panOffset.current.y + gestureState.dy;
+        const finalX = Math.min(Math.max(rawX, bMinX), bMaxX);
+        const finalY = Math.min(Math.max(rawY, bMinY), bMaxY);
+
+        panOffset.current = { x: finalX, y: finalY };
+        pan.setValue({ x: finalX, y: finalY });
+
         if (Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5) {
           handleOpenChatModal();
         }
