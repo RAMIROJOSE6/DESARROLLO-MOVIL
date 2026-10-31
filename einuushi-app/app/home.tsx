@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
+import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -2280,32 +2281,19 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Contenedor del Mapa en Vivo */}
-              <View style={styles.mapViewerContainer}>
-                {Platform.OS === 'web' ? (
-                  <iframe
-                    src={mapProvider === 'google' ? googleMapEmbedUrl : osmMapEmbedUrl}
-                    style={{ width: '100%', height: '100%', border: 'none', borderRadius: 12 }}
-                    title="Mapa de seguimiento de entrega Einuushi"
-                    loading="lazy"
-                  />
-                ) : (
-                  <WebView
-                    source={{ uri: mapProvider === 'google' ? googleMapEmbedUrl : osmMapEmbedUrl }}
-                    style={{ flex: 1, borderRadius: 12 }}
-                    startInLoadingState={true}
-                  />
-                )}
-
-                {/* Badge flotante con la dirección de destino */}
-                <View style={styles.mapFloatingAddressBadge}>
-                  <Ionicons name="location" size={13} color="#C5A880" style={{marginRight: 4}} />
-                  <Text style={styles.mapFloatingAddressText} numberOfLines={1}>
-                    {activeTrackingOrder?.statusCode === 'PENDING' ? '🏪 Tienda Einuushi • En preparación' : (activeTrackingOrder?.client?.address || 'Riohacha, La Guajira')}
-                  </Text>
-                </View>
+              {/* Contenedor del Mapa en Vivo con Leaflet / OSM */}
+              <View style={[styles.mapViewerContainer, { height: 280 }]}>
+                <LiveDeliveryMap
+                  orderId={activeTrackingOrder?.id}
+                  statusCode={activeTrackingOrder?.statusCode}
+                  driverName={activeTrackingOrder?.driverName}
+                  vehicleType={activeTrackingOrder?.vehicleType}
+                  plateOrNit={activeTrackingOrder?.plateOrNit}
+                  deliveryAddress={activeTrackingOrder?.client?.address}
+                  city={activeTrackingOrder?.city}
+                  height="100%"
+                />
               </View>
-
               {/* Banner Informativo de Pago Contra Entrega vs Pagado Previo */}
               {activeTrackingOrder?.client?.payment?.toLowerCase().includes('contra') ? (
                 <View style={[

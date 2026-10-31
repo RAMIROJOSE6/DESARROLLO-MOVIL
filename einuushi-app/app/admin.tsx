@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
+import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 import * as ImagePicker from 'expo-image-picker';
 import { useAdmin } from '../hooks/useAdmin';
 import { Order, Product, Category, CustomQuote, User, isSuperAdmin } from '../services/database';
@@ -3899,11 +3900,12 @@ export default function AdminScreen() {
       </Modal>
 
       {/* ================================================================= */}
+      {/* ================================================================= */}
       {/* MODAL: SEGUIMIENTO DE RUTA EN MAPA                              */}
       {/* ================================================================= */}
       <Modal visible={isMapModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalDialog, { height: '80%', padding: 0, overflow: 'hidden' }]}>
+          <View style={[styles.modalDialog, { height: '82%', padding: 0, overflow: 'hidden' }]}>
             <View style={[styles.modalHeaderRow, { padding: 16, backgroundColor: '#1E2B58' }]}>
               <View>
                 <Text style={[styles.modalDialogTitle, { color: '#FFFFFF' }]}>
@@ -3913,33 +3915,26 @@ export default function AdminScreen() {
                   📍 {activeTrackingOrder?.client.address}, {activeTrackingOrder?.city || 'Riohacha'}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setIsMapModalVisible(false)}>
+              <TouchableOpacity onPress={() => setIsMapModalVisible(false)} style={{ padding: 4 }}>
                 <Ionicons name="close-circle" size={26} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
-            {Platform.OS === 'web' ? (
-              <iframe
-                title="Mapa de Ruta"
-                src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                  `${activeTrackingOrder?.client?.address || 'Riohacha'}, La Guajira, Colombia`
-                )}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                style={{ width: '100%', height: '100%', border: 'none' }}
+            <View style={{ flex: 1, backgroundColor: '#F1F5F9' }}>
+              <LiveDeliveryMap
+                orderId={activeTrackingOrder?.id}
+                statusCode={activeTrackingOrder?.statusCode}
+                driverName={activeTrackingOrder?.driverName}
+                vehicleType={activeTrackingOrder?.vehicleType}
+                plateOrNit={activeTrackingOrder?.plateOrNit}
+                deliveryAddress={activeTrackingOrder?.client?.address}
+                city={activeTrackingOrder?.city}
+                height="100%"
               />
-            ) : (
-              <WebView
-                source={{
-                  uri: `https://maps.google.com/maps?q=${encodeURIComponent(
-                    `${activeTrackingOrder?.client?.address || 'Riohacha'}, La Guajira, Colombia`
-                  )}&t=&z=15&ie=UTF8&iwloc=&output=embed`,
-                }}
-                style={{ flex: 1 }}
-              />
-            )}
+            </View>
           </View>
         </View>
       </Modal>
-
       {/* MODAL DE DIRECTORIO DE CLIENTES REGISTRADOS (SOLO CLIENTES, ADMINISTRADORES SE GESTIONAN EN CONFIGURACIÓN) */}
       <Modal 
         visible={isUsersModalVisible} 
