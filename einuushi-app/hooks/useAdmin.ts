@@ -24,6 +24,8 @@ import {
   updateProduct,
   createProduct,
   createCategory,
+  updateCategory,
+  deleteCategory,
   deleteProduct,
   updateCustomQuote,
   sendChatMessage,
@@ -594,6 +596,41 @@ export function useAdmin() {
     return newCat;
   };
 
+  // Editar categoría existente
+  const editCategory = async (categoryId: string, updates: Partial<Category>) => {
+    const updated = await updateCategory(categoryId, updates);
+    setCategories(prev => prev.map(c => c.id === categoryId ? updated : c));
+    await logAdminActivity({
+      adminId: adminUser?.id,
+      adminEmail: adminUser?.email || 'admin@einuushi.com',
+      adminName: adminUser?.fullName || 'Administrador',
+      actionType: 'CATEGORY_UPDATE',
+      entityType: 'CATEGORIA',
+      entityId: categoryId,
+      details: `${adminUser?.fullName || 'Administrador'} actualizó la categoría "${updated.name}" (${categoryId}).`,
+    });
+    await refreshAll();
+    return updated;
+  };
+
+  // Eliminar categoría
+  const removeCategory = async (categoryId: string) => {
+    const cat = categories.find(c => c.id === categoryId);
+    await deleteCategory(categoryId);
+    setCategories(prev => prev.filter(c => c.id !== categoryId));
+    await logAdminActivity({
+      adminId: adminUser?.id,
+      adminEmail: adminUser?.email || 'admin@einuushi.com',
+      adminName: adminUser?.fullName || 'Administrador',
+      actionType: 'CATEGORY_DELETE',
+      entityType: 'CATEGORIA',
+      entityId: categoryId,
+      details: `${adminUser?.fullName || 'Administrador'} eliminó la categoría "${cat?.name || categoryId}".`,
+    });
+    await refreshAll();
+    return true;
+  };
+
   // Eliminar producto con trazabilidad
   const removeProduct = async (productId: string) => {
     const prod = products.find(p => p.id === productId);
@@ -894,6 +931,8 @@ export function useAdmin() {
     toggleDiscount,
     addProduct,
     addCategory,
+    editCategory,
+    removeCategory,
     removeProduct,
     toggleProductActive,
     updateProductPhoto,

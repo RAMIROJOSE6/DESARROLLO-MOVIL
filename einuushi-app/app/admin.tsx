@@ -77,6 +77,8 @@ export default function AdminScreen() {
     toggleDiscount,
     addProduct,
     addCategory,
+    editCategory,
+    removeCategory,
     removeProduct,
     toggleProductActive,
     updateProductPhoto,
@@ -177,6 +179,12 @@ export default function AdminScreen() {
 
   const [isNewProductModalVisible, setIsNewProductModalVisible] = useState(false);
   const [isNewCategoryModalVisible, setIsNewCategoryModalVisible] = useState(false);
+  const [isCategoryManagerModalVisible, setIsCategoryManagerModalVisible] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editCatName, setEditCatName] = useState('');
+  const [editCatIcon, setEditCatIcon] = useState('sparkles-outline');
+  const [editCatDescription, setEditCatDescription] = useState('');
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [isQuoteModalVisible, setIsQuoteModalVisible] = useState(false);
   const [selectedQuote, setSelectedQuote] = useState<CustomQuote | null>(null);
   const [isMapModalVisible, setIsMapModalVisible] = useState(false);
@@ -898,6 +906,84 @@ export default function AdminScreen() {
     setNewProdDiscount('0');
     setNewProdIsDiscount(false);
     Alert.alert('¡Éxito!', 'Artículo agregado exitosamente al catálogo.');
+  };
+
+  const PRESET_CATEGORY_ICONS = [
+    { icon: 'briefcase-outline', label: 'Mochilas' },
+    { icon: 'shirt-outline', label: 'Mantas' },
+    { icon: 'bed-outline', label: 'Chinchorros' },
+    { icon: 'umbrella-outline', label: 'Sombreros' },
+    { icon: 'sparkles-outline', label: 'Accesorios' },
+    { icon: 'color-palette-outline', label: 'Artesanías' },
+    { icon: 'diamond-outline', label: 'Joyería' },
+    { icon: 'ribbon-outline', label: 'Fajones' },
+    { icon: 'basket-outline', label: 'Canastos' },
+    { icon: 'gift-outline', label: 'Especiales' },
+  ];
+
+  // Iniciar edición de categoría
+  const handleStartEditCategory = (cat: Category) => {
+    setEditingCategory(cat);
+    setEditCatName(cat.name);
+    setEditCatIcon(cat.icon || 'sparkles-outline');
+    setEditCatDescription(cat.description || '');
+  };
+
+  // Guardar edición de categoría
+  const handleSaveEditCategory = async () => {
+    if (!editingCategory) return;
+    if (!editCatName.trim()) {
+      Alert.alert('Campo requerido', 'El nombre de la categoría no puede estar vacío.');
+      return;
+    }
+    setIsSavingCategory(true);
+    try {
+      await editCategory(editingCategory.id, {
+        name: editCatName.trim(),
+        icon: editCatIcon.trim() || 'sparkles-outline',
+        description: editCatDescription.trim(),
+      });
+      setEditingCategory(null);
+      Alert.alert('¡Categoría Actualizada!', `La categoría "${editCatName.trim()}" fue actualizada exitosamente.`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'No se pudo actualizar la categoría.');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  // Eliminar categoría
+  const handleDeleteCategory = (cat: Category) => {
+    const associatedProducts = products.filter(
+      p => p.categoryId === cat.id || p.categoryId === cat.name
+    );
+    if (associatedProducts.length > 0) {
+      Alert.alert(
+        'No se puede eliminar',
+        `La categoría "${cat.name}" tiene ${associatedProducts.length} artículo(s) asociados en el inventario. Debes reasignar o eliminar esos productos antes de borrar la categoría.`
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Confirmar Eliminación',
+      `¿Estás seguro de que deseas eliminar permanentemente la categoría "${cat.name}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeCategory(cat.id);
+              Alert.alert('Eliminada', `La categoría "${cat.name}" ha sido eliminada del catálogo.`);
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'No se pudo eliminar la categoría.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   // Guardar nueva categoría
@@ -2171,6 +2257,15 @@ export default function AdminScreen() {
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity
+                  style={[styles.createCategoryBtn, { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' }]}
+                  onPress={() => setIsCategoryManagerModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="folder-open-outline" size={16} color="#1E2B58" style={{ marginRight: 4 }} />
+                  <Text style={styles.createCategoryBtnText}>📂 Categorías ({categories.length})</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
                   style={styles.createCategoryBtn}
                   onPress={() => setIsNewCategoryModalVisible(true)}
                   activeOpacity={0.8}
@@ -2188,6 +2283,67 @@ export default function AdminScreen() {
                   <Text style={styles.addProductMainBtnText}>+ Nuevo Artículo</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+
+            {/* BARRA HORIZONTAL DE CATEGORÍAS REGISTRADAS CON ACCESO DIRECTO A EDICIÓN */}
+            <View style={{ marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="grid-outline" size={14} color="#C5A880" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E2B58' }}>
+                    Categorías Registradas ({categories.length})
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setIsCategoryManagerModalVisible(true)}
+                  style={{ flexDirection: 'row', alignItems: 'center' }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="settings-outline" size={13} color="#2563EB" style={{ marginRight: 4 }} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB' }}>Administrar y Editar</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                {categories.map(cat => {
+                  const count = products.filter(p => p.categoryId === cat.id || p.categoryId === cat.name).length;
+                  return (
+                    <View
+                      key={cat.id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: '#FFFFFF',
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        borderRadius: 20,
+                        paddingVertical: 6,
+                        paddingHorizontal: 12,
+                        gap: 6,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.04,
+                        shadowRadius: 2,
+                        elevation: 1,
+                      }}
+                    >
+                      <Ionicons name={(cat.icon as any) || 'sparkles-outline'} size={15} color="#C5A880" />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#1E2B58' }}>{cat.name}</Text>
+                      <View style={{ backgroundColor: '#F1F5F9', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }}>{count}</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleStartEditCategory(cat)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                        style={{ marginLeft: 2, padding: 2 }}
+                      >
+                        <Ionicons name="pencil" size={12} color="#2563EB" />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </ScrollView>
             </View>
 
             {/* FILTROS DE ARTÍCULOS EXCLUSIVOS DE ADMINISTRADOR */}
@@ -3986,9 +4142,14 @@ export default function AdminScreen() {
       {/* ================================================================= */}
       <Modal visible={isNewCategoryModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalDialog, { maxWidth: 440 }]}>
+          <View style={[styles.modalDialog, { maxWidth: 460 }]}>
             <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalDialogTitle}>Crear Nueva Categoría</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
+                  <Ionicons name="add-circle" size={18} color="#2563EB" />
+                </View>
+                <Text style={styles.modalDialogTitle}>Crear Nueva Categoría</Text>
+              </View>
               <TouchableOpacity onPress={() => setIsNewCategoryModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#1E2B58" />
               </TouchableOpacity>
@@ -4002,7 +4163,38 @@ export default function AdminScreen() {
               onChangeText={setNewCatName}
             />
 
-            <Text style={styles.formInputLabel}>Ícono (Nombre Ionicons)</Text>
+            <Text style={styles.formInputLabel}>Seleccionar Ícono Representativo</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
+                {PRESET_CATEGORY_ICONS.map(p => {
+                  const isSelected = newCatIcon === p.icon;
+                  return (
+                    <TouchableOpacity
+                      key={p.icon}
+                      style={{
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: isSelected ? '#C5A880' : '#E2E8F0',
+                        backgroundColor: isSelected ? '#FFFBEB' : '#FFFFFF',
+                      }}
+                      onPress={() => setNewCatIcon(p.icon)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name={p.icon as any} size={20} color={isSelected ? '#C5A880' : '#1E2B58'} />
+                      <Text style={{ fontSize: 10, marginTop: 2, color: isSelected ? '#C5A880' : '#64748B', fontWeight: isSelected ? 'bold' : 'normal' }}>
+                        {p.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <Text style={styles.formInputLabel}>Ícono Personalizado (Nombre Ionicons)</Text>
             <TextInput
               style={styles.formTextInput}
               placeholder="Ej. sparkles-outline, shirt-outline, ribbon-outline"
@@ -4013,7 +4205,7 @@ export default function AdminScreen() {
             <Text style={styles.formInputLabel}>Descripción</Text>
             <TextInput
               style={[styles.formTextInput, { height: 60 }]}
-              placeholder="Breve reseña de la categoría..."
+              placeholder="Breve reseña del significado cultural o tipo de producto..."
               multiline
               value={newCatDescription}
               onChangeText={setNewCatDescription}
@@ -4022,6 +4214,259 @@ export default function AdminScreen() {
             <TouchableOpacity style={styles.saveModalBtn} onPress={handleSaveCategory} activeOpacity={0.8}>
               <Text style={styles.saveModalBtnText}>Registrar Categoría</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL: GESTOR Y DIRECTORIO DE CATEGORÍAS REGISTRADAS             */}
+      {/* ================================================================= */}
+      <Modal visible={isCategoryManagerModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 620, maxHeight: '88%' }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+                  <Ionicons name="folder-open" size={20} color="#2563EB" />
+                </View>
+                <View>
+                  <Text style={styles.modalDialogTitle}>Directorio de Categorías</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>
+                    {categories.length} categorías registradas en el catálogo
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setIsCategoryManagerModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#1E2B58" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Cabecera de acciones */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 12, paddingBottom: 10, borderBottomWidth: 1, borderColor: '#F1F5F9' }}>
+              <Text style={{ fontSize: 12, color: '#475569', fontWeight: '600' }}>
+                Listado y Gestión de Categorías
+              </Text>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E2B58', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                onPress={() => {
+                  setIsNewCategoryModalVisible(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' }}>+ Nueva Categoría</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Lista de Categorías */}
+            <ScrollView showsVerticalScrollIndicator={true} style={{ flexGrow: 1 }} contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
+              {categories.map((cat, idx) => {
+                const count = products.filter(p => p.categoryId === cat.id || p.categoryId === cat.name).length;
+                return (
+                  <View
+                    key={cat.id || idx}
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      backgroundColor: '#FFFFFF',
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      borderRadius: 12,
+                      padding: 12,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.04,
+                      shadowRadius: 3,
+                      elevation: 1,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 10 }}>
+                      <View style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 21,
+                        backgroundColor: '#F8FAFC',
+                        borderWidth: 1.5,
+                        borderColor: '#C5A880',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        marginRight: 12,
+                      }}>
+                        <Ionicons name={(cat.icon as any) || 'sparkles-outline'} size={22} color="#1E2B58" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1E2B58' }}>{cat.name}</Text>
+                          <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                            <Text style={{ fontSize: 10, color: '#2563EB', fontWeight: 'bold' }}>
+                              {count} {count === 1 ? 'artículo' : 'artículos'}
+                            </Text>
+                          </View>
+                        </View>
+                        {cat.description ? (
+                          <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }} numberOfLines={2}>
+                            {cat.description}
+                          </Text>
+                        ) : (
+                          <Text style={{ fontSize: 10, color: '#94A3B8', fontStyle: 'italic', marginTop: 2 }}>
+                            Sin descripción registrada
+                          </Text>
+                        )}
+                        <Text style={{ fontSize: 9, color: '#94A3B8', marginTop: 2 }}>ID: {cat.id}</Text>
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          backgroundColor: '#EFF6FF',
+                          borderWidth: 1,
+                          borderColor: '#BFDBFE',
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                        }}
+                        onPress={() => handleStartEditCategory(cat)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="pencil" size={13} color="#2563EB" style={{ marginRight: 4 }} />
+                        <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#2563EB' }}>Editar</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 6,
+                          backgroundColor: '#FEF2F2',
+                          borderWidth: 1,
+                          borderColor: '#FECACA',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                        onPress={() => handleDeleteCategory(cat)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="trash-outline" size={14} color="#DC2626" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            <View style={{ borderTopWidth: 1, borderColor: '#F1F5F9', paddingTop: 12, alignItems: 'flex-end' }}>
+              <TouchableOpacity
+                style={{ backgroundColor: '#1E2B58', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
+                onPress={() => setIsCategoryManagerModalVisible(false)}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>Cerrar Gestor</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL: EDITAR CATEGORÍA                                           */}
+      {/* ================================================================= */}
+      <Modal visible={editingCategory !== null} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 460 }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
+                  <Ionicons name="pencil" size={18} color="#2563EB" />
+                </View>
+                <View>
+                  <Text style={styles.modalDialogTitle}>Editar Categoría</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>ID: {editingCategory?.id}</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setEditingCategory(null)}>
+                <Ionicons name="close" size={24} color="#1E2B58" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.formInputLabel}>Nombre de la Categoría *</Text>
+            <TextInput
+              style={styles.formTextInput}
+              placeholder="Ej. Mochilas, Mantas, Chinchorros"
+              value={editCatName}
+              onChangeText={setEditCatName}
+            />
+
+            <Text style={styles.formInputLabel}>Seleccionar Ícono Rápido</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
+                {PRESET_CATEGORY_ICONS.map(p => {
+                  const isSelected = editCatIcon === p.icon;
+                  return (
+                    <TouchableOpacity
+                      key={p.icon}
+                      style={{
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: isSelected ? '#C5A880' : '#E2E8F0',
+                        backgroundColor: isSelected ? '#FFFBEB' : '#FFFFFF',
+                      }}
+                      onPress={() => setEditCatIcon(p.icon)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name={p.icon as any} size={20} color={isSelected ? '#C5A880' : '#1E2B58'} />
+                      <Text style={{ fontSize: 10, marginTop: 2, color: isSelected ? '#C5A880' : '#64748B', fontWeight: isSelected ? 'bold' : 'normal' }}>
+                        {p.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <Text style={styles.formInputLabel}>O escribir nombre de Ícono Ionicons</Text>
+            <TextInput
+              style={styles.formTextInput}
+              placeholder="Ej. sparkles-outline, shirt-outline"
+              value={editCatIcon}
+              onChangeText={setEditCatIcon}
+            />
+
+            <Text style={styles.formInputLabel}>Descripción</Text>
+            <TextInput
+              style={[styles.formTextInput, { height: 60 }]}
+              placeholder="Breve reseña o significado cultural..."
+              multiline
+              value={editCatDescription}
+              onChangeText={setEditCatDescription}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#F1F5F9', paddingVertical: 12, borderRadius: 10, alignItems: 'center' }}
+                onPress={() => setEditingCategory(null)}
+                disabled={isSavingCategory}
+              >
+                <Text style={{ color: '#475569', fontWeight: 'bold', fontSize: 13 }}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.saveModalBtn, { flex: 2, marginTop: 0 }]}
+                onPress={handleSaveEditCategory}
+                disabled={isSavingCategory}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.saveModalBtnText}>
+                  {isSavingCategory ? 'Guardando...' : '💾 Guardar Cambios'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

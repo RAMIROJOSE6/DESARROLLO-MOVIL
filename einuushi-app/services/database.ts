@@ -1468,6 +1468,80 @@ export async function createCategory(
   return newCat;
 }
 
+export async function updateCategory(
+  id: string,
+  updates: Partial<Category>,
+): Promise<Category> {
+  const current = memoryCategories.find(c => c.id === id) || {
+    id,
+    name: id,
+    icon: 'sparkles-outline',
+    description: '',
+  };
+
+  const newName = updates.name !== undefined ? updates.name.trim() : current.name;
+  const newIcon = updates.icon !== undefined ? updates.icon : current.icon;
+  const newDescription = updates.description !== undefined ? updates.description : (current.description || '');
+  const newId = updates.id ? updates.id : (id === current.name ? newName : id);
+
+  const updatedCat: Category = {
+    id: newId,
+    name: newName,
+    icon: newIcon || 'sparkles-outline',
+    description: newDescription,
+  };
+
+  if (isSupabaseConfigured()) {
+    try {
+      if (newId !== id) {
+        // Actualizar category_id en productos vinculados
+        await supabase.from('products').update({ category_id: newId }).eq('category_id', id);
+        // Crear nuevo registro de categoría y remover el id anterior
+        await supabase.from('categories').upsert({
+          id: updatedCat.id,
+          name: updatedCat.name,
+          icon: updatedCat.icon,
+          description: updatedCat.description || null,
+        });
+        await supabase.from('categories').delete().eq('id', id);
+      } else {
+        await supabase.from('categories').update({
+          name: updatedCat.name,
+          icon: updatedCat.icon,
+          description: updatedCat.description || null,
+        }).eq('id', id);
+      }
+    } catch (e) {
+      console.warn('Error actualizando categoría en Supabase:', e);
+    }
+  }
+
+  memoryCategories = memoryCategories.map(c => c.id === id ? updatedCat : c);
+  if (!memoryCategories.some(c => c.id === updatedCat.id)) {
+    memoryCategories.push(updatedCat);
+  }
+
+  if (newId !== id) {
+    memoryProducts = memoryProducts.map(p => p.categoryId === id ? { ...p, categoryId: newId } : p);
+  }
+
+  notifyDatabaseChange();
+  return updatedCat;
+}
+
+export async function deleteCategory(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    try {
+      await supabase.from('categories').delete().eq('id', id);
+    } catch (e) {
+      console.warn('Error eliminando categoría en Supabase:', e);
+    }
+  }
+  memoryCategories = memoryCategories.filter(c => c.id !== id);
+  notifyDatabaseChange();
+  return true;
+}
+
 /**
  * =========================================================================
  * 6. MÓDULO DE PRODUCTOS (100% SUPABASE CON STORAGE CDN)
