@@ -2139,45 +2139,21 @@ export default function AdminScreen() {
                       <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569', marginBottom: 4 }}>
                         Desde (Fecha inicial):
                       </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <TextInput
-                          style={{
-                            flex: 1,
-                            backgroundColor: '#F8FAFC',
-                            borderWidth: 1,
-                            borderColor: '#CBD5E1',
-                            borderRadius: 8,
-                            paddingHorizontal: 10,
-                            paddingVertical: 7,
-                            fontSize: 12,
-                            color: '#1E2B58',
-                          }}
-                          placeholder="AAAA-MM-DD"
-                          value={orderStartDate}
-                          onChangeText={setOrderStartDate}
-                        />
-                        <TouchableOpacity
-                          style={{
-                            backgroundColor: '#1E2B58',
-                            paddingHorizontal: 11,
-                            paddingVertical: 8,
-                            borderRadius: 8,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                          onPress={() => {
-                            setCalendarActiveTarget('start');
-                            if (orderStartDate) {
-                              const p = orderStartDate.split('-');
-                              if (p.length === 3) setCalendarViewDate(new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, 1));
-                            }
-                            setIsCalendarModalVisible(true);
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="calendar" size={16} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      </View>
+                      <TextInput
+                        style={{
+                          backgroundColor: '#F8FAFC',
+                          borderWidth: 1,
+                          borderColor: '#CBD5E1',
+                          borderRadius: 8,
+                          paddingHorizontal: 10,
+                          paddingVertical: 7,
+                          fontSize: 12,
+                          color: '#1E2B58',
+                        }}
+                        placeholder="AAAA-MM-DD"
+                        value={orderStartDate}
+                        onChangeText={setOrderStartDate}
+                      />
                     </View>
 
                     {/* Campo Hasta */}
@@ -2185,45 +2161,21 @@ export default function AdminScreen() {
                       <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569', marginBottom: 4 }}>
                         Hasta (Fecha final):
                       </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <TextInput
-                          style={{
-                            flex: 1,
-                            backgroundColor: '#F8FAFC',
-                            borderWidth: 1,
-                            borderColor: '#CBD5E1',
-                            borderRadius: 8,
-                            paddingHorizontal: 10,
-                            paddingVertical: 7,
-                            fontSize: 12,
-                            color: '#1E2B58',
-                          }}
-                          placeholder="AAAA-MM-DD"
-                          value={orderEndDate}
-                          onChangeText={setOrderEndDate}
-                        />
-                        <TouchableOpacity
-                          style={{
-                            backgroundColor: '#1E2B58',
-                            paddingHorizontal: 11,
-                            paddingVertical: 8,
-                            borderRadius: 8,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                          onPress={() => {
-                            setCalendarActiveTarget('end');
-                            if (orderEndDate) {
-                              const p = orderEndDate.split('-');
-                              if (p.length === 3) setCalendarViewDate(new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, 1));
-                            }
-                            setIsCalendarModalVisible(true);
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="calendar" size={16} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      </View>
+                      <TextInput
+                        style={{
+                          backgroundColor: '#F8FAFC',
+                          borderWidth: 1,
+                          borderColor: '#CBD5E1',
+                          borderRadius: 8,
+                          paddingHorizontal: 10,
+                          paddingVertical: 7,
+                          fontSize: 12,
+                          color: '#1E2B58',
+                        }}
+                        placeholder="AAAA-MM-DD"
+                        value={orderEndDate}
+                        onChangeText={setOrderEndDate}
+                      />
                     </View>
                   </View>
 
