@@ -1,5 +1,5 @@
 -- ============================================================================
--- MIGRACIÓN SUPABASE: LOGÍSTICA, LIQUIDACIÓN Y GALERÍA MULTIFOTO
+-- MIGRACIÓN SUPABASE: LOGÍSTICA, LIQUIDACIÓN, GALERÍA MULTIFOTO Y MEDIOS DE PAGO DINÁMICOS
 -- ============================================================================
 -- Ejecuta este script en el SQL Editor de Supabase (https://supabase.com/dashboard/project/ismvmlcemxkawdwextzk/sql)
 -- para asegurar que todas las tablas tengan las columnas necesarias de forma nativa.
@@ -119,8 +119,45 @@ BEGIN
   END IF;
 END $$;
 
+-- 5. TABLA PAYMENT_METHODS: Medios de pago configurables por la tienda
+CREATE TABLE IF NOT EXISTS payment_methods (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'other', -- 'cash' | 'transfer' | 'card' | 'qr' | 'other'
+  description TEXT,
+  instructions TEXT,
+  account_number TEXT,
+  account_holder TEXT,
+  qr_image_url TEXT,
+  icon TEXT DEFAULT 'wallet-outline',
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  requires_proof BOOLEAN NOT NULL DEFAULT false,
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Políticas RLS para payment_methods
+ALTER TABLE payment_methods ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acceso total a payment_methods" ON payment_methods;
+CREATE POLICY "Acceso total a payment_methods" ON payment_methods FOR ALL USING (true) WITH CHECK (true);
+
+-- Semilla de Medios de Pago por Defecto
+INSERT INTO payment_methods (id, name, type, icon, description, instructions, is_active, requires_proof, order_index)
+VALUES 
+  ('efectivo', 'Efectivo contra entrega', 'cash', 'cash-outline', 'Pagas al repartidor en efectivo al recibir tu pedido en destino.', 'Ten a mano el valor exacto en efectivo para agilizar la entrega.', true, false, 1),
+  ('nequi_daviplata', 'Transferencia Nequi / Daviplata', 'transfer', 'phone-portrait-outline', 'Transfiere directamente desde tu billetera digital favorita.', 'Número Nequi / Daviplata: 300 123 4567. Envía el comprobante.', true, true, 2),
+  ('codigo_qr', 'Código QR', 'qr', 'qr-code-outline', 'Escanea el código QR de Bancolombia / Nequi.', 'Escanea desde tu app bancaria al momento de finalizar tu pedido.', true, true, 3),
+  ('pse', 'PSE', 'transfer', 'swap-horizontal-outline', 'Débito bancario en línea y seguro a través de PSE.', 'Disponible para cuentas de ahorros y corrientes de todos los bancos.', true, false, 4),
+  ('tarjeta_debito', 'Tarjeta débito', 'card', 'card-outline', 'Pago electrónico con tarjeta débito bancaria.', 'Pago seguro en línea.', true, false, 5),
+  ('tarjeta_credito', 'Tarjeta de crédito', 'card', 'card-outline', 'Pago en línea con tarjeta de crédito (Visa, Mastercard, Amex).', 'Cuotas y pago seguro.', true, false, 6)
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  instructions = EXCLUDED.instructions;
+
 -- Índices de alto rendimiento para búsquedas y filtros
 CREATE INDEX IF NOT EXISTS idx_orders_settlement ON orders(settlement_status);
 CREATE INDEX IF NOT EXISTS idx_orders_driver_id ON orders(driver_id);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_users_driver_type ON users(driver_type);
+CREATE INDEX IF NOT EXISTS idx_payment_methods_active ON payment_methods(is_active);

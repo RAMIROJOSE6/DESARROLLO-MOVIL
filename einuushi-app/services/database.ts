@@ -45,6 +45,21 @@ export interface User {
   isActive?: boolean;
 }
 
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  type: 'cash' | 'transfer' | 'card' | 'qr' | 'other';
+  description?: string;
+  instructions?: string;
+  accountNumber?: string;
+  accountHolder?: string;
+  qrImageUrl?: string;
+  icon?: string;
+  isActive: boolean;
+  requiresProof?: boolean;
+  orderIndex: number;
+}
+
 export interface EmailConfig {
   serviceId: string;
   templateId: string;
@@ -2618,4 +2633,231 @@ export function parseOrderDate(order: { date?: string; createdAt?: string }): Da
     if (!isNaN(d.getTime())) return d;
   }
   return null;
+}
+
+
+/**
+ * =========================================================================
+ * 12. MÓDULO DE MEDIOS DE PAGO DINÁMICOS (100% SUPABASE + ASYNCSTORAGE)
+ * =========================================================================
+ */
+
+export const DEFAULT_PAYMENT_METHODS: PaymentMethod[] = [
+  {
+    id: 'efectivo',
+    name: 'Efectivo contra entrega',
+    type: 'cash',
+    icon: 'cash-outline',
+    description: 'Pagas al repartidor en efectivo al recibir tu pedido en destino.',
+    instructions: 'Ten a mano el valor exacto en efectivo para agilizar la entrega.',
+    isActive: true,
+    requiresProof: false,
+    orderIndex: 1,
+  },
+  {
+    id: 'nequi_daviplata',
+    name: 'Transferencia Nequi / Daviplata',
+    type: 'transfer',
+    icon: 'phone-portrait-outline',
+    description: 'Transfiere directamente desde tu billetera digital favorita.',
+    instructions: 'Número Nequi / Daviplata: 300 123 4567. Envía el comprobante.',
+    accountNumber: '300 123 4567',
+    accountHolder: 'Tienda Einuushi S.A.S.',
+    isActive: true,
+    requiresProof: true,
+    orderIndex: 2,
+  },
+  {
+    id: 'codigo_qr',
+    name: 'Código QR',
+    type: 'qr',
+    icon: 'qr-code-outline',
+    description: 'Escanea el código QR de Bancolombia / Nequi.',
+    instructions: 'Escanea desde tu app bancaria al momento de finalizar tu pedido.',
+    isActive: true,
+    requiresProof: true,
+    orderIndex: 3,
+  },
+  {
+    id: 'pse',
+    name: 'PSE',
+    type: 'transfer',
+    icon: 'swap-horizontal-outline',
+    description: 'Débito bancario en línea y seguro a través de PSE.',
+    instructions: 'Disponible para cuentas de ahorros y corrientes de todos los bancos.',
+    isActive: true,
+    requiresProof: false,
+    orderIndex: 4,
+  },
+  {
+    id: 'tarjeta_debito',
+    name: 'Tarjeta débito',
+    type: 'card',
+    icon: 'card-outline',
+    description: 'Pago electrónico con tarjeta débito bancaria.',
+    isActive: true,
+    requiresProof: false,
+    orderIndex: 5,
+  },
+  {
+    id: 'tarjeta_credito',
+    name: 'Tarjeta de crédito',
+    type: 'card',
+    icon: 'card-outline',
+    description: 'Pago en línea con tarjeta de crédito (Visa, Mastercard, Amex).',
+    isActive: true,
+    requiresProof: false,
+    orderIndex: 6,
+  },
+];
+
+const PAYMENT_METHODS_STORAGE_KEY = '@einuushi_payment_methods_v2';
+let memoryPaymentMethods: PaymentMethod[] = [...DEFAULT_PAYMENT_METHODS];
+
+export async function getPaymentMethods(): Promise<PaymentMethod[]> {
+  // 1. Intentar cargar desde Supabase si la tabla existe
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('payment_methods')
+        .select('*')
+        .order('order_index', { ascending: true });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const mapped: PaymentMethod[] = data.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          type: r.type || 'other',
+          description: r.description || '',
+          instructions: r.instructions || '',
+          accountNumber: r.account_number || '',
+          accountHolder: r.account_holder || '',
+          qrImageUrl: r.qr_image_url || '',
+          icon: r.icon || 'wallet-outline',
+          isActive: r.is_active !== undefined ? Boolean(r.is_active) : true,
+          requiresProof: Boolean(r.requires_proof),
+          orderIndex: r.order_index ?? 0,
+        }));
+        memoryPaymentMethods = mapped;
+        // Respaldo en AsyncStorage
+        await AsyncStorage.setItem(PAYMENT_METHODS_STORAGE_KEY, JSON.stringify(mapped)).catch(() => {});
+        return mapped;
+      }
+    } catch (_) {}
+  }
+
+  // 2. Fallback a AsyncStorage local
+  try {
+    const local = await AsyncStorage.getItem(PAYMENT_METHODS_STORAGE_KEY);
+    if (local) {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        memoryPaymentMethods = parsed;
+        return parsed;
+      }
+    }
+  } catch (_) {}
+
+  // 3. Fallback a configuración por defecto
+  return memoryPaymentMethods;
+}
+
+export async function savePaymentMethod(
+  methodData: Partial<PaymentMethod> & { name: string; type?: 'cash' | 'transfer' | 'card' | 'qr' | 'other' }
+): Promise<PaymentMethod> {
+  const methodId = methodData.id || `pm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const existing = memoryPaymentMethods.find(m => m.id === methodId);
+
+  const newMethod: PaymentMethod = {
+    id: methodId,
+    name: methodData.name.trim(),
+    type: methodData.type || existing?.type || 'other',
+    description: methodData.description !== undefined ? methodData.description : (existing?.description || ''),
+    instructions: methodData.instructions !== undefined ? methodData.instructions : (existing?.instructions || ''),
+    accountNumber: methodData.accountNumber !== undefined ? methodData.accountNumber : (existing?.accountNumber || ''),
+    accountHolder: methodData.accountHolder !== undefined ? methodData.accountHolder : (existing?.accountHolder || ''),
+    qrImageUrl: methodData.qrImageUrl !== undefined ? methodData.qrImageUrl : (existing?.qrImageUrl || ''),
+    icon: methodData.icon || existing?.icon || (
+      methodData.type === 'cash' ? 'cash-outline' :
+      methodData.type === 'transfer' ? 'phone-portrait-outline' :
+      methodData.type === 'qr' ? 'qr-code-outline' :
+      methodData.type === 'card' ? 'card-outline' : 'wallet-outline'
+    ),
+    isActive: methodData.isActive !== undefined ? methodData.isActive : (existing?.isActive ?? true),
+    requiresProof: methodData.requiresProof !== undefined ? methodData.requiresProof : (existing?.requiresProof ?? false),
+    orderIndex: methodData.orderIndex !== undefined ? methodData.orderIndex : (existing?.orderIndex ?? memoryPaymentMethods.length + 1),
+  };
+
+  // Actualizar memoria
+  if (existing) {
+    memoryPaymentMethods = memoryPaymentMethods.map(m => m.id === methodId ? newMethod : m);
+  } else {
+    memoryPaymentMethods.push(newMethod);
+  }
+
+  // Persistir en AsyncStorage
+  try {
+    await AsyncStorage.setItem(PAYMENT_METHODS_STORAGE_KEY, JSON.stringify(memoryPaymentMethods));
+  } catch (_) {}
+
+  // Intentar sincronizar en Supabase si la tabla existe
+  if (isSupabaseConfigured()) {
+    try {
+      await supabase.from('payment_methods').upsert({
+        id: newMethod.id,
+        name: newMethod.name,
+        type: newMethod.type,
+        description: newMethod.description || null,
+        instructions: newMethod.instructions || null,
+        account_number: newMethod.accountNumber || null,
+        account_holder: newMethod.accountHolder || null,
+        qr_image_url: newMethod.qrImageUrl || null,
+        icon: newMethod.icon || null,
+        is_active: newMethod.isActive,
+        requires_proof: newMethod.requiresProof,
+        order_index: newMethod.orderIndex,
+      });
+    } catch (_) {}
+  }
+
+  notifyDatabaseChange();
+  return newMethod;
+}
+
+export async function togglePaymentMethodActive(id: string, isActive: boolean): Promise<boolean> {
+  const target = memoryPaymentMethods.find(m => m.id === id);
+  if (!target) return false;
+
+  target.isActive = isActive;
+  memoryPaymentMethods = memoryPaymentMethods.map(m => m.id === id ? { ...m, isActive } : m);
+
+  try {
+    await AsyncStorage.setItem(PAYMENT_METHODS_STORAGE_KEY, JSON.stringify(memoryPaymentMethods));
+  } catch (_) {}
+
+  if (isSupabaseConfigured()) {
+    try {
+      await supabase.from('payment_methods').update({ is_active: isActive }).eq('id', id);
+    } catch (_) {}
+  }
+
+  notifyDatabaseChange();
+  return true;
+}
+
+export async function deletePaymentMethod(id: string): Promise<boolean> {
+  memoryPaymentMethods = memoryPaymentMethods.filter(m => m.id !== id);
+
+  try {
+    await AsyncStorage.setItem(PAYMENT_METHODS_STORAGE_KEY, JSON.stringify(memoryPaymentMethods));
+  } catch (_) {}
+
+  if (isSupabaseConfigured()) {
+    try {
+      await supabase.from('payment_methods').delete().eq('id', id);
+    } catch (_) {}
+  }
+
+  notifyDatabaseChange();
+  return true;
 }

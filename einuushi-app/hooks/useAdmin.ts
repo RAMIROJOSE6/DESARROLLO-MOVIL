@@ -45,6 +45,11 @@ import {
   updatePassword,
   findUserByEmail,
   isSuperAdmin,
+  PaymentMethod,
+  getPaymentMethods,
+  savePaymentMethod as dbSavePaymentMethod,
+  togglePaymentMethodActive as dbTogglePaymentMethodActive,
+  deletePaymentMethod as dbDeletePaymentMethod,
 } from '../services/database';
 
 export function useAdmin() {
@@ -62,6 +67,7 @@ export function useAdmin() {
   const [drivers, setDrivers] = useState<User[]>([]);
   const [activityLogs, setActivityLogs] = useState<AdminActivityLog[]>([]);
   const [analytics, setAnalytics] = useState<StoreAnalytics | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
 
   const [activeTrackingOrder, setActiveTrackingOrder] = useState<Order | null>(null);
 
@@ -72,7 +78,7 @@ export function useAdmin() {
       const activeSession = await getAdminSession();
       const isSuper = isSuperAdmin(activeSession);
 
-      const [ord, prod, cat, qts, msgs, anl, usrs, logs, admins, drvs] = await Promise.all([
+      const [ord, prod, cat, qts, msgs, anl, usrs, logs, admins, drvs, pms] = await Promise.all([
         getOrders(),
         getProducts(),
         getCategories(),
@@ -83,11 +89,13 @@ export function useAdmin() {
         getAdminActivityLogs(100),
         getAdminUsers(activeSession),
         getDrivers(),
+        getPaymentMethods(),
       ]);
       setOrders(ord);
       setProducts(prod);
       setCategories(cat);
       setQuotes(qts);
+      setPaymentMethods(pms);
       setMessages(msgs);
       setAnalytics(anl);
       setUsersList(isSuper ? usrs : []);
@@ -899,6 +907,64 @@ export function useAdmin() {
 
   const isSuper = isSuperAdmin(adminUser);
 
+  // Operaciones de Medios de Pago Dinámicos
+  const togglePaymentMethodActive = async (id: string, active: boolean) => {
+    const res = await dbTogglePaymentMethodActive(id, active);
+    if (res) {
+      setPaymentMethods(prev => prev.map(m => m.id === id ? { ...m, isActive: active } : m));
+      await logAdminActivity({
+        adminId: adminUser?.id,
+        adminEmail: adminUser?.email || 'admin@einuushi.com',
+        adminName: adminUser?.fullName || 'Administrador',
+        actionType: 'PAYMENT_METHOD_TOGGLE',
+        entityType: 'CONFIGURACION',
+        entityId: id,
+        details: `${adminUser?.fullName || 'Administrador'} ${active ? 'activó' : 'desactivó'} el medio de pago "${id}".`,
+      });
+    }
+    return res;
+  };
+
+  const savePaymentMethod = async (methodData: Partial<PaymentMethod> & { name: string; type?: 'cash' | 'transfer' | 'card' | 'qr' | 'other' }) => {
+    const saved = await dbSavePaymentMethod(methodData);
+    setPaymentMethods(prev => {
+      const idx = prev.findIndex(m => m.id === saved.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = saved;
+        return copy;
+      }
+      return [...prev, saved];
+    });
+    await logAdminActivity({
+      adminId: adminUser?.id,
+      adminEmail: adminUser?.email || 'admin@einuushi.com',
+      adminName: adminUser?.fullName || 'Administrador',
+      actionType: 'PAYMENT_METHOD_SAVE',
+      entityType: 'CONFIGURACION',
+      entityId: saved.id,
+      details: `${adminUser?.fullName || 'Administrador'} guardó/actualizó el medio de pago "${saved.name}".`,
+    });
+    return saved;
+  };
+
+  const deletePaymentMethod = async (id: string) => {
+    const res = await dbDeletePaymentMethod(id);
+    if (res) {
+      setPaymentMethods(prev => prev.filter(m => m.id !== id));
+      await logAdminActivity({
+        adminId: adminUser?.id,
+        adminEmail: adminUser?.email || 'admin@einuushi.com',
+        adminName: adminUser?.fullName || 'Administrador',
+        actionType: 'PAYMENT_METHOD_DELETE',
+        entityType: 'CONFIGURACION',
+        entityId: id,
+        details: `${adminUser?.fullName || 'Administrador'} eliminó el medio de pago "${id}".`,
+      });
+    }
+    return res;
+  };
+
   return {
     adminUser,
     isAuthenticated: !!adminUser && (adminUser.role === 'admin' || adminUser.role === 'superadmin' || isSuper),
@@ -925,6 +991,10 @@ export function useAdmin() {
     markOrderArrived,
     markOrderDelivered,
     settleOrderPazYSalvo,
+    paymentMethods,
+    togglePaymentMethodActive,
+    savePaymentMethod,
+    deletePaymentMethod,
     createDriver,
     updateDriver,
     updateStock,

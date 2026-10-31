@@ -21,7 +21,7 @@ import { WebView } from 'react-native-webview';
 import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 import * as ImagePicker from 'expo-image-picker';
 import { useAdmin } from '../hooks/useAdmin';
-import { Order, OrderItem, Product, Category, CustomQuote, User, isSuperAdmin, parseOrderDate } from '../services/database';
+import { Order, OrderItem, Product, Category, CustomQuote, User, isSuperAdmin, parseOrderDate, PaymentMethod } from '../services/database';
 
 const SUPABASE_FALLBACK_IMAGES: Record<string, string> = {
   mochila1: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/mochila1.jpg',
@@ -132,6 +132,10 @@ export default function AdminScreen() {
     changeAdminPassword,
     requestAdminPasswordRecovery,
     verifyAndResetAdminPassword,
+    paymentMethods,
+    togglePaymentMethodActive,
+    savePaymentMethod,
+    deletePaymentMethod,
   } = useAdmin();
 
   // Estados de Modales del Panel de Rendimiento (Ventas, Total Pedidos, Pendientes)
@@ -174,8 +178,105 @@ export default function AdminScreen() {
     }
   };
 
+  // Manejo de Modal de Medios de Pago
+  const openNewPaymentModal = () => {
+    setEditingPaymentMethod(null);
+    setPmName('');
+    setPmType('transfer');
+    setPmDescription('');
+    setPmInstructions('');
+    setPmAccountNumber('');
+    setPmAccountHolder('');
+    setPmIsActive(true);
+    setPmRequiresProof(false);
+    setIsPaymentModalVisible(true);
+  };
+
+  const openEditPaymentModal = (pm: PaymentMethod) => {
+    setEditingPaymentMethod(pm);
+    setPmName(pm.name);
+    setPmType(pm.type);
+    setPmDescription(pm.description || '');
+    setPmInstructions(pm.instructions || '');
+    setPmAccountNumber(pm.accountNumber || '');
+    setPmAccountHolder(pm.accountHolder || '');
+    setPmIsActive(pm.isActive);
+    setPmRequiresProof(pm.requiresProof || false);
+    setIsPaymentModalVisible(true);
+  };
+
+  const handleSavePaymentMethod = async () => {
+    if (!pmName.trim()) {
+      Alert.alert('Campo Requerido', 'Por favor ingresa el nombre del medio de pago.');
+      return;
+    }
+    setIsSavingPm(true);
+    try {
+      await savePaymentMethod({
+        id: editingPaymentMethod?.id,
+        name: pmName.trim(),
+        type: pmType,
+        description: pmDescription.trim(),
+        instructions: pmInstructions.trim(),
+        accountNumber: pmAccountNumber.trim(),
+        accountHolder: pmAccountHolder.trim(),
+        isActive: pmIsActive,
+        requiresProof: pmRequiresProof,
+      });
+      setIsPaymentModalVisible(false);
+      Alert.alert('Éxito', `Medio de pago "${pmName.trim()}" guardado correctamente.`);
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'No se pudo guardar el medio de pago.');
+    } finally {
+      setIsSavingPm(false);
+    }
+  };
+
+  const handleTogglePaymentMethod = async (pm: PaymentMethod) => {
+    try {
+      await togglePaymentMethodActive(pm.id, !pm.isActive);
+    } catch (err: any) {
+      Alert.alert('Error', 'No se pudo cambiar el estado del medio de pago.');
+    }
+  };
+
+  const handleDeletePaymentMethod = (pm: PaymentMethod) => {
+    Alert.alert(
+      'Confirmar Eliminación',
+      `¿Estás seguro de que deseas eliminar el medio de pago "${pm.name}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deletePaymentMethod(pm.id);
+              Alert.alert('Eliminado', 'Medio de pago eliminado.');
+            } catch (err: any) {
+              Alert.alert('Error', 'No se pudo eliminar el medio de pago.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Sub-pestaña activa dentro de la pestaña Configuración & Trazabilidad
-  const [settingsSubTab, setSettingsSubTab] = useState<'profile' | 'admins' | 'logistics' | 'audit'>('profile');
+  const [settingsSubTab, setSettingsSubTab] = useState<'profile' | 'admins' | 'logistics' | 'audit' | 'payments'>('profile');
+
+  // Estados para Modal de Medios de Pago
+  const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
+  const [editingPaymentMethod, setEditingPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [pmName, setPmName] = useState('');
+  const [pmType, setPmType] = useState<'cash' | 'transfer' | 'card' | 'qr' | 'other'>('transfer');
+  const [pmDescription, setPmDescription] = useState('');
+  const [pmInstructions, setPmInstructions] = useState('');
+  const [pmAccountNumber, setPmAccountNumber] = useState('');
+  const [pmAccountHolder, setPmAccountHolder] = useState('');
+  const [pmIsActive, setPmIsActive] = useState(true);
+  const [pmRequiresProof, setPmRequiresProof] = useState(false);
+  const [isSavingPm, setIsSavingPm] = useState(false);
 
   // Filtro de Artículos en Inventario (Solo Admin)
   const [inventoryFilter, setInventoryFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
@@ -3439,6 +3540,27 @@ export default function AdminScreen() {
                     </Text>
                   </View>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.settingsSubTabBtn, settingsSubTab === 'payments' && styles.settingsSubTabBtnActive]}
+                  onPress={() => setSettingsSubTab('payments')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="card"
+                    size={17}
+                    color={settingsSubTab === 'payments' ? '#FFFFFF' : '#1E2B58'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.settingsSubTabBtnText, settingsSubTab === 'payments' && styles.settingsSubTabBtnTextActive]}>
+                    Medios de Pago
+                  </Text>
+                  <View style={[styles.settingsSubTabBadge, settingsSubTab === 'payments' && { backgroundColor: '#10B981' }]}>
+                    <Text style={[styles.settingsSubTabBadgeText, settingsSubTab === 'payments' && { color: '#FFFFFF' }]}>
+                      {(paymentMethods || []).filter((p: PaymentMethod) => p.isActive).length} Activos
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               </ScrollView>
             </View>
 
@@ -3887,6 +4009,252 @@ export default function AdminScreen() {
                 )}
               </View>
             </View>
+            )}
+
+            {/* SUB-PESTAÑA 5: GESTIÓN DE MEDIOS DE PAGO DINÁMICOS */}
+            {settingsSubTab === 'payments' && (
+              <View style={styles.settingsCard}>
+                <View style={[styles.settingsCardHeader, { justifyContent: 'space-between' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 }}>
+                    <View style={[styles.settingsIconCircle, { backgroundColor: '#DCFCE7' }]}>
+                      <Ionicons name="card" size={22} color="#15803D" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.settingsCardTitle}>Configuración de Medios de Pago</Text>
+                      <Text style={styles.settingsCardSubtitle}>
+                        Controla y personaliza qué opciones de pago estarán disponibles para los clientes en el checkout
+                      </Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: '#1E2B58',
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                    }}
+                    onPress={openNewPaymentModal}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="add-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                      + Nuevo Medio
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Banner de Ayuda */}
+                <View style={{
+                  backgroundColor: '#EFF6FF',
+                  borderWidth: 1,
+                  borderColor: '#BFDBFE',
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}>
+                  <Ionicons name="information-circle" size={20} color="#2563EB" style={{ marginRight: 8 }} />
+                  <Text style={{ fontSize: 11, color: '#1E40AF', flex: 1, lineHeight: 16 }}>
+                    <Text style={{ fontWeight: 'bold' }}>Control en Vivo:</Text> Los clientes únicamente podrán seleccionar los métodos que marques como <Text style={{ fontWeight: 'bold', color: '#15803D' }}>"ACTIVO"</Text>. Puedes habilitar o inhabilitar cualquiera al instante con un solo toque.
+                  </Text>
+                </View>
+
+                {/* Lista de Medios de Pago */}
+                <View style={{ gap: 12 }}>
+                  {(paymentMethods || []).map((pm: PaymentMethod) => {
+                    const isCash = pm.type === 'cash';
+                    const isTransfer = pm.type === 'transfer';
+                    const isQr = pm.type === 'qr';
+                    const isCard = pm.type === 'card';
+
+                    const iconColor = isCash ? '#10B981' : isTransfer ? '#8B5CF6' : isQr ? '#F59E0B' : '#3B82F6';
+                    const iconBg = isCash ? '#DCFCE7' : isTransfer ? '#F3E8FF' : isQr ? '#FEF3C7' : '#DBEAFE';
+
+                    return (
+                      <View
+                        key={pm.id}
+                        style={{
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: 12,
+                          padding: 14,
+                          borderWidth: 1.5,
+                          borderColor: pm.isActive ? '#E2E8F0' : '#F1F5F9',
+                          opacity: pm.isActive ? 1 : 0.75,
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: 0.04,
+                          shadowRadius: 2,
+                          elevation: 1,
+                        }}
+                      >
+                        {/* Cabecera del Medio de Pago */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 }}>
+                            <View style={{
+                              width: 38,
+                              height: 38,
+                              borderRadius: 19,
+                              backgroundColor: iconBg,
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              marginRight: 10,
+                            }}>
+                              <Ionicons
+                                name={(pm.icon as any) || (isCash ? 'cash-outline' : isTransfer ? 'phone-portrait-outline' : isQr ? 'qr-code-outline' : 'card-outline')}
+                                size={20}
+                                color={iconColor}
+                              />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1E2B58' }}>
+                                  {pm.name}
+                                </Text>
+                                <View style={{
+                                  backgroundColor: pm.isActive ? '#DCFCE7' : '#F1F5F9',
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 2,
+                                  borderRadius: 10,
+                                  borderWidth: 1,
+                                  borderColor: pm.isActive ? '#BBF7D0' : '#E2E8F0',
+                                }}>
+                                  <Text style={{
+                                    fontSize: 10,
+                                    fontWeight: 'bold',
+                                    color: pm.isActive ? '#15803D' : '#64748B',
+                                  }}>
+                                    {pm.isActive ? '✓ ACTIVO (En Checkout)' : '✕ INACTIVO (Oculto)'}
+                                  </Text>
+                                </View>
+                              </View>
+                              {pm.description ? (
+                                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                                  {pm.description}
+                                </Text>
+                              ) : null}
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Detalles: Instrucciones, Número de Cuenta o Titular */}
+                        {(pm.instructions || pm.accountNumber || pm.accountHolder) && (
+                          <View style={{
+                            backgroundColor: '#F8FAFC',
+                            borderRadius: 8,
+                            padding: 10,
+                            marginTop: 10,
+                            borderWidth: 1,
+                            borderColor: '#F1F5F9',
+                          }}>
+                            {pm.accountNumber ? (
+                              <Text style={{ fontSize: 11, color: '#334155' }}>
+                                🏦 <Text style={{ fontWeight: 'bold' }}>Cuenta / Teléfono:</Text> {pm.accountNumber}
+                                {pm.accountHolder ? ` (Titular: ${pm.accountHolder})` : ''}
+                              </Text>
+                            ) : null}
+                            {pm.instructions ? (
+                              <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                                ℹ️ <Text style={{ fontWeight: '600' }}>Instrucciones:</Text> {pm.instructions}
+                              </Text>
+                            ) : null}
+                          </View>
+                        )}
+
+                        {/* Barra de Acciones */}
+                        <View style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginTop: 12,
+                          paddingTop: 10,
+                          borderTopWidth: 1,
+                          borderColor: '#F1F5F9',
+                        }}>
+                          {/* Botón Switch Activar / Desactivar */}
+                          <TouchableOpacity
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              backgroundColor: pm.isActive ? '#FFFBEB' : '#DCFCE7',
+                              borderWidth: 1,
+                              borderColor: pm.isActive ? '#FDE68A' : '#BBF7D0',
+                              paddingHorizontal: 12,
+                              paddingVertical: 6,
+                              borderRadius: 8,
+                            }}
+                            onPress={() => handleTogglePaymentMethod(pm)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons
+                              name={pm.isActive ? 'pause-circle-outline' : 'checkmark-circle-outline'}
+                              size={15}
+                              color={pm.isActive ? '#B45309' : '#15803D'}
+                              style={{ marginRight: 5 }}
+                            />
+                            <Text style={{
+                              fontSize: 11,
+                              fontWeight: 'bold',
+                              color: pm.isActive ? '#B45309' : '#15803D',
+                            }}>
+                              {pm.isActive ? 'Desactivar en Checkout' : 'Activar en Checkout'}
+                            </Text>
+                          </TouchableOpacity>
+
+                          {/* Botones Editar y Eliminar */}
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            <TouchableOpacity
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: '#EFF6FF',
+                                borderWidth: 1,
+                                borderColor: '#BFDBFE',
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                borderRadius: 8,
+                              }}
+                              onPress={() => openEditPaymentModal(pm)}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="create-outline" size={14} color="#2563EB" style={{ marginRight: 4 }} />
+                              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#2563EB' }}>
+                                Editar
+                              </Text>
+                            </TouchableOpacity>
+
+                            {/* Solo permitir eliminar si no son métodos del sistema base */}
+                            {!['efectivo', 'nequi_daviplata', 'codigo_qr'].includes(pm.id) && (
+                              <TouchableOpacity
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  backgroundColor: '#FEF2F2',
+                                  borderWidth: 1,
+                                  borderColor: '#FECACA',
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 8,
+                                }}
+                                onPress={() => handleDeletePaymentMethod(pm)}
+                                activeOpacity={0.8}
+                              >
+                                <Ionicons name="trash-outline" size={14} color="#DC2626" style={{ marginRight: 4 }} />
+                                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#DC2626' }}>
+                                  Eliminar
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
             )}
 
             {/* SUB-PESTAÑA 4: BITÁCORA DE TRAZABILIDAD Y AUDITORÍA EN VIVO */}
@@ -6283,6 +6651,296 @@ export default function AdminScreen() {
               >
                 <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
                   Cerrar
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL: ADICIONAR / EDITAR MEDIO DE PAGO DINÁMICO                  */}
+      {/* ================================================================= */}
+      <Modal
+        visible={isPaymentModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsPaymentModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 540, maxHeight: '90%', padding: 0, overflow: 'hidden' }]}>
+            {/* Header del Modal */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#1E2B58',
+              paddingHorizontal: 20,
+              paddingVertical: 16,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  backgroundColor: '#C5A880',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: 10,
+                }}>
+                  <Ionicons name="card" size={20} color="#1E2B58" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#FFFFFF' }}>
+                    {editingPaymentMethod ? 'Editar Medio de Pago' : 'Nuevo Medio de Pago'}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#C5A880' }}>
+                    Configuración visible para clientes en el checkout
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setIsPaymentModalVisible(false)}
+                style={{ padding: 4 }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close-circle" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Formulario */}
+            <ScrollView style={{ padding: 20 }}>
+              {/* Nombre */}
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4 }}>
+                  Nombre del Medio de Pago *
+                </Text>
+                <TextInput
+                  placeholder="Ej: Transferencia Bancolombia, Daviplata, Efecty..."
+                  placeholderTextColor="#94A3B8"
+                  value={pmName}
+                  onChangeText={setPmName}
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    fontSize: 13,
+                    color: '#1E293B',
+                  }}
+                />
+              </View>
+
+              {/* Tipo de Pago */}
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 6 }}>
+                  Tipo de Operación
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {[
+                    { id: 'cash', label: '💵 Efectivo' },
+                    { id: 'transfer', label: '📱 Transferencia' },
+                    { id: 'qr', label: '📷 Código QR' },
+                    { id: 'card', label: '💳 Tarjeta' },
+                    { id: 'other', label: '⚙️ Otro' },
+                  ].map(t => (
+                    <TouchableOpacity
+                      key={t.id}
+                      onPress={() => setPmType(t.id as any)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: 8,
+                        backgroundColor: pmType === t.id ? '#1E2B58' : '#F1F5F9',
+                        borderWidth: 1,
+                        borderColor: pmType === t.id ? '#1E2B58' : '#CBD5E1',
+                      }}
+                    >
+                      <Text style={{
+                        fontSize: 11,
+                        fontWeight: 'bold',
+                        color: pmType === t.id ? '#FFFFFF' : '#475569',
+                      }}>
+                        {t.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Descripción breve */}
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4 }}>
+                  Descripción para el Cliente (Subtítulo en Checkout)
+                </Text>
+                <TextInput
+                  placeholder="Ej: Transfiere desde tu app bancaria y adjunta el comprobante"
+                  placeholderTextColor="#94A3B8"
+                  value={pmDescription}
+                  onChangeText={setPmDescription}
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    fontSize: 13,
+                    color: '#1E293B',
+                  }}
+                />
+              </View>
+
+              {/* Número de Cuenta / Teléfono */}
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4 }}>
+                  Número de Cuenta / Teléfono (Opcional)
+                </Text>
+                <TextInput
+                  placeholder="Ej: 300 123 4567 o Cta Ahorros #987-654321-0"
+                  placeholderTextColor="#94A3B8"
+                  value={pmAccountNumber}
+                  onChangeText={setPmAccountNumber}
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    fontSize: 13,
+                    color: '#1E293B',
+                  }}
+                />
+              </View>
+
+              {/* Titular de la cuenta */}
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4 }}>
+                  Titular de la Cuenta (Opcional)
+                </Text>
+                <TextInput
+                  placeholder="Ej: Tienda Oficial S.A.S. - NIT 900.123.456-7"
+                  placeholderTextColor="#94A3B8"
+                  value={pmAccountHolder}
+                  onChangeText={setPmAccountHolder}
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    fontSize: 13,
+                    color: '#1E293B',
+                  }}
+                />
+              </View>
+
+              {/* Instrucciones detalladas */}
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#334155', marginBottom: 4 }}>
+                  Instrucciones o Indicaciones Adicionales
+                </Text>
+                <TextInput
+                  placeholder="Ej: Una vez realices el pago, nuestro equipo confirmará el despacho de inmediato."
+                  placeholderTextColor="#94A3B8"
+                  value={pmInstructions}
+                  onChangeText={setPmInstructions}
+                  multiline
+                  numberOfLines={2}
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    fontSize: 13,
+                    color: '#1E293B',
+                    minHeight: 50,
+                  }}
+                />
+              </View>
+
+              {/* Switch Activo en Checkout */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: pmIsActive ? '#DCFCE7' : '#F1F5F9',
+                  borderWidth: 1,
+                  borderColor: pmIsActive ? '#BBF7D0' : '#E2E8F0',
+                  padding: 12,
+                  borderRadius: 10,
+                  marginBottom: 14,
+                }}
+                onPress={() => setPmIsActive(!pmIsActive)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={pmIsActive ? 'checkbox' : 'square-outline'}
+                  size={20}
+                  color={pmIsActive ? '#15803D' : '#64748B'}
+                  style={{ marginRight: 8 }}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: pmIsActive ? '#15803D' : '#475569' }}>
+                    {pmIsActive ? 'Medio de Pago ACTIVO (Visible en Checkout)' : 'Medio de Pago INACTIVO (Oculto)'}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                    {pmIsActive ? 'Los clientes podrán elegir este método al comprar.' : 'Ningún cliente podrá seleccionar este método.'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </ScrollView>
+
+            {/* Footer con Botones */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'flex-end',
+              gap: 10,
+              paddingHorizontal: 20,
+              paddingVertical: 14,
+              backgroundColor: '#F8FAFC',
+              borderTopWidth: 1,
+              borderColor: '#E2E8F0',
+            }}>
+              <TouchableOpacity
+                onPress={() => setIsPaymentModalVisible(false)}
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  backgroundColor: '#E2E8F0',
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: '#475569', fontSize: 12, fontWeight: 'bold' }}>
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleSavePaymentMethod}
+                disabled={isSavingPm}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#1E2B58',
+                  paddingHorizontal: 20,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  opacity: isSavingPm ? 0.7 : 1,
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                  {isSavingPm ? 'Guardando...' : 'Guardar Medio de Pago'}
                 </Text>
               </TouchableOpacity>
             </View>

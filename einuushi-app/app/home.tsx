@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -40,7 +40,10 @@ import {
   toggleProductFavoriteInDb,
   logAdminActivity,
   ChatMessage,
-  Category
+  Category,
+  PaymentMethod,
+  DEFAULT_PAYMENT_METHODS,
+  getPaymentMethods
 } from '../services/database';
 
 // Catálogo de imágenes oficiales alojadas 100% en Supabase Storage
@@ -146,7 +149,27 @@ export default function HomeScreen() {
   const [clientCity, setClientCity] = useState(effectiveUser?.city || 'Riohacha');
   const [clientNeighborhood, setClientNeighborhood] = useState('');
   const [clientStreetAddress, setClientStreetAddress] = useState('');
+  const [configuredPaymentMethods, setConfiguredPaymentMethods] = useState<PaymentMethod[]>(DEFAULT_PAYMENT_METHODS);
   const [paymentMethod, setPaymentMethod] = useState('Efectivo contra entrega');
+
+  // Medios de pago activos configurados por el administrador
+  const activePaymentMethods = useMemo(() => {
+    return configuredPaymentMethods.filter((pm: PaymentMethod) => pm.isActive);
+  }, [configuredPaymentMethods]);
+
+  const selectedPaymentMethodObj = useMemo(() => {
+    return configuredPaymentMethods.find((pm: PaymentMethod) => pm.name === paymentMethod) || null;
+  }, [configuredPaymentMethods, paymentMethod]);
+
+  // Si el medio seleccionado ya no está activo, seleccionar el primero disponible
+  useEffect(() => {
+    if (activePaymentMethods.length > 0) {
+      const isCurrentActive = activePaymentMethods.some((pm: PaymentMethod) => pm.name === paymentMethod);
+      if (!isCurrentActive) {
+        setPaymentMethod(activePaymentMethods[0].name);
+      }
+    }
+  }, [activePaymentMethods, paymentMethod]);
   const [nativePickerModal, setNativePickerModal] = useState<{
     title: string;
     options: { label: string; value: string }[];
@@ -264,6 +287,12 @@ export default function HomeScreen() {
       const dbCategories = await getCategories();
       if (dbCategories && dbCategories.length > 0) {
         setCategories(dbCategories);
+      }
+
+      // Cargar Medios de Pago dinámicos configurados por el administrador
+      const dbPaymentMethods = await getPaymentMethods();
+      if (dbPaymentMethods && Array.isArray(dbPaymentMethods) && dbPaymentMethods.length > 0) {
+        setConfiguredPaymentMethods(dbPaymentMethods);
       }
 
       // Cargar Artículos desde SQLite / Servidor compartido
@@ -1941,7 +1970,7 @@ export default function HomeScreen() {
                 style={styles.pickerSelector}
                 onPress={() => setNativePickerModal({
                   title: 'Seleccionar Medio de Pago',
-                  options: PAYMENT_METHOD_OPTIONS,
+                  options: activePaymentMethods.map((pm: PaymentMethod) => ({ label: pm.name, value: pm.name })),
                   selectedValue: paymentMethod,
                   onSelect: (val) => setPaymentMethod(val),
                 })}
@@ -1949,6 +1978,34 @@ export default function HomeScreen() {
                 <Text style={styles.pickerSelectorText}>{paymentMethod}</Text>
                 <Ionicons name="chevron-down" size={18} color="#64748B" />
               </TouchableOpacity>
+
+              {/* Información y detalles del medio de pago seleccionado */}
+              {selectedPaymentMethodObj?.description ? (
+                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+                  {selectedPaymentMethodObj.description}
+                </Text>
+              ) : null}
+
+              {selectedPaymentMethodObj?.accountNumber ? (
+                <View style={{ backgroundColor: '#F0FDF4', borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                  <Text style={{ fontSize: 11, color: '#166534', fontWeight: 'bold' }}>
+                    🏦 Cuenta / Número de Pago: {selectedPaymentMethodObj.accountNumber}
+                  </Text>
+                  {selectedPaymentMethodObj.accountHolder ? (
+                    <Text style={{ fontSize: 10, color: '#166534', marginTop: 2 }}>
+                      Titular: {selectedPaymentMethodObj.accountHolder}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {selectedPaymentMethodObj?.instructions ? (
+                <View style={{ backgroundColor: '#EFF6FF', borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: '#BFDBFE' }}>
+                  <Text style={{ fontSize: 11, color: '#1E40AF' }}>
+                    ℹ️ <Text style={{ fontWeight: 'bold' }}>Instrucciones:</Text> {selectedPaymentMethodObj.instructions}
+                  </Text>
+                </View>
+              ) : null}
 
               <View style={styles.shippingSummaryBox}>
                 <Text style={styles.shippingSummaryText}>📦 Tarifa de envío aplicada:</Text>
