@@ -40,6 +40,47 @@ export const isPureClientUser = (u: User) => {
   return true;
 };
 
+// Constantes y generador para el Calendario Visual Interactivo
+const CALENDAR_MONTH_NAMES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+const CALENDAR_WEEK_DAYS = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'];
+
+function getCalendarGridDays(year: number, month: number) {
+  const date = new Date(year, month, 1);
+  const days = [];
+  const firstDayIndex = date.getDay();
+  const prevMonthLastDay = new Date(year, month, 0).getDate();
+  for (let i = firstDayIndex - 1; i >= 0; i--) {
+    days.push({
+      day: prevMonthLastDay - i,
+      month: month === 0 ? 11 : month - 1,
+      year: month === 0 ? year - 1 : year,
+      isCurrentMonth: false,
+    });
+  }
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  for (let i = 1; i <= lastDay; i++) {
+    days.push({
+      day: i,
+      month: month,
+      year: year,
+      isCurrentMonth: true,
+    });
+  }
+  const remaining = (7 - (days.length % 7)) % 7;
+  for (let i = 1; i <= remaining; i++) {
+    days.push({
+      day: i,
+      month: month === 11 ? 0 : month + 1,
+      year: month === 11 ? year + 1 : year,
+      isCurrentMonth: false,
+    });
+  }
+  return days;
+}
+
 export default function AdminScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -148,6 +189,11 @@ export default function AdminScreen() {
   const [orderDatePreset, setOrderDatePreset] = useState<'ALL' | 'TODAY' | 'LAST_7_DAYS' | 'THIS_MONTH' | 'CUSTOM'>('ALL');
   const [orderStartDate, setOrderStartDate] = useState<string>(''); // YYYY-MM-DD
   const [orderEndDate, setOrderEndDate] = useState<string>(''); // YYYY-MM-DD
+
+  // Estados del Calendario Visual Interactivo
+  const [isCalendarModalVisible, setIsCalendarModalVisible] = useState(false);
+  const [calendarViewDate, setCalendarViewDate] = useState(() => new Date());
+  const [calendarActiveTarget, setCalendarActiveTarget] = useState<'start' | 'end'>('start');
 
   // Modales
   const [isSettlementModalVisible, setIsSettlementModalVisible] = useState(false);
@@ -2075,59 +2121,136 @@ export default function AdminScreen() {
                 ))}
               </ScrollView>
 
-              {/* Selector de Rango Personalizado (Desde / Hasta) */}
+              {/* Selector de Rango Personalizado (Desde / Hasta con Botones de Calendario Visual) */}
               {orderDatePreset === 'CUSTOM' && (
                 <View style={{
-                  flexDirection: isDesktop ? 'row' : 'column',
-                  gap: 10,
                   marginTop: 10,
                   paddingTop: 10,
                   borderTopWidth: 1,
                   borderColor: '#F1F5F9',
-                  alignItems: isDesktop ? 'center' : 'stretch'
                 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569', marginBottom: 4 }}>
-                      Desde (AAAA-MM-DD):
-                    </Text>
-                    <TextInput
-                      style={{
-                        backgroundColor: '#F8FAFC',
-                        borderWidth: 1,
-                        borderColor: '#CBD5E1',
-                        borderRadius: 8,
-                        paddingHorizontal: 10,
-                        paddingVertical: 7,
-                        fontSize: 12,
-                        color: '#1E2B58',
-                      }}
-                      placeholder="Ej. 2026-10-01"
-                      value={orderStartDate}
-                      onChangeText={setOrderStartDate}
-                      {...({ type: 'date' } as any)}
-                    />
+                  <View style={{
+                    flexDirection: isDesktop ? 'row' : 'column',
+                    gap: 10,
+                    alignItems: isDesktop ? 'center' : 'stretch'
+                  }}>
+                    {/* Campo Desde */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569', marginBottom: 4 }}>
+                        Desde (Fecha inicial):
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TextInput
+                          style={{
+                            flex: 1,
+                            backgroundColor: '#F8FAFC',
+                            borderWidth: 1,
+                            borderColor: '#CBD5E1',
+                            borderRadius: 8,
+                            paddingHorizontal: 10,
+                            paddingVertical: 7,
+                            fontSize: 12,
+                            color: '#1E2B58',
+                          }}
+                          placeholder="AAAA-MM-DD"
+                          value={orderStartDate}
+                          onChangeText={setOrderStartDate}
+                        />
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: '#1E2B58',
+                            paddingHorizontal: 11,
+                            paddingVertical: 8,
+                            borderRadius: 8,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                          onPress={() => {
+                            setCalendarActiveTarget('start');
+                            if (orderStartDate) {
+                              const p = orderStartDate.split('-');
+                              if (p.length === 3) setCalendarViewDate(new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, 1));
+                            }
+                            setIsCalendarModalVisible(true);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="calendar" size={16} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Campo Hasta */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569', marginBottom: 4 }}>
+                        Hasta (Fecha final):
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TextInput
+                          style={{
+                            flex: 1,
+                            backgroundColor: '#F8FAFC',
+                            borderWidth: 1,
+                            borderColor: '#CBD5E1',
+                            borderRadius: 8,
+                            paddingHorizontal: 10,
+                            paddingVertical: 7,
+                            fontSize: 12,
+                            color: '#1E2B58',
+                          }}
+                          placeholder="AAAA-MM-DD"
+                          value={orderEndDate}
+                          onChangeText={setOrderEndDate}
+                        />
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: '#1E2B58',
+                            paddingHorizontal: 11,
+                            paddingVertical: 8,
+                            borderRadius: 8,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                          onPress={() => {
+                            setCalendarActiveTarget('end');
+                            if (orderEndDate) {
+                              const p = orderEndDate.split('-');
+                              if (p.length === 3) setCalendarViewDate(new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, 1));
+                            }
+                            setIsCalendarModalVisible(true);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="calendar" size={16} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
 
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569', marginBottom: 4 }}>
-                      Hasta (AAAA-MM-DD):
-                    </Text>
-                    <TextInput
+                  {/* Botón directo para abrir calendario visual */}
+                  <View style={{ marginTop: 10, flexDirection: 'row', justifyContent: 'flex-start' }}>
+                    <TouchableOpacity
                       style={{
-                        backgroundColor: '#F8FAFC',
-                        borderWidth: 1,
-                        borderColor: '#CBD5E1',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: '#EFF6FF',
+                        borderWidth: 1.5,
+                        borderColor: '#93C5FD',
                         borderRadius: 8,
-                        paddingHorizontal: 10,
-                        paddingVertical: 7,
-                        fontSize: 12,
-                        color: '#1E2B58',
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
                       }}
-                      placeholder="Ej. 2026-10-31"
-                      value={orderEndDate}
-                      onChangeText={setOrderEndDate}
-                      {...({ type: 'date' } as any)}
-                    />
+                      onPress={() => {
+                        setCalendarActiveTarget('start');
+                        setIsCalendarModalVisible(true);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="calendar-outline" size={15} color="#2563EB" style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#2563EB' }}>
+                        📅 Abrir Calendario Visual
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               )}
@@ -4717,6 +4840,266 @@ export default function AdminScreen() {
             <TouchableOpacity style={styles.saveModalBtn} onPress={handleSendQuoteResponse} activeOpacity={0.8}>
               <Text style={styles.saveModalBtnText}>Enviar Cotización Formal al Cliente</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL: CALENDARIO VISUAL INTERACTIVO                             */}
+      {/* ================================================================= */}
+      <Modal visible={isCalendarModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialog, { maxWidth: 440, padding: 18 }]}>
+            {/* Header del Modal */}
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
+                  <Ionicons name="calendar" size={18} color="#2563EB" />
+                </View>
+                <View>
+                  <Text style={styles.modalDialogTitle}>Calendario de Fechas</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>
+                    Toca en los días para seleccionar el rango
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setIsCalendarModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#1E2B58" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Pestañas de Selección: 'Desde' o 'Hasta' */}
+            <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 10, padding: 3, marginVertical: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 7,
+                  alignItems: 'center',
+                  borderRadius: 8,
+                  backgroundColor: calendarActiveTarget === 'start' ? '#1E2B58' : 'transparent',
+                }}
+                onPress={() => setCalendarActiveTarget('start')}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  fontSize: 11,
+                  fontWeight: 'bold',
+                  color: calendarActiveTarget === 'start' ? '#FFFFFF' : '#64748B'
+                }}>
+                  Desde: {orderStartDate || 'Sin elegir'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 7,
+                  alignItems: 'center',
+                  borderRadius: 8,
+                  backgroundColor: calendarActiveTarget === 'end' ? '#1E2B58' : 'transparent',
+                }}
+                onPress={() => setCalendarActiveTarget('end')}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  fontSize: 11,
+                  fontWeight: 'bold',
+                  color: calendarActiveTarget === 'end' ? '#FFFFFF' : '#64748B'
+                }}>
+                  Hasta: {orderEndDate || 'Sin elegir'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Controles de Navegación de Mes */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setCalendarViewDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+                }}
+                style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="chevron-back" size={18} color="#1E2B58" />
+              </TouchableOpacity>
+
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1E2B58' }}>
+                  {CALENDAR_MONTH_NAMES[calendarViewDate.getMonth()]} {calendarViewDate.getFullYear()}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setCalendarViewDate(new Date())}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Text style={{ fontSize: 10, color: '#C5A880', fontWeight: 'bold' }}>Ir a Hoy</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setCalendarViewDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+                }}
+                style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="chevron-forward" size={18} color="#1E2B58" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Días de la semana */}
+            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+              {CALENDAR_WEEK_DAYS.map((d, i) => (
+                <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#64748B' }}>{d}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Cuadrícula de Días */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              {(() => {
+                const days = getCalendarGridDays(calendarViewDate.getFullYear(), calendarViewDate.getMonth());
+                const todayFormatted = new Date().toISOString().split('T')[0];
+
+                return days.map((item, idx) => {
+                  const itemFormatted = `${item.year}-${String(item.month + 1).padStart(2, '0')}-${String(item.day).padStart(2, '0')}`;
+                  const isStart = orderStartDate === itemFormatted;
+                  const isEnd = orderEndDate === itemFormatted;
+                  const isInRange = Boolean(
+                    orderStartDate && orderEndDate &&
+                    itemFormatted > orderStartDate && itemFormatted < orderEndDate
+                  );
+                  const isToday = itemFormatted === todayFormatted;
+
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      style={{
+                        width: '14.28%',
+                        height: 38,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        backgroundColor: (isStart || isEnd)
+                          ? '#1E2B58'
+                          : isInRange
+                          ? '#E0E7FF'
+                          : 'transparent',
+                        borderRadius: (isStart || isEnd) ? 19 : 0,
+                        marginVertical: 1,
+                      }}
+                      onPress={() => {
+                        if (calendarActiveTarget === 'start') {
+                          setOrderStartDate(itemFormatted);
+                          if (orderEndDate && itemFormatted > orderEndDate) {
+                            setOrderEndDate(itemFormatted);
+                          }
+                          setCalendarActiveTarget('end');
+                        } else {
+                          if (orderStartDate && itemFormatted < orderStartDate) {
+                            setOrderStartDate(itemFormatted);
+                            setCalendarActiveTarget('end');
+                          } else {
+                            setOrderEndDate(itemFormatted);
+                          }
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{
+                        fontSize: 12,
+                        fontWeight: (isStart || isEnd || isToday) ? 'bold' : 'normal',
+                        color: (isStart || isEnd)
+                          ? '#FFFFFF'
+                          : !item.isCurrentMonth
+                          ? '#CBD5E1'
+                          : isToday
+                          ? '#2563EB'
+                          : '#1E2B58'
+                      }}>
+                        {item.day}
+                      </Text>
+                      {isToday && !isStart && !isEnd && (
+                        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#2563EB', marginTop: 1 }} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                });
+              })()}
+            </View>
+
+            {/* Accesos rápidos de rango */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14, paddingTop: 10, borderTopWidth: 1, borderColor: '#F1F5F9' }}>
+              {[
+                {
+                  label: 'Hoy',
+                  action: () => {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    setOrderStartDate(todayStr);
+                    setOrderEndDate(todayStr);
+                  }
+                },
+                {
+                  label: 'Últimos 7 días',
+                  action: () => {
+                    const now = new Date();
+                    const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+                    setOrderStartDate(sevenDaysAgo.toISOString().split('T')[0]);
+                    setOrderEndDate(now.toISOString().split('T')[0]);
+                  }
+                },
+                {
+                  label: 'Este Mes',
+                  action: () => {
+                    const now = new Date();
+                    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+                    setOrderStartDate(firstDay.toISOString().split('T')[0]);
+                    setOrderEndDate(now.toISOString().split('T')[0]);
+                  }
+                },
+                {
+                  label: 'Mes Pasado',
+                  action: () => {
+                    const now = new Date();
+                    const firstDayPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    const lastDayPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+                    setOrderStartDate(firstDayPrevMonth.toISOString().split('T')[0]);
+                    setOrderEndDate(lastDayPrevMonth.toISOString().split('T')[0]);
+                  }
+                },
+              ].map((shortcut, sIdx) => (
+                <TouchableOpacity
+                  key={sIdx}
+                  style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}
+                  onPress={shortcut.action}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 10, color: '#475569', fontWeight: '600' }}>{shortcut.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Botones de Acción */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#F1F5F9', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}
+                onPress={() => setIsCalendarModalVisible(false)}
+              >
+                <Text style={{ color: '#475569', fontWeight: 'bold', fontSize: 12 }}>Cerrar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ flex: 2, backgroundColor: '#1E2B58', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}
+                onPress={() => {
+                  setOrderDatePreset('CUSTOM');
+                  setIsCalendarModalVisible(false);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>
+                  ✅ Aplicar Fechas
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
