@@ -21,7 +21,7 @@ import { WebView } from 'react-native-webview';
 import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 import * as ImagePicker from 'expo-image-picker';
 import { useAdmin } from '../hooks/useAdmin';
-import { Order, OrderItem, Product, Category, CustomQuote, User, isSuperAdmin, parseOrderDate, PaymentMethod } from '../services/database';
+import { Order, OrderItem, Product, Category, CustomQuote, User, isSuperAdmin, parseOrderDate, PaymentMethod, uploadMediaToSupabase } from '../services/database';
 
 const SUPABASE_FALLBACK_IMAGES: Record<string, string> = {
   mochila1: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/mochila1.jpg',
@@ -189,6 +189,7 @@ export default function AdminScreen() {
     setPmAccountHolder('');
     setPmIsActive(true);
     setPmRequiresProof(false);
+    setPmQrImageUrl('');
     setIsPaymentModalVisible(true);
   };
 
@@ -202,7 +203,79 @@ export default function AdminScreen() {
     setPmAccountHolder(pm.accountHolder || '');
     setPmIsActive(pm.isActive);
     setPmRequiresProof(pm.requiresProof || false);
+    setPmQrImageUrl(pm.qrImageUrl || '');
     setIsPaymentModalVisible(true);
+  };
+
+  const handlePickQrImage = async (targetPaymentMethod?: PaymentMethod) => {
+    try {
+      setIsUploadingQr(true);
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso Requerido', 'Se requiere acceso a la galería para cargar la imagen del código QR.');
+        setIsUploadingQr(false);
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.9,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        setIsUploadingQr(false);
+        return;
+      }
+
+      const asset = result.assets[0];
+      const sourceUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+
+      // Subir a Supabase Storage
+      const publicUrl = await uploadMediaToSupabase(sourceUri, 'payments', `qr_${Date.now()}`);
+
+      setPmQrImageUrl(publicUrl);
+
+      // Si se pasó un método específico o codigo_qr directo
+      const target = targetPaymentMethod || paymentMethods.find(p => p.id === 'codigo_qr' || p.type === 'qr');
+      if (target) {
+        await savePaymentMethod({
+          ...target,
+          qrImageUrl: publicUrl,
+        });
+        Alert.alert('Código QR Cargado', '¡El código QR real ha sido cargado con éxito! Ahora los clientes verán este código oficial en la app para realizar sus pagos.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'No se pudo cargar la imagen del código QR.');
+    } finally {
+      setIsUploadingQr(false);
+    }
+  };
+
+  const handleResetQrImage = async () => {
+    Alert.alert(
+      'Restablecer Código QR',
+      '¿Deseas quitar el código QR real y volver a mostrar el código ilustrativo de prueba en la app?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Restablecer',
+          style: 'destructive',
+          onPress: async () => {
+            const target = paymentMethods.find(p => p.id === 'codigo_qr' || p.type === 'qr');
+            if (target) {
+              await savePaymentMethod({
+                ...target,
+                qrImageUrl: '',
+              });
+              setPmQrImageUrl('');
+              Alert.alert('Restablecido', 'Se ha restablecido al código ilustrativo de prueba.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleSavePaymentMethod = async () => {
@@ -220,6 +293,7 @@ export default function AdminScreen() {
         instructions: pmInstructions.trim(),
         accountNumber: pmAccountNumber.trim(),
         accountHolder: pmAccountHolder.trim(),
+        qrImageUrl: pmQrImageUrl,
         isActive: pmIsActive,
         requiresProof: pmRequiresProof,
       });
@@ -276,6 +350,8 @@ export default function AdminScreen() {
   const [pmAccountHolder, setPmAccountHolder] = useState('');
   const [pmIsActive, setPmIsActive] = useState(true);
   const [pmRequiresProof, setPmRequiresProof] = useState(false);
+  const [pmQrImageUrl, setPmQrImageUrl] = useState('');
+  const [isUploadingQr, setIsUploadingQr] = useState(false);
   const [isSavingPm, setIsSavingPm] = useState(false);
 
   // Filtro de Artículos en Inventario (Solo Admin)
@@ -4062,6 +4138,131 @@ export default function AdminScreen() {
                     <Text style={{ fontWeight: 'bold' }}>Control en Vivo:</Text> Los clientes únicamente podrán seleccionar los métodos que marques como <Text style={{ fontWeight: 'bold', color: '#15803D' }}>"ACTIVO"</Text>. Puedes habilitar o inhabilitar cualquiera al instante con un solo toque.
                   </Text>
                 </View>
+
+                {/* Tarjeta Destacada de Carga de Código QR Real */}
+                {(() => {
+                  const qrMethod = (paymentMethods || []).find(p => p.id === 'codigo_qr' || p.type === 'qr');
+                  const hasRealQr = Boolean(qrMethod && qrMethod.qrImageUrl);
+
+                  return (
+                    <View style={{
+                      backgroundColor: hasRealQr ? '#F0FDF4' : '#FFFBEB',
+                      borderWidth: 1.5,
+                      borderColor: hasRealQr ? '#86EFAC' : '#FDE68A',
+                      borderRadius: 12,
+                      padding: 16,
+                      marginBottom: 18,
+                      flexDirection: isDesktop ? 'row' : 'column',
+                      alignItems: isDesktop ? 'center' : 'stretch',
+                      gap: 16,
+                    }}>
+                      {/* Vista previa del QR */}
+                      <View style={{
+                        width: 140,
+                        height: 140,
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: hasRealQr ? '#86EFAC' : '#E2E8F0',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        alignSelf: isDesktop ? 'auto' : 'center',
+                        overflow: 'hidden',
+                        padding: 4,
+                      }}>
+                        {hasRealQr ? (
+                          <Image
+                            source={{ uri: qrMethod!.qrImageUrl }}
+                            style={{ width: '100%', height: '100%', resizeMode: 'contain' }}
+                          />
+                        ) : (
+                          <View style={{ alignItems: 'center' }}>
+                            <Ionicons name="qr-code-outline" size={70} color="#94A3B8" />
+                            <Text style={{ fontSize: 9, color: '#94A3B8', marginTop: 2, textAlign: 'center' }}>
+                              QR Ilustrativo (Ficticio)
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Información y Acciones */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1E2B58' }}>
+                            Código QR Oficial de la Tienda
+                          </Text>
+                          <View style={{
+                            backgroundColor: hasRealQr ? '#DCFCE7' : '#FEF3C7',
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            borderRadius: 10,
+                          }}>
+                            <Text style={{
+                              fontSize: 10,
+                              fontWeight: 'bold',
+                              color: hasRealQr ? '#15803D' : '#B45309',
+                            }}>
+                              {hasRealQr ? '✓ QR REAL ACTIVO EN LA APP' : '⚠️ USANDO QR ILUSTRATIVO DE PRUEBA'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text style={{ fontSize: 11, color: '#475569', marginTop: 4, lineHeight: 16 }}>
+                          {hasRealQr
+                            ? 'Los clientes ya pueden escanear tu código QR oficial en la app para transferir a tu cuenta bancaria o billetera digital.'
+                            : 'Actualmente los clientes ven el código ilustrativo de prueba (no funcional). Carga la imagen de tu código QR real de Bancolombia, Nequi, Daviplata o tu entidad bancaria para que los clientes puedan pagar directamente.'}
+                        </Text>
+
+                        {/* Botones de acción */}
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                          <TouchableOpacity
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              backgroundColor: '#1E2B58',
+                              paddingHorizontal: 14,
+                              paddingVertical: 8,
+                              borderRadius: 8,
+                              opacity: isUploadingQr ? 0.7 : 1,
+                            }}
+                            onPress={() => handlePickQrImage(qrMethod)}
+                            disabled={isUploadingQr}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="cloud-upload-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>
+                              {isUploadingQr ? 'Cargando QR...' : (hasRealQr ? 'Cambiar Imagen QR' : 'Cargar Código QR Real')}
+                            </Text>
+                          </TouchableOpacity>
+
+                          {hasRealQr && (
+                            <TouchableOpacity
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: '#F8FAFC',
+                                borderWidth: 1,
+                                borderColor: '#CBD5E1',
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                borderRadius: 8,
+                              }}
+                              onPress={handleResetQrImage}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="refresh-outline" size={15} color="#64748B" style={{ marginRight: 5 }} />
+                              <Text style={{ color: '#64748B', fontSize: 12, fontWeight: 'bold' }}>
+                                Restablecer al Ilustrativo
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })()}
+
+
 
                 {/* Lista de Medios de Pago */}
                 <View style={{ gap: 12 }}>

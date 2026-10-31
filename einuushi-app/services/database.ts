@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { supabase, isSupabaseConfigured, uploadMediaToSupabase } from "./supabase";
+export { uploadMediaToSupabase };
 
 // Limpieza automática preventiva de claves obsoletas pesadas de AsyncStorage (elimina error SQLITE_FULL)
 (async () => {

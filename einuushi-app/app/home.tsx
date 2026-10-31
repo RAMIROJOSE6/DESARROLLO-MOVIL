@@ -2102,10 +2102,65 @@ export default function HomeScreen() {
               <Text style={styles.qrInstructions}>Escanee este código QR desde su aplicación bancaria para cancelar su pedido por valor de:</Text>
               <Text style={styles.qrTotalAmount}>$ {finalTotalValue.toLocaleString()} COP</Text>
               
-              <View style={styles.qrPlaceholderBox}>
-                <Ionicons name="qr-code-outline" size={130} color="#1E2B58" />
-                <Text style={styles.qrStoreText}>EINUUSHI ARTESANÍAS</Text>
-              </View>
+              {/* Código QR Dinámico (Real si fue cargado por la tienda, o ilustrativo de prueba) */}
+              {(() => {
+                const qrMethod = configuredPaymentMethods.find(pm => pm.id === 'codigo_qr' || pm.type === 'qr');
+                const realQrUrl = qrMethod?.qrImageUrl;
+
+                if (realQrUrl) {
+                  return (
+                    <View style={{ alignItems: 'center', marginVertical: 12 }}>
+                      <View style={{
+                        backgroundColor: '#FFFFFF',
+                        padding: 10,
+                        borderRadius: 16,
+                        borderWidth: 2,
+                        borderColor: '#10B981',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 4,
+                        elevation: 3,
+                      }}>
+                        <Image
+                          source={{ uri: realQrUrl }}
+                          style={{ width: 220, height: 220, resizeMode: 'contain', borderRadius: 8 }}
+                        />
+                      </View>
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: '#DCFCE7',
+                        paddingHorizontal: 12,
+                        paddingVertical: 4,
+                        borderRadius: 12,
+                        marginTop: 8,
+                      }}>
+                        <Ionicons name="checkmark-circle" size={14} color="#15803D" style={{ marginRight: 4 }} />
+                        <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#15803D' }}>
+                          Código QR Oficial de la Tienda
+                        </Text>
+                      </View>
+                      {qrMethod?.instructions ? (
+                        <Text style={{ fontSize: 11, color: '#475569', marginTop: 4, textAlign: 'center', paddingHorizontal: 16 }}>
+                          {qrMethod.instructions}
+                        </Text>
+                      ) : null}
+                    </View>
+                  );
+                }
+
+                // Fallback: Código QR ilustrativo de prueba
+                return (
+                  <View style={styles.qrPlaceholderBox}>
+                    <Ionicons name="qr-code-outline" size={130} color="#1E2B58" />
+                    <Text style={styles.qrStoreText}>EINUUSHI ARTESANÍAS</Text>
+                    <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 4 }}>
+                      (Código ilustrativo de prueba)
+                    </Text>
+                  </View>
+                );
+              })()}
 
               <Text style={styles.qrSubNote}>Una vez realizado el pago, presione el botón de confirmación inferior.</Text>
             </View>

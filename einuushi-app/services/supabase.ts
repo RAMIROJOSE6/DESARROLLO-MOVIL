@@ -95,7 +95,7 @@ async function uriToArrayBuffer(uri: string): Promise<{ data: Uint8Array; conten
  */
 export async function uploadMediaToSupabase(
   uriOrBase64: string,
-  folder: 'avatars' | 'products' | 'quotes',
+  folder: 'avatars' | 'products' | 'quotes' | 'payments' | 'qr',
   customFileName?: string
 ): Promise<string> {
   // Si no está configurado Supabase o ya es una URL remota http/https, devolverla intacta
