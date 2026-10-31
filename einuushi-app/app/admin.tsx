@@ -1894,9 +1894,6 @@ export default function AdminScreen() {
         {activeTab === 'analytics' && (
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionHeaderTitle}>Panel de Consultas y Rendimiento</Text>
-            <Text style={styles.sectionHeaderSubtitle}>
-              Datos agregados en tiempo real desde la base de datos SQLite con Drizzle ORM
-            </Text>
 
             {/* KPIs CARDS INTERACTIVAS CON DETALLE */}
             <View style={styles.kpiGrid}>

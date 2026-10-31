@@ -37,10 +37,11 @@ CREATE TABLE IF NOT EXISTS products (
   discount_percent INTEGER DEFAULT 0,
   is_discount_active INTEGER DEFAULT 0,
   is_active INTEGER DEFAULT 1,
+  gallery_images JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 2.3 Usuarios Registrados (Clientes y Administradores)
+-- 2.3 Usuarios Registrados (Clientes, Administradores y Repartidores)
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   full_name TEXT NOT NULL,
@@ -49,8 +50,14 @@ CREATE TABLE IF NOT EXISTS users (
   phone TEXT NOT NULL,
   city TEXT NOT NULL,
   password TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'client', -- 'client' | 'admin'
+  role TEXT NOT NULL DEFAULT 'client', -- 'client' | 'admin' | 'driver'
   avatar TEXT, -- URL pública de Supabase Storage
+  driver_type TEXT, -- 'individual' | 'corporate'
+  company_name TEXT,
+  vehicle_type TEXT,
+  plate_or_nit TEXT,
+  carrier_tracking_url TEXT,
+  driver_status TEXT DEFAULT 'active',
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -82,8 +89,20 @@ CREATE TABLE IF NOT EXISTS orders (
   settled_by TEXT,
   settlement_method TEXT, -- 'EFECTIVO_EN_TIENDA' | 'TRANSFERENCIA_TIENDA'
   transfer_reference TEXT, -- Número de comprobante / transferencia
-  driver_name TEXT DEFAULT 'José Guajiro',
+  driver_name TEXT,
+  driver_id TEXT,
+  driver_email TEXT,
+  driver_phone TEXT,
+  driver_type TEXT,
+  vehicle_type TEXT,
+  plate_or_nit TEXT,
+  tracking_guide_number TEXT,
+  carrier_tracking_url TEXT,
+  delivery_evidence_photo TEXT,
+  driver_collection_evidence TEXT,
   settlement_notes TEXT,
+  driver_lat DOUBLE PRECISION,
+  driver_lng DOUBLE PRECISION,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

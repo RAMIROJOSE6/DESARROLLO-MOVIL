@@ -966,7 +966,7 @@ export async function saveOrder(order: Order): Promise<void> {
           status_code: order.statusCode,
           eta: order.eta,
           rating: order.rating || 0,
-          items_json: order.items,
+          items_json: supaPayload.items_json,
           dispatched_at: order.dispatchedAt || null,
           received_at: order.receivedAt || null,
         });
