@@ -61,6 +61,30 @@ export interface PaymentMethod {
   orderIndex: number;
 }
 
+export interface Empresa {
+  id: string;
+  nombre: string;
+  razonSocial?: string;
+  nit?: string;
+  slogan?: string;
+  descripcion?: string;
+  logoUrl?: string;
+  bannerUrl?: string;
+  telefono?: string;
+  whatsapp?: string;
+  email?: string;
+  direccion?: string;
+  ciudad?: string;
+  departamento?: string;
+  pais?: string;
+  moneda?: string;
+  simboloMoneda?: string;
+  costoEnvioBase?: number;
+  isActiva?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface EmailConfig {
   serviceId: string;
   templateId: string;
@@ -2861,4 +2885,169 @@ export async function deletePaymentMethod(id: string): Promise<boolean> {
 
   notifyDatabaseChange();
   return true;
+}
+
+/**
+ * =========================================================================
+ * GESTIÓN Y CONFIGURACIÓN MULTITIENDA / EMPRESAS (PERSISTENCIA DUAL)
+ * =========================================================================
+ */
+
+export const DEFAULT_EMPRESA_EINUUSHI: Empresa = {
+  id: 'einuushi',
+  nombre: 'Einuushi',
+  razonSocial: 'Einuushi Artesanías Wayuu S.A.S.',
+  nit: '900.123.456-7',
+  slogan: 'Arte, Cultura y Tradición Wayuu',
+  descripcion: 'Tienda oficial de artesanías tradicionales wayuu hechas a mano por maestras artesanas de La Guajira, Colombia.',
+  logoUrl: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/branding/logo_einuushi.jpeg',
+  telefono: '3009998877',
+  whatsapp: '3009998877',
+  email: 'admin@einuushi.com',
+  direccion: 'Calle 1 # 2-3, Centro',
+  ciudad: 'Riohacha',
+  departamento: 'La Guajira',
+  pais: 'Colombia',
+  moneda: 'COP',
+  simboloMoneda: '$',
+  costoEnvioBase: 16000,
+  isActiva: true,
+  updatedAt: new Date().toISOString(),
+};
+
+const EMPRESAS_STORAGE_KEY = '@einuushi_empresas_db_v1';
+let memoryEmpresas: Empresa[] = [{ ...DEFAULT_EMPRESA_EINUUSHI }];
+
+export async function getEmpresas(): Promise<Empresa[]> {
+  // 1. Intentar cargar desde Supabase si la tabla empresas existe
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase.from('empresas').select('*');
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const mapped: Empresa[] = data.map((r: any) => ({
+          id: r.id,
+          nombre: r.nombre || 'Einuushi',
+          razonSocial: r.razon_social || '',
+          nit: r.nit || '',
+          slogan: r.slogan || '',
+          descripcion: r.descripcion || '',
+          logoUrl: r.logo_url || DEFAULT_EMPRESA_EINUUSHI.logoUrl,
+          bannerUrl: r.banner_url || undefined,
+          telefono: r.telefono || '',
+          whatsapp: r.whatsapp || '',
+          email: r.email || '',
+          direccion: r.direccion || '',
+          ciudad: r.ciudad || '',
+          departamento: r.departamento || '',
+          pais: r.pais || 'Colombia',
+          moneda: r.moneda || 'COP',
+          simboloMoneda: r.simbolo_moneda || '$',
+          costoEnvioBase: Number(r.costo_envio_base) || 16000,
+          isActiva: r.is_activa !== undefined ? Boolean(r.is_activa) : true,
+          updatedAt: r.updated_at,
+          createdAt: r.created_at,
+        }));
+        memoryEmpresas = mapped;
+        await AsyncStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(mapped)).catch(() => {});
+        return mapped;
+      }
+    } catch (_) {}
+  }
+
+  // 2. Fallback a AsyncStorage local
+  try {
+    const local = await AsyncStorage.getItem(EMPRESAS_STORAGE_KEY);
+    if (local) {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        memoryEmpresas = parsed;
+        return parsed;
+      }
+    }
+  } catch (_) {}
+
+  // 3. Fallback a configuración inicial oficial de Einuushi
+  return memoryEmpresas;
+}
+
+export async function getEmpresaById(id: string = 'einuushi'): Promise<Empresa> {
+  const all = await getEmpresas();
+  const found = all.find(e => e.id === id);
+  if (found) return found;
+
+  const inMem = memoryEmpresas.find(e => e.id === id);
+  if (inMem) return inMem;
+
+  return { ...DEFAULT_EMPRESA_EINUUSHI, id };
+}
+
+export async function saveEmpresa(empresaData: Partial<Empresa> & { id: string }): Promise<Empresa> {
+  const empId = empresaData.id;
+  const existing = memoryEmpresas.find(e => e.id === empId) || (empId === 'einuushi' ? DEFAULT_EMPRESA_EINUUSHI : undefined);
+
+  const updated: Empresa = {
+    id: empId,
+    nombre: empresaData.nombre ? empresaData.nombre.trim() : (existing?.nombre || 'Einuushi'),
+    razonSocial: empresaData.razonSocial !== undefined ? empresaData.razonSocial.trim() : (existing?.razonSocial || ''),
+    nit: empresaData.nit !== undefined ? empresaData.nit.trim() : (existing?.nit || ''),
+    slogan: empresaData.slogan !== undefined ? empresaData.slogan.trim() : (existing?.slogan || ''),
+    descripcion: empresaData.descripcion !== undefined ? empresaData.descripcion.trim() : (existing?.descripcion || ''),
+    logoUrl: empresaData.logoUrl !== undefined ? empresaData.logoUrl : (existing?.logoUrl || DEFAULT_EMPRESA_EINUUSHI.logoUrl),
+    bannerUrl: empresaData.bannerUrl !== undefined ? empresaData.bannerUrl : existing?.bannerUrl,
+    telefono: empresaData.telefono !== undefined ? empresaData.telefono.trim() : (existing?.telefono || ''),
+    whatsapp: empresaData.whatsapp !== undefined ? empresaData.whatsapp.trim() : (existing?.whatsapp || ''),
+    email: empresaData.email !== undefined ? empresaData.email.trim() : (existing?.email || ''),
+    direccion: empresaData.direccion !== undefined ? empresaData.direccion.trim() : (existing?.direccion || ''),
+    ciudad: empresaData.ciudad !== undefined ? empresaData.ciudad.trim() : (existing?.ciudad || ''),
+    departamento: empresaData.departamento !== undefined ? empresaData.departamento.trim() : (existing?.departamento || ''),
+    pais: empresaData.pais !== undefined ? empresaData.pais.trim() : (existing?.pais || 'Colombia'),
+    moneda: empresaData.moneda !== undefined ? empresaData.moneda.trim() : (existing?.moneda || 'COP'),
+    simboloMoneda: empresaData.simboloMoneda !== undefined ? empresaData.simboloMoneda.trim() : (existing?.simboloMoneda || '$'),
+    costoEnvioBase: empresaData.costoEnvioBase !== undefined ? Number(empresaData.costoEnvioBase) : (existing?.costoEnvioBase ?? 16000),
+    isActiva: empresaData.isActiva !== undefined ? Boolean(empresaData.isActiva) : (existing?.isActiva ?? true),
+    updatedAt: new Date().toISOString(),
+    createdAt: existing?.createdAt || new Date().toISOString(),
+  };
+
+  if (memoryEmpresas.some(e => e.id === empId)) {
+    memoryEmpresas = memoryEmpresas.map(e => e.id === empId ? updated : e);
+  } else {
+    memoryEmpresas.push(updated);
+  }
+
+  // Persistir en AsyncStorage
+  try {
+    await AsyncStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(memoryEmpresas));
+  } catch (_) {}
+
+  // Sincronizar en Supabase si la tabla existe
+  if (isSupabaseConfigured()) {
+    try {
+      await supabase.from('empresas').upsert({
+        id: updated.id,
+        nombre: updated.nombre,
+        razon_social: updated.razonSocial || null,
+        nit: updated.nit || null,
+        slogan: updated.slogan || null,
+        descripcion: updated.descripcion || null,
+        logo_url: updated.logoUrl || null,
+        banner_url: updated.bannerUrl || null,
+        telefono: updated.telefono || null,
+        whatsapp: updated.whatsapp || null,
+        email: updated.email || null,
+        direccion: updated.direccion || null,
+        ciudad: updated.ciudad || null,
+        departamento: updated.departamento || null,
+        pais: updated.pais || 'Colombia',
+        moneda: updated.moneda || 'COP',
+        simbolo_moneda: updated.simboloMoneda || '$',
+        costo_envio_base: updated.costoEnvioBase,
+        is_activa: updated.isActiva,
+        updated_at: updated.updatedAt,
+      });
+    } catch (_) {}
+  }
+
+  notifyDatabaseChange();
+  return updated;
 }

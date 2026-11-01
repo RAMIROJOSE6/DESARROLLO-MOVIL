@@ -136,6 +136,8 @@ export default function AdminScreen() {
     togglePaymentMethodActive,
     savePaymentMethod,
     deletePaymentMethod,
+    empresa,
+    updateEmpresaProfile,
   } = useAdmin();
 
   // Estados de Modales del Panel de Rendimiento (Ventas, Total Pedidos, Pendientes)
@@ -337,7 +339,7 @@ export default function AdminScreen() {
   };
 
   // Sub-pestaña activa dentro de la pestaña Configuración & Trazabilidad
-  const [settingsSubTab, setSettingsSubTab] = useState<'profile' | 'admins' | 'logistics' | 'audit' | 'payments'>('profile');
+  const [settingsSubTab, setSettingsSubTab] = useState<'empresa' | 'profile' | 'admins' | 'logistics' | 'audit' | 'payments'>('empresa');
 
   // Estados para Modal de Medios de Pago
   const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
@@ -429,6 +431,117 @@ export default function AdminScreen() {
   const [isUsersModalVisible, setIsUsersModalVisible] = useState(false);
   const [usersSearchQuery, setUsersSearchQuery] = useState('');
   const [usersRoleFilter, setUsersRoleFilter] = useState<'all' | 'client' | 'admin'>('all');
+
+    // Estados y Formulario de la Empresa / Multitienda
+  const [empresaNombre, setEmpresaNombre] = useState(empresa?.nombre || 'Einuushi');
+  const [empresaRazonSocial, setEmpresaRazonSocial] = useState(empresa?.razonSocial || '');
+  const [empresaNit, setEmpresaNit] = useState(empresa?.nit || '');
+  const [empresaSlogan, setEmpresaSlogan] = useState(empresa?.slogan || '');
+  const [empresaDescripcion, setEmpresaDescripcion] = useState(empresa?.descripcion || '');
+  const [empresaLogo, setEmpresaLogo] = useState(empresa?.logoUrl || '');
+  const [empresaTelefono, setEmpresaTelefono] = useState(empresa?.telefono || '');
+  const [empresaWhatsapp, setEmpresaWhatsapp] = useState(empresa?.whatsapp || '');
+  const [empresaEmail, setEmpresaEmail] = useState(empresa?.email || '');
+  const [empresaDireccion, setEmpresaDireccion] = useState(empresa?.direccion || '');
+  const [empresaCiudad, setEmpresaCiudad] = useState(empresa?.ciudad || '');
+  const [empresaDepartamento, setEmpresaDepartamento] = useState(empresa?.departamento || '');
+  const [empresaCostoEnvioBase, setEmpresaCostoEnvioBase] = useState(String(empresa?.costoEnvioBase || 16000));
+  const [isSavingEmpresa, setIsSavingEmpresa] = useState(false);
+  const [isUploadingEmpresaLogo, setIsUploadingEmpresaLogo] = useState(false);
+  const [empresaFeedback, setEmpresaFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  React.useEffect(() => {
+    if (empresa) {
+      setEmpresaNombre(empresa.nombre || 'Einuushi');
+      setEmpresaRazonSocial(empresa.razonSocial || '');
+      setEmpresaNit(empresa.nit || '');
+      setEmpresaSlogan(empresa.slogan || '');
+      setEmpresaDescripcion(empresa.descripcion || '');
+      setEmpresaLogo(empresa.logoUrl || '');
+      setEmpresaTelefono(empresa.telefono || '');
+      setEmpresaWhatsapp(empresa.whatsapp || '');
+      setEmpresaEmail(empresa.email || '');
+      setEmpresaDireccion(empresa.direccion || '');
+      setEmpresaCiudad(empresa.ciudad || '');
+      setEmpresaDepartamento(empresa.departamento || '');
+      setEmpresaCostoEnvioBase(String(empresa.costoEnvioBase || 16000));
+    }
+  }, [empresa]);
+
+  const handlePickEmpresaLogo = async () => {
+    try {
+      setIsUploadingEmpresaLogo(true);
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso Requerido', 'Se requiere acceso a la galería para cargar el logo de la empresa.');
+        setIsUploadingEmpresaLogo(false);
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.9,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        setIsUploadingEmpresaLogo(false);
+        return;
+      }
+
+      const asset = result.assets[0];
+      const sourceUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+
+      const publicUrl = await uploadMediaToSupabase(sourceUri, 'branding', `logo_${Date.now()}`);
+      setEmpresaLogo(publicUrl);
+      Alert.alert('Logo Cargado', 'El logotipo de la empresa se ha cargado. Recuerda hacer clic en "Guardar Información de Empresa" para confirmar.');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'No se pudo cargar la imagen del logotipo.');
+    } finally {
+      setIsUploadingEmpresaLogo(false);
+    }
+  };
+
+  const handleSaveEmpresa = async () => {
+    if (!empresaNombre.trim()) {
+      setEmpresaFeedback({ type: 'error', text: 'El nombre comercial de la tienda es obligatorio.' });
+      return;
+    }
+
+    try {
+      setIsSavingEmpresa(true);
+      setEmpresaFeedback(null);
+      const numEnvio = parseFloat(empresaCostoEnvioBase.replace(/[^0-9.]/g, '')) || 16000;
+
+      const ok = await updateEmpresaProfile({
+        nombre: empresaNombre.trim(),
+        razonSocial: empresaRazonSocial.trim(),
+        nit: empresaNit.trim(),
+        slogan: empresaSlogan.trim(),
+        descripcion: empresaDescripcion.trim(),
+        logoUrl: empresaLogo.trim(),
+        telefono: empresaTelefono.trim(),
+        whatsapp: empresaWhatsapp.trim(),
+        email: empresaEmail.trim(),
+        direccion: empresaDireccion.trim(),
+        ciudad: empresaCiudad.trim(),
+        departamento: empresaDepartamento.trim(),
+        costoEnvioBase: numEnvio,
+      });
+
+      if (ok) {
+        setEmpresaFeedback({ type: 'success', text: '¡Datos oficiales de la empresa actualizados correctamente en la base de datos!' });
+        Alert.alert('Empresa Actualizada', 'Los datos oficiales de la empresa han sido guardados exitosamente.');
+      } else {
+        setEmpresaFeedback({ type: 'error', text: 'No se pudieron guardar los cambios de la empresa.' });
+      }
+    } catch (err: any) {
+      setEmpresaFeedback({ type: 'error', text: err?.message || 'Ocurrió un error al guardar los datos de la empresa.' });
+    } finally {
+      setIsSavingEmpresa(false);
+    }
+  };
 
   // Formulario Mi Perfil Administrador
   const [adminEditName, setAdminEditName] = useState('');
@@ -3539,6 +3652,27 @@ export default function AdminScreen() {
             <View style={styles.settingsSubTabsContainer}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.settingsSubTabsScroll}>
                 <TouchableOpacity
+                  style={[styles.settingsSubTabBtn, settingsSubTab === 'empresa' && styles.settingsSubTabBtnActive]}
+                  onPress={() => setSettingsSubTab('empresa')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="business"
+                    size={17}
+                    color={settingsSubTab === 'empresa' ? '#FFFFFF' : '#1E2B58'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.settingsSubTabBtnText, settingsSubTab === 'empresa' && styles.settingsSubTabBtnTextActive]}>
+                    Empresa / Tienda
+                  </Text>
+                  <View style={[styles.settingsSubTabBadge, settingsSubTab === 'empresa' && { backgroundColor: '#10B981' }]}>
+                    <Text style={[styles.settingsSubTabBadgeText, settingsSubTab === 'empresa' && { color: '#FFFFFF' }]}>
+                      OFICIAL
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
                   style={[styles.settingsSubTabBtn, settingsSubTab === 'profile' && styles.settingsSubTabBtnActive]}
                   onPress={() => setSettingsSubTab('profile')}
                   activeOpacity={0.8}
@@ -3639,6 +3773,257 @@ export default function AdminScreen() {
                 </TouchableOpacity>
               </ScrollView>
             </View>
+
+            {/* SUB-PESTAÑA 0: DATOS DE LA EMPRESA / TIENDA REGISTRADA */}
+            {settingsSubTab === 'empresa' && (
+              <View style={styles.settingsCard}>
+                <View style={styles.settingsCardHeader}>
+                  <View style={[styles.settingsIconCircle, { backgroundColor: '#E0F2FE' }]}>
+                    <Ionicons name="business" size={24} color="#0284C7" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settingsCardTitle}>Identidad y Datos de la Empresa</Text>
+                    <Text style={styles.settingsCardSubtitle}>
+                      Gestiona la información corporativa, logotipo oficial, NIT, ubicación y datos de contacto de {empresa?.nombre || 'la tienda'}
+                    </Text>
+                  </View>
+                  <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#ECFDF5' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669' }}>
+                      {empresa?.isActiva !== false ? 'EMPRESA ACTIVA' : 'INACTIVA'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Banner Informativo Arquitectura Multitienda */}
+                <View style={{ marginBottom: 18, backgroundColor: '#F0F9FF', borderColor: '#BAE6FD', borderWidth: 1, borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'flex-start' }}>
+                  <Ionicons name="information-circle" size={20} color="#0284C7" style={{ marginRight: 8, marginTop: 2 }} />
+                  <Text style={{ color: '#0369A1', fontSize: 13, lineHeight: 18, flex: 1 }}>
+                    Esta configuración representa los datos oficiales de la empresa registrada ({empresa?.nombre || 'Einuushi'}). La información está centralizada en la tabla de base de datos <Text style={{ fontWeight: '700' }}>empresas</Text>, permitiendo que en el futuro registres nuevas empresas o tiendas bajo este mismo esquema unificado sin interferir con la operación actual.
+                  </Text>
+                </View>
+
+                {empresaFeedback && (
+                  <View style={[styles.feedbackMsgBox, empresaFeedback.type === 'success' ? styles.feedbackSuccess : styles.feedbackError]}>
+                    <Ionicons
+                      name={empresaFeedback.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
+                      size={18}
+                      color={empresaFeedback.type === 'success' ? '#166534' : '#DC2626'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={[styles.feedbackText, empresaFeedback.type === 'success' ? { color: '#166534' } : { color: '#DC2626' }]}>
+                      {empresaFeedback.text}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Sección de Logo Corporativo */}
+                <View style={{ backgroundColor: '#F8FAFC', borderRadius: 14, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1E2B58', marginBottom: 12, alignSelf: 'flex-start' }}>
+                    Logotipo Oficial de la Empresa:
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, width: '100%' }}>
+                    <View style={{ width: 88, height: 88, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#CBD5E1', overflow: 'hidden', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 }}>
+                      {empresaLogo ? (
+                        <Image source={{ uri: empresaLogo }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                      ) : (
+                        <Ionicons name="business" size={40} color="#94A3B8" />
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 10 }}>
+                        Este logotipo se refleja en la identidad de la tienda, cabeceras, recibos y pedidos.
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                        <TouchableOpacity
+                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E2B58', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 }}
+                          onPress={handlePickEmpresaLogo}
+                          disabled={isUploadingEmpresaLogo}
+                        >
+                          {isUploadingEmpresaLogo ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 6 }} />
+                          ) : (
+                            <Ionicons name="cloud-upload-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                          )}
+                          <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '600' }}>
+                            {isUploadingEmpresaLogo ? 'Subiendo...' : 'Cargar Imagen'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={{ width: '100%', marginTop: 12 }}>
+                    <Text style={[styles.settingsLabel, { fontSize: 12 }]}>O ingresa URL directa de la imagen:</Text>
+                    <TextInput
+                      style={[styles.settingsInput, { height: 38, fontSize: 12 }]}
+                      value={empresaLogo}
+                      onChangeText={setEmpresaLogo}
+                      placeholder="https://.../logo.jpg"
+                      placeholderTextColor="#94A3B8"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
+
+                {/* Formulario de Datos */}
+                <View style={styles.settingsFormGrid}>
+                  <View style={styles.settingsFormGroup}>
+                    <Text style={styles.settingsLabel}>Nombre Comercial de la Tienda *</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={empresaNombre}
+                      onChangeText={setEmpresaNombre}
+                      placeholder="Ej. Einuushi"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+
+                  <View style={styles.settingsFormGroup}>
+                    <Text style={styles.settingsLabel}>Razón Social Legal:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={empresaRazonSocial}
+                      onChangeText={setEmpresaRazonSocial}
+                      placeholder="Ej. Einuushi Artesanías Wayuu S.A.S."
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+
+                  <View style={styles.settingsFormGroup}>
+                    <Text style={styles.settingsLabel}>NIT o Identificación Tributaria:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={empresaNit}
+                      onChangeText={setEmpresaNit}
+                      placeholder="Ej. 900.123.456-7"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+
+                  <View style={styles.settingsFormGroup}>
+                    <Text style={styles.settingsLabel}>Slogan / Frase Distintiva:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={empresaSlogan}
+                      onChangeText={setEmpresaSlogan}
+                      placeholder="Ej. Arte, Cultura y Tradición Wayuu"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+
+                  <View style={styles.settingsFormGroup}>
+                    <Text style={styles.settingsLabel}>Teléfono de Contacto Principal:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={empresaTelefono}
+                      onChangeText={setEmpresaTelefono}
+                      keyboardType="phone-pad"
+                      placeholder="Ej. 3009998877"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+
+                  <View style={styles.settingsFormGroup}>
+                    <Text style={styles.settingsLabel}>WhatsApp Oficial de Atención:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={empresaWhatsapp}
+                      onChangeText={setEmpresaWhatsapp}
+                      keyboardType="phone-pad"
+                      placeholder="Ej. 3009998877"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+
+                  <View style={styles.settingsFormGroup}>
+                    <Text style={styles.settingsLabel}>Correo Electrónico Oficial:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={empresaEmail}
+                      onChangeText={setEmpresaEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      placeholder="admin@einuushi.com"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+
+                  <View style={styles.settingsFormGroup}>
+                    <Text style={styles.settingsLabel}>Costo Base de Envíos (COP):</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={empresaCostoEnvioBase}
+                      onChangeText={setEmpresaCostoEnvioBase}
+                      keyboardType="numeric"
+                      placeholder="16000"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+
+                  <View style={styles.settingsFormGroup}>
+                    <Text style={styles.settingsLabel}>Dirección de la Sede / Taller:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={empresaDireccion}
+                      onChangeText={setEmpresaDireccion}
+                      placeholder="Calle 1 # 2-3, Centro"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+
+                  <View style={styles.settingsFormGroup}>
+                    <Text style={styles.settingsLabel}>Ciudad y Departamento:</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TextInput
+                        style={[styles.settingsInput, { flex: 1 }]}
+                        value={empresaCiudad}
+                        onChangeText={setEmpresaCiudad}
+                        placeholder="Ciudad (Ej. Riohacha)"
+                        placeholderTextColor="#94A3B8"
+                      />
+                      <TextInput
+                        style={[styles.settingsInput, { flex: 1 }]}
+                        value={empresaDepartamento}
+                        onChangeText={setEmpresaDepartamento}
+                        placeholder="Departamento (Ej. La Guajira)"
+                        placeholderTextColor="#94A3B8"
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                <View style={{ marginTop: 12 }}>
+                  <Text style={styles.settingsLabel}>Descripción y Reseña de la Empresa:</Text>
+                  <TextInput
+                    style={[styles.settingsInput, { height: 75, textAlignVertical: 'top' }]}
+                    value={empresaDescripcion}
+                    onChangeText={setEmpresaDescripcion}
+                    multiline
+                    placeholder="Describe la historia, misión y especialidad de la tienda..."
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                {/* Botón Guardar */}
+                <View style={{ marginTop: 24, flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
+                  <TouchableOpacity
+                    style={[styles.settingsPrimaryBtn, { backgroundColor: '#0284C7' }, isSavingEmpresa && { opacity: 0.7 }]}
+                    onPress={handleSaveEmpresa}
+                    disabled={isSavingEmpresa}
+                    activeOpacity={0.85}
+                  >
+                    {isSavingEmpresa ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                    ) : (
+                      <Ionicons name="save-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    )}
+                    <Text style={styles.settingsPrimaryBtnText}>
+                      {isSavingEmpresa ? 'Guardando...' : 'Guardar Información de Empresa'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
             {/* SUB-PESTAÑA 1: MI PERFIL Y CREDENCIALES */}
             {settingsSubTab === 'profile' && (

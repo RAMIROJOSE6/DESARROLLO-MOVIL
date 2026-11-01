@@ -50,6 +50,10 @@ import {
   savePaymentMethod as dbSavePaymentMethod,
   togglePaymentMethodActive as dbTogglePaymentMethodActive,
   deletePaymentMethod as dbDeletePaymentMethod,
+  Empresa,
+  DEFAULT_EMPRESA_EINUUSHI,
+  getEmpresaById,
+  saveEmpresa as dbSaveEmpresa,
 } from '../services/database';
 
 export function useAdmin() {
@@ -68,6 +72,7 @@ export function useAdmin() {
   const [activityLogs, setActivityLogs] = useState<AdminActivityLog[]>([]);
   const [analytics, setAnalytics] = useState<StoreAnalytics | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [empresa, setEmpresa] = useState<Empresa>(DEFAULT_EMPRESA_EINUUSHI);
 
   const [activeTrackingOrder, setActiveTrackingOrder] = useState<Order | null>(null);
 
@@ -78,7 +83,7 @@ export function useAdmin() {
       const activeSession = await getAdminSession();
       const isSuper = isSuperAdmin(activeSession);
 
-      const [ord, prod, cat, qts, msgs, anl, usrs, logs, admins, drvs, pms] = await Promise.all([
+      const [ord, prod, cat, qts, msgs, anl, usrs, logs, admins, drvs, pms, emp] = await Promise.all([
         getOrders(),
         getProducts(),
         getCategories(),
@@ -90,12 +95,14 @@ export function useAdmin() {
         getAdminUsers(activeSession),
         getDrivers(),
         getPaymentMethods(),
+        getEmpresaById('einuushi'),
       ]);
       setOrders(ord);
       setProducts(prod);
       setCategories(cat);
       setQuotes(qts);
       setPaymentMethods(pms);
+      if (emp) setEmpresa(emp);
       setMessages(msgs);
       setAnalytics(anl);
       setUsersList(isSuper ? usrs : []);
@@ -965,6 +972,30 @@ export function useAdmin() {
     return res;
   };
 
+  const updateEmpresaProfile = async (changes: Partial<Empresa>): Promise<boolean> => {
+    try {
+      const updated = await dbSaveEmpresa({
+        ...empresa,
+        ...changes,
+        id: empresa.id || 'einuushi',
+      });
+      setEmpresa(updated);
+      await logAdminActivity({
+        adminId: adminUser?.id,
+        adminEmail: adminUser?.email || 'admin@einuushi.com',
+        adminName: adminUser?.fullName || 'Administrador',
+        actionType: 'ADMIN_PROFILE_UPDATE',
+        entityType: 'CONFIGURACION',
+        entityId: updated.id,
+        details: `${adminUser?.fullName || 'Administrador'} actualizó los datos corporativos de la empresa "${updated.nombre}" (NIT: ${updated.nit || 'N/A'}).`,
+      });
+      return true;
+    } catch (err) {
+      console.error('Error updating empresa profile:', err);
+      return false;
+    }
+  };
+
   return {
     adminUser,
     isAuthenticated: !!adminUser && (adminUser.role === 'admin' || adminUser.role === 'superadmin' || isSuper),
@@ -995,6 +1026,9 @@ export function useAdmin() {
     togglePaymentMethodActive,
     savePaymentMethod,
     deletePaymentMethod,
+    empresa,
+    updateEmpresaProfile,
+    setEmpresa,
     createDriver,
     updateDriver,
     updateStock,
