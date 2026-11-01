@@ -1464,7 +1464,7 @@ export async function markNotificationAsReadInDb(
  * =========================================================================
  */
 
-export async function getCategories(): Promise<Category[]> {
+export async function getCategories(empresaId?: string): Promise<Category[]> {
   if (isSupabaseConfigured()) {
     try {
       const { data, error } = await supabase.from('categories').select('*');
@@ -1590,7 +1590,7 @@ export async function deleteCategory(id: string): Promise<boolean> {
  * =========================================================================
  */
 
-export async function getProducts(): Promise<Product[]> {
+export async function getProducts(empresaId?: string): Promise<Product[]> {
   if (isSupabaseConfigured()) {
     try {
       const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
@@ -2739,7 +2739,7 @@ export const DEFAULT_PAYMENT_METHODS: PaymentMethod[] = [
 const PAYMENT_METHODS_STORAGE_KEY = '@einuushi_payment_methods_v2';
 let memoryPaymentMethods: PaymentMethod[] = [...DEFAULT_PAYMENT_METHODS];
 
-export async function getPaymentMethods(): Promise<PaymentMethod[]> {
+export async function getPaymentMethods(empresaId?: string): Promise<PaymentMethod[]> {
   // 1. Intentar cargar desde Supabase si la tabla existe
   if (isSupabaseConfigured()) {
     try {
@@ -3050,4 +3050,26 @@ export async function saveEmpresa(empresaData: Partial<Empresa> & { id: string }
 
   notifyDatabaseChange();
   return updated;
+}
+
+const ACTIVE_EMPRESA_KEY = '@einuushi_active_empresa_id_v2';
+
+export async function getActiveEmpresa(): Promise<Empresa> {
+  try {
+    const savedId = await AsyncStorage.getItem(ACTIVE_EMPRESA_KEY);
+    if (savedId) {
+      return await getEmpresaById(savedId);
+    }
+  } catch (_) {}
+  return await getEmpresaById('einuushi');
+}
+
+export async function setActiveEmpresa(empresaOrId: Empresa | string): Promise<Empresa> {
+  const targetId = typeof empresaOrId === 'string' ? empresaOrId : empresaOrId.id;
+  try {
+    await AsyncStorage.setItem(ACTIVE_EMPRESA_KEY, targetId);
+  } catch (_) {}
+  const loaded = await getEmpresaById(targetId);
+  notifyDatabaseChange();
+  return loaded;
 }

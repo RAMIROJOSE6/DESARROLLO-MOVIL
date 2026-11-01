@@ -43,7 +43,12 @@ import {
   Category,
   PaymentMethod,
   DEFAULT_PAYMENT_METHODS,
-  getPaymentMethods
+  getPaymentMethods,
+  Empresa,
+  DEFAULT_EMPRESA_EINUUSHI,
+  getActiveEmpresa,
+  setActiveEmpresa,
+  getEmpresas
 } from '../services/database';
 
 // Catálogo de imágenes oficiales alojadas 100% en Supabase Storage
@@ -150,6 +155,9 @@ export default function HomeScreen() {
   const [clientNeighborhood, setClientNeighborhood] = useState('');
   const [clientStreetAddress, setClientStreetAddress] = useState('');
   const [configuredPaymentMethods, setConfiguredPaymentMethods] = useState<PaymentMethod[]>(DEFAULT_PAYMENT_METHODS);
+  const [activeEmpresa, setActiveEmpresaState] = useState<Empresa>(DEFAULT_EMPRESA_EINUUSHI);
+  const [empresasList, setEmpresasList] = useState<Empresa[]>([DEFAULT_EMPRESA_EINUUSHI]);
+  const [isStoreSelectorVisible, setIsStoreSelectorVisible] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('Efectivo contra entrega');
 
   // Medios de pago activos configurados por el administrador
@@ -281,22 +289,30 @@ export default function HomeScreen() {
   };
 
   // Cargar datos locales sincronizados desde SQLite con Drizzle ORM (Offline-First)
-  const loadLocalDbData = useCallback(async () => {
+  const loadLocalDbData = useCallback(async (forcedEmpresa?: Empresa) => {
     try {
-      // Cargar Categorías sincronizadas
-      const dbCategories = await getCategories();
+      const currentEmp = forcedEmpresa || (await getActiveEmpresa());
+      setActiveEmpresaState(currentEmp);
+
+      const allEmps = await getEmpresas();
+      if (allEmps && allEmps.length > 0) {
+        setEmpresasList(allEmps);
+      }
+
+      // Cargar Categorías sincronizadas de la empresa
+      const dbCategories = await getCategories(currentEmp.id);
       if (dbCategories && dbCategories.length > 0) {
         setCategories(dbCategories);
       }
 
-      // Cargar Medios de Pago dinámicos configurados por el administrador
-      const dbPaymentMethods = await getPaymentMethods();
+      // Cargar Medios de Pago dinámicos configurados por la empresa
+      const dbPaymentMethods = await getPaymentMethods(currentEmp.id);
       if (dbPaymentMethods && Array.isArray(dbPaymentMethods) && dbPaymentMethods.length > 0) {
         setConfiguredPaymentMethods(dbPaymentMethods);
       }
 
-      // Cargar Artículos desde SQLite / Servidor compartido
-      const dbProducts = await getProducts();
+      // Cargar Artículos de la empresa
+      const dbProducts = await getProducts(currentEmp.id);
       if (dbProducts && Array.isArray(dbProducts)) {
         setProducts(prevProducts =>
           dbProducts.map(dbp => {
@@ -941,8 +957,10 @@ export default function HomeScreen() {
 
   const calculateShippingCost = (country: string, city: string) => {
     if (country !== 'Colombia') return 100000;
-    if (city.toLowerCase() === 'riohacha') return 5000;
-    return 16000;
+    const base = Number(activeEmpresa?.costoEnvioBase) || 16000;
+    const localCity = (activeEmpresa?.ciudad || 'riohacha').toLowerCase();
+    if (city && city.toLowerCase() === localCity) return Math.min(5000, base);
+    return base;
   };
 
   // Helper para calcular precio final con descuento si está activo
@@ -958,6 +976,22 @@ export default function HomeScreen() {
   const subtotalProductsValue = cartItems.reduce((sum, product) => sum + (getProductFinalPrice(product) * product.cartQuantity), 0);
   const shippingCostValue = calculateShippingCost(clientCountry, clientCity);
   const finalTotalValue = subtotalProductsValue + (cartItems.length > 0 ? shippingCostValue : 0);
+
+  const handleSwitchStore = async (selectedEmpresa: Empresa) => {
+    try {
+      await setActiveEmpresa(selectedEmpresa);
+      setActiveEmpresaState(selectedEmpresa);
+      setIsStoreSelectorVisible(false);
+      await loadLocalDbData(selectedEmpresa);
+      Alert.alert(
+        'Tienda Seleccionada',
+        `Ahora estás explorando el catálogo de ${selectedEmpresa.nombre}.`,
+        [{ text: 'Explorar Catálogo' }]
+      );
+    } catch (err) {
+      console.error('Error switching store:', err);
+    }
+  };
 
   const handleProceedToCheckout = () => {
     if (isAdminPreview) {
@@ -1029,6 +1063,7 @@ export default function HomeScreen() {
 
       const newOrder = {
         id: orderId,
+        empresaId: activeEmpresa?.id || 'einuushi',
         userId: currentUser?.id,
         userEmail: currentUser?.email,
         date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -1366,10 +1401,34 @@ export default function HomeScreen() {
 
       {/* Cabecera */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerSubtitle}>Artesanías de Riohacha</Text>
-          <Text style={styles.headerTitle}>EINUUSHI</Text>
-        </View>
+        <TouchableOpacity 
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}
+          onPress={() => setIsStoreSelectorVisible(true)}
+          activeOpacity={0.8}
+        >
+          {activeEmpresa.logoUrl ? (
+            <Image 
+              source={{ uri: activeEmpresa.logoUrl }} 
+              style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1' }}
+              resizeMode="contain"
+            />
+          ) : (
+            <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' }}>
+              <Ionicons name="business" size={24} color="#1E2B58" />
+            </View>
+          )}
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={styles.headerSubtitle} numberOfLines={1}>
+                {activeEmpresa.ciudad ? `Artesanías de ${activeEmpresa.ciudad}` : (activeEmpresa.slogan || 'Tienda Oficial')}
+              </Text>
+              <Ionicons name="chevron-down" size={12} color="#C5A880" />
+            </View>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {activeEmpresa.nombre.toUpperCase()}
+            </Text>
+          </View>
+        </TouchableOpacity>
         <View style={styles.headerIconsRow}>
           
           {/* Botón Diseñador IA */}
@@ -1860,9 +1919,17 @@ export default function HomeScreen() {
           <View style={styles.modalContent}>
             
             <View style={styles.modalHeader}>
-              <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                <Ionicons name="cube" size={22} color="#1E2B58" style={{marginRight: 8}} />
-                <Text style={styles.modalTitle}>Datos de Envío y Pago</Text>
+              <View style={{flex: 1}}>
+                <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                  <Ionicons name="cube" size={22} color="#1E2B58" style={{marginRight: 8}} />
+                  <Text style={styles.modalTitle}>Datos de Envío y Pago</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <Ionicons name="business-outline" size={13} color="#C5A880" />
+                  <Text style={{ fontSize: 12, color: '#C5A880', fontWeight: '700' }}>
+                    Comprando en: {activeEmpresa.nombre}
+                  </Text>
+                </View>
               </View>
               <TouchableOpacity onPress={() => setIsCheckoutModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#1E2B58" />
@@ -3546,6 +3613,133 @@ export default function HomeScreen() {
               </View>
             </SafeAreaView>
           ) : null}
+        </View>
+      </Modal>
+
+      {/* Modal Plaza de Tiendas & Talleres Artesanales (Multitienda) */}
+      <Modal
+        visible={isStoreSelectorVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsStoreSelectorVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '85%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="business" size={20} color="#0284C7" />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Plaza de Talleres Artesanales</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B' }}>
+                    Explora y compra directamente en cada taller oficial
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsStoreSelectorVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ marginTop: 12 }} showsVerticalScrollIndicator={false}>
+              <View style={{ marginBottom: 14, backgroundColor: '#F0F9FF', borderColor: '#BAE6FD', borderWidth: 1, borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'flex-start' }}>
+                <Ionicons name="information-circle" size={18} color="#0284C7" style={{ marginRight: 8, marginTop: 1 }} />
+                <Text style={{ color: '#0369A1', fontSize: 12, lineHeight: 17, flex: 1 }}>
+                  Cada taller artesanal maneja su propio catálogo exclusivo, sus propios artesanos y sus medios de pago directos. Puedes comprar en cualquiera con tu misma cuenta.
+                </Text>
+              </View>
+
+              {empresasList.map((emp) => {
+                const isSelected = activeEmpresa.id === emp.id;
+                return (
+                  <TouchableOpacity
+                    key={emp.id}
+                    style={{
+                      backgroundColor: isSelected ? '#F0FDF4' : '#FFFFFF',
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? '#10B981' : '#E2E8F0',
+                      borderRadius: 14,
+                      padding: 14,
+                      marginBottom: 12,
+                      shadowColor: '#000',
+                      shadowOpacity: 0.04,
+                      shadowRadius: 3,
+                      elevation: 1,
+                    }}
+                    onPress={() => handleSwitchStore(emp)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <View style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
+                        {emp.logoUrl ? (
+                          <Image source={{ uri: emp.logoUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                        ) : (
+                          <Ionicons name="business" size={28} color="#94A3B8" />
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: 16, fontWeight: '700', color: '#1E2B58' }}>
+                            {emp.nombre}
+                          </Text>
+                          {isSelected && (
+                            <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#15803D' }}>TIENDA ACTUAL</Text>
+                            </View>
+                          )}
+                        </View>
+                        {Boolean(emp.slogan) && (
+                          <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }} numberOfLines={1}>
+                            {emp.slogan}
+                          </Text>
+                        )}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 }}>
+                          {Boolean(emp.ciudad) && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                              <Ionicons name="location-outline" size={13} color="#94A3B8" />
+                              <Text style={{ fontSize: 11, color: '#64748B' }}>{emp.ciudad}, {emp.departamento || 'Colombia'}</Text>
+                            </View>
+                          )}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <Ionicons name="bicycle-outline" size={13} color="#94A3B8" />
+                            <Text style={{ fontSize: 11, color: '#64748B' }}>Envío: ${Number(emp.costoEnvioBase || 16000).toLocaleString()}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+
+                    {Boolean(emp.descripcion) && (
+                      <Text style={{ fontSize: 12, color: '#475569', marginTop: 10, lineHeight: 16 }} numberOfLines={2}>
+                        {emp.descripcion}
+                      </Text>
+                    )}
+
+                    <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: isSelected ? '#BBF7D0' : '#F1F5F9', flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: isSelected ? '#15803D' : '#1E2B58' }}>
+                        {isSelected ? '✓ Catálogo en pantalla' : 'Explorar artículos de esta tienda →'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+
+              {empresasList.length === 1 && (
+                <View style={{ padding: 14, borderRadius: 12, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', marginTop: 4 }}>
+                  <Ionicons name="sparkles" size={20} color="#C5A880" style={{ marginBottom: 4 }} />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#1E2B58', textAlign: 'center' }}>
+                    Próximamente más talleres artesanales asociados
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center', marginTop: 2 }}>
+                    Nuevos maestros artesanos de La Guajira se integrarán a la plataforma para ofrecer sus colecciones.
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
         </View>
       </Modal>
 
