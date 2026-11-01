@@ -1,9 +1,10 @@
 -- ============================================================================
--- MIGRACIÓN SUPABASE V3: TABLA DE EMPRESAS / ARQUITECTURA MULTITIENDA
+-- MIGRACIÓN SUPABASE V3: TABLA DE EMPRESAS Y ARQUITECTURA MULTITIENDA CENTRALIZADA
 -- ============================================================================
--- Ejecuta este script en el SQL Editor de Supabase (https://supabase.com/dashboard/project/ismvmlcemxkawdwextzk/sql)
--- para habilitar la tabla de empresas y migrar la información oficial de Einuushi.
+-- Ejecuta este script completo en el SQL Editor de Supabase (https://supabase.com/dashboard/project/ismvmlcemxkawdwextzk/sql)
+-- para crear la tabla 'empresas', migrar a Einuushi y vincular la columna 'empresa_id' a todas las tablas.
 
+-- 1. CREACIÓN DE LA TABLA 'empresas'
 CREATE TABLE IF NOT EXISTS empresas (
   id TEXT PRIMARY KEY,
   nombre TEXT NOT NULL,
@@ -28,10 +29,9 @@ CREATE TABLE IF NOT EXISTS empresas (
   updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Habilitar RLS (Row Level Security)
+-- 2. HABILITAR SEGURIDAD RLS
 ALTER TABLE empresas ENABLE ROW LEVEL SECURITY;
 
--- Políticas de seguridad
 DROP POLICY IF EXISTS "Lectura publica de empresas" ON empresas;
 CREATE POLICY "Lectura publica de empresas" ON empresas
   FOR SELECT USING (true);
@@ -40,7 +40,7 @@ DROP POLICY IF EXISTS "Escritura de empresas" ON empresas;
 CREATE POLICY "Escritura de empresas" ON empresas
   FOR ALL USING (true) WITH CHECK (true);
 
--- Semilla oficial inicial: Registro y migración de datos de Einuushi
+-- 3. SEMILLA OFICIAL: REGISTRO DE EINUUSHI COMO EMPRESA PRINCIPAL
 INSERT INTO empresas (
   id,
   nombre,
@@ -95,3 +95,57 @@ ON CONFLICT (id) DO UPDATE SET
   departamento = EXCLUDED.departamento,
   updated_at = timezone('utc'::text, now());
 
+-- 4. VINCULACIÓN DE LA COLUMNA 'empresa_id' EN TODAS LAS TABLAS OPERATIVAS
+-- Garantiza que cada tienda mantenga sus productos, pedidos y configuraciones aislados
+DO $$ 
+BEGIN 
+  -- Tabla products
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='empresa_id') THEN
+    ALTER TABLE products ADD COLUMN empresa_id TEXT DEFAULT 'einuushi';
+  END IF;
+
+  -- Tabla categories
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='categories' AND column_name='empresa_id') THEN
+    ALTER TABLE categories ADD COLUMN empresa_id TEXT DEFAULT 'einuushi';
+  END IF;
+
+  -- Tabla orders
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='empresa_id') THEN
+    ALTER TABLE orders ADD COLUMN empresa_id TEXT DEFAULT 'einuushi';
+  END IF;
+
+  -- Tabla payment_methods
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payment_methods' AND column_name='empresa_id') THEN
+    ALTER TABLE payment_methods ADD COLUMN empresa_id TEXT DEFAULT 'einuushi';
+  END IF;
+
+  -- Tabla custom_quotes
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='custom_quotes' AND column_name='empresa_id') THEN
+    ALTER TABLE custom_quotes ADD COLUMN empresa_id TEXT DEFAULT 'einuushi';
+  END IF;
+
+  -- Tabla chat_messages
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='chat_messages' AND column_name='empresa_id') THEN
+    ALTER TABLE chat_messages ADD COLUMN empresa_id TEXT DEFAULT 'einuushi';
+  END IF;
+
+  -- Tabla admin_activity_logs
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_activity_logs' AND column_name='empresa_id') THEN
+    ALTER TABLE admin_activity_logs ADD COLUMN empresa_id TEXT DEFAULT 'einuushi';
+  END IF;
+
+  -- Tabla users (para administradores y repartidores específicos de cada tienda)
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='empresa_id') THEN
+    ALTER TABLE users ADD COLUMN empresa_id TEXT DEFAULT 'einuushi';
+  END IF;
+END $$;
+
+-- 5. ACTUALIZAR REGISTROS EXISTENTES PARA QUE QUEDEN BAJO 'einuushi'
+UPDATE products SET empresa_id = 'einuushi' WHERE empresa_id IS NULL;
+UPDATE categories SET empresa_id = 'einuushi' WHERE empresa_id IS NULL;
+UPDATE orders SET empresa_id = 'einuushi' WHERE empresa_id IS NULL;
+UPDATE payment_methods SET empresa_id = 'einuushi' WHERE empresa_id IS NULL;
+UPDATE custom_quotes SET empresa_id = 'einuushi' WHERE empresa_id IS NULL;
+UPDATE chat_messages SET empresa_id = 'einuushi' WHERE empresa_id IS NULL;
+UPDATE admin_activity_logs SET empresa_id = 'einuushi' WHERE empresa_id IS NULL;
+UPDATE users SET empresa_id = 'einuushi' WHERE empresa_id IS NULL;
