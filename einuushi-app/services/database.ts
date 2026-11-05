@@ -3011,35 +3011,65 @@ export async function getEmpresas(): Promise<Empresa[]> {
     try {
       const { data, error } = await supabase.from('empresas').select('*');
       if (!error && Array.isArray(data) && data.length > 0) {
-        const mapped: Empresa[] = data.map((r: any) => ({
-          id: r.id,
-          nombre: r.nombre || 'Einuushi',
-          razonSocial: r.razon_social || '',
-          nit: r.nit || '',
-          slogan: r.slogan || '',
-          descripcion: r.descripcion || '',
-          logoUrl: r.logo_url || DEFAULT_EMPRESA_EINUUSHI.logoUrl,
-          bannerUrl: r.banner_url || undefined,
-          telefono: r.telefono || '',
-          whatsapp: r.whatsapp || '',
-          email: r.email || '',
-          direccion: r.direccion || '',
-          ciudad: r.ciudad || '',
-          departamento: r.departamento || '',
-          pais: r.pais || 'Colombia',
-          moneda: r.moneda || 'COP',
-          simboloMoneda: r.simbolo_moneda || '$',
-          costoEnvioBase: Number(r.costo_envio_base) || 16000,
-          isActiva: r.is_activa !== undefined ? Boolean(r.is_activa) : true,
-          valorArriendo: (r.valor_arriendo !== undefined && r.valor_arriendo !== null)
+        const mapped: Empresa[] = data.map((r: any) => {
+          // Extraer metadatos de configuración en la nube alojados en Supabase
+          const rawDesc = r.descripcion || '';
+          let cloudMeta: any = null;
+          const metaMatch = rawDesc.match(/<!--TODA_CONFIG:([\s\S]*?)-->/);
+          if (metaMatch && metaMatch[1]) {
+            try {
+              cloudMeta = JSON.parse(metaMatch[1]);
+            } catch (_) {}
+          }
+          const cleanDesc = rawDesc.replace(/\n?<!--TODA_CONFIG:[\s\S]*?-->/g, '').trim();
+
+          const valorArriendo = (r.valor_arriendo !== undefined && r.valor_arriendo !== null)
             ? Number(r.valor_arriendo)
-            : (storedLicenses[r.id]?.valorArriendo !== undefined ? Number(storedLicenses[r.id]?.valorArriendo) : 150000),
-          estadoPago: (r.estado_pago as any) || storedLicenses[r.id]?.estadoPago || 'al_dia',
-          fechaCorteArriendo: r.fecha_corte_arriendo || storedLicenses[r.id]?.fechaCorteArriendo || 'Día 5 de cada mes',
-          notasArriendo: r.notas_arriendo || storedLicenses[r.id]?.notasArriendo || '',
-          updatedAt: r.updated_at,
-          createdAt: r.created_at,
-        }));
+            : (cloudMeta?.valorArriendo !== undefined
+              ? Number(cloudMeta.valorArriendo)
+              : (storedLicenses[r.id]?.valorArriendo !== undefined ? Number(storedLicenses[r.id]?.valorArriendo) : 150000));
+
+          const estadoPago = (r.estado_pago as any) || cloudMeta?.estadoPago || storedLicenses[r.id]?.estadoPago || 'al_dia';
+          const fechaCorteArriendo = r.fecha_corte_arriendo || cloudMeta?.fechaCorteArriendo || storedLicenses[r.id]?.fechaCorteArriendo || 'Día 5 de cada mes';
+          const notasArriendo = r.notas_arriendo || cloudMeta?.notasArriendo || storedLicenses[r.id]?.notasArriendo || '';
+
+          if (cloudMeta?.valorArriendo !== undefined) {
+            saveStoredLicenseData(r.id, {
+              valorArriendo,
+              estadoPago,
+              fechaCorteArriendo,
+              notasArriendo,
+            }).catch(() => {});
+          }
+
+          return {
+            id: r.id,
+            nombre: r.nombre || 'Einuushi',
+            razonSocial: r.razon_social || '',
+            nit: r.nit || '',
+            slogan: r.slogan || '',
+            descripcion: cleanDesc,
+            logoUrl: r.logo_url || DEFAULT_EMPRESA_EINUUSHI.logoUrl,
+            bannerUrl: r.banner_url || undefined,
+            telefono: r.telefono || '',
+            whatsapp: r.whatsapp || '',
+            email: r.email || '',
+            direccion: r.direccion || '',
+            ciudad: r.ciudad || '',
+            departamento: r.departamento || '',
+            pais: r.pais || 'Colombia',
+            moneda: r.moneda || 'COP',
+            simboloMoneda: r.simbolo_moneda || '$',
+            costoEnvioBase: Number(r.costo_envio_base) || 16000,
+            isActiva: r.is_activa !== undefined ? Boolean(r.is_activa) : true,
+            valorArriendo,
+            estadoPago,
+            fechaCorteArriendo,
+            notasArriendo,
+            updatedAt: r.updated_at,
+            createdAt: r.created_at,
+          };
+        });
         memoryEmpresas = mapped;
         await AsyncStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(mapped)).catch(() => {});
         return mapped;
@@ -3132,7 +3162,19 @@ export async function saveEmpresa(empresaData: Partial<Empresa> & { id: string }
     });
   }
 
-  // 2. Sincronizar en Supabase con auto-recuperación si faltan columnas
+  // 2. Preparar metadatos en la nube para asegurar 100% sincronización multi-navegador en Supabase
+  const rawDescForMeta = (updated.descripcion || '').replace(/\n?<!--TODA_CONFIG:[\s\S]*?-->/g, '').trim();
+  const configMetadata = {
+    valorArriendo: updated.valorArriendo,
+    estadoPago: updated.estadoPago,
+    fechaCorteArriendo: updated.fechaCorteArriendo,
+    notasArriendo: updated.notasArriendo,
+  };
+  const descWithCloudMeta = rawDescForMeta
+    ? `${rawDescForMeta}\n<!--TODA_CONFIG:${JSON.stringify(configMetadata)}-->`
+    : `<!--TODA_CONFIG:${JSON.stringify(configMetadata)}-->`;
+
+  // 3. Sincronizar en Supabase con auto-recuperación si faltan columnas
   if (isSupabaseConfigured()) {
     try {
       const payload: any = {
@@ -3141,7 +3183,7 @@ export async function saveEmpresa(empresaData: Partial<Empresa> & { id: string }
         razon_social: updated.razonSocial || null,
         nit: updated.nit || null,
         slogan: updated.slogan || null,
-        descripcion: updated.descripcion || null,
+        descripcion: descWithCloudMeta,
         logo_url: updated.logoUrl || null,
         banner_url: updated.bannerUrl || null,
         telefono: updated.telefono || null,
