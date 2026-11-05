@@ -188,6 +188,7 @@ export interface Category {
   name: string;
   icon: string;
   description?: string;
+  empresaId?: string;
 }
 
 export interface Product {
@@ -206,6 +207,7 @@ export interface Product {
   isDiscountActive?: number; // 0 = inactivo, 1 = activo
   isActive?: number; // 0 = inactivo, 1 = activo
   images?: string[]; // Galería de fotos del producto (múltiples ángulos)
+  empresaId?: string;
 }
 
 export interface CustomQuote {
@@ -372,10 +374,10 @@ const INITIAL_USERS: User[] = [
   },
 ];
 
-// Memoria volátil en ejecución para sincronización ultrarrápida
-let memoryUsers: User[] = [...INITIAL_USERS];
-let memoryProducts: Product[] = [...INITIAL_PRODUCTS_DATA];
-let memoryCategories: Category[] = [...INITIAL_CATEGORIES_DATA];
+// Memoria volátil en ejecución para sincronización ultrarrápida (100% datos reales de Supabase)
+let memoryUsers: User[] = [];
+let memoryProducts: Product[] = [];
+let memoryCategories: Category[] = [];
 let memoryOrders: Order[] = [];
 let memoryNotifications: AppNotification[] = [];
 let memoryQuotes: CustomQuote[] = [];
@@ -406,7 +408,7 @@ export async function getUsers(): Promise<User[]> {
   if (isSupabaseConfigured()) {
     try {
       const { data, error } = await supabase.from('users').select('*');
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (!error && Array.isArray(data)) {
         const mappedUsers: User[] = data.map((u: any) => ({
           id: u.id,
           fullName: u.full_name,
@@ -818,18 +820,9 @@ export async function authenticateAdmin(
   const isAdmin = user && (user.role === 'admin' || user.role === 'superadmin' || isSuper);
 
   if (!user || (!isAdmin && !isSuper)) {
-    if (normEmail === 'admin@einuushi.com' && password === 'admin2026') {
-      const fallbackAdmin: User = {
-        ...INITIAL_USERS[0],
-        role: 'admin',
-        empresaId: 'einuushi',
-      };
-      await saveAdminSession(fallbackAdmin);
-      return { success: true, user: fallbackAdmin };
-    }
     return {
       success: false,
-      message: 'Acceso denegado: credenciales incorrectas o usuario no registrado.',
+      message: 'Acceso denegado: credenciales incorrectas o usuario no registrado en la base de datos.',
     };
   }
 
@@ -1524,31 +1517,41 @@ export async function markNotificationAsReadInDb(
 export async function getCategories(empresaId?: string): Promise<Category[]> {
   if (isSupabaseConfigured()) {
     try {
-      const { data, error } = await supabase.from('categories').select('*');
-      if (!error && Array.isArray(data) && data.length > 0) {
+      let query = supabase.from('categories').select('*');
+      if (empresaId && empresaId !== 'ALL') {
+        query = query.eq('empresa_id', empresaId);
+      }
+      const { data, error } = await query;
+      if (!error && Array.isArray(data)) {
         const mapped = data.map((c: any) => ({
           id: c.id,
           name: c.name,
-          icon: c.icon,
+          icon: c.icon || 'sparkles-outline',
           description: c.description || undefined,
+          empresaId: c.empresa_id || 'einuushi',
         }));
         memoryCategories = mapped;
         return mapped;
       }
     } catch (_) {}
   }
+  if (empresaId && empresaId !== 'ALL') {
+    return memoryCategories.filter(c => !c.empresaId || c.empresaId === empresaId);
+  }
   return memoryCategories;
 }
 
 export async function createCategory(
-  categoryData: Omit<Category, "id"> & { id?: string },
+  categoryData: Omit<Category, "id"> & { id?: string; empresaId?: string },
 ): Promise<Category> {
   const categoryId = categoryData.id || categoryData.name.trim().replace(/\s+/g, "_");
+  const targetEmpresaId = categoryData.empresaId || 'einuushi';
   const newCat: Category = {
     id: categoryId,
     name: categoryData.name.trim(),
     icon: categoryData.icon || "sparkles-outline",
     description: categoryData.description || "",
+    empresaId: targetEmpresaId,
   };
 
   if (isSupabaseConfigured()) {
@@ -1558,6 +1561,7 @@ export async function createCategory(
         name: newCat.name,
         icon: newCat.icon,
         description: newCat.description || null,
+        empresa_id: targetEmpresaId,
       });
     } catch (_) {}
   }
@@ -1650,8 +1654,12 @@ export async function deleteCategory(id: string): Promise<boolean> {
 export async function getProducts(empresaId?: string): Promise<Product[]> {
   if (isSupabaseConfigured()) {
     try {
-      const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-      if (!error && Array.isArray(data) && data.length > 0) {
+      let query = supabase.from('products').select('*').order('created_at', { ascending: false });
+      if (empresaId && empresaId !== 'ALL') {
+        query = query.eq('empresa_id', empresaId);
+      }
+      const { data, error } = await query;
+      if (!error && Array.isArray(data)) {
         const mapped: Product[] = data.map((p: any) => {
           let resolvedImages: string[] = [];
           if (p.image_path) {
@@ -1675,12 +1683,16 @@ export async function getProducts(empresaId?: string): Promise<Product[]> {
             isDiscountActive: p.is_discount_active ?? 0,
             isActive: p.is_active !== undefined ? p.is_active : 1,
             images: resolvedImages.length > 0 ? resolvedImages : (primaryImage ? [primaryImage] : []),
+            empresaId: p.empresa_id || 'einuushi',
           };
         });
         memoryProducts = mapped;
         return mapped;
       }
     } catch (_) {}
+  }
+  if (empresaId && empresaId !== 'ALL') {
+    return memoryProducts.filter(p => !p.empresaId || p.empresaId === empresaId);
   }
   return memoryProducts;
 }
@@ -1751,6 +1763,7 @@ export async function createProduct(
         discount_percent: newProduct.discountPercent || 0,
         is_discount_active: newProduct.isDiscountActive || 0,
         is_active: newProduct.isActive !== undefined ? newProduct.isActive : 1,
+        empresa_id: (newProduct as any).empresaId || 'einuushi',
       });
 
       await supabase.from('inventory_logs').insert({
@@ -2419,9 +2432,6 @@ export async function getAdminUsers(viewerAdmin?: { email?: string; id?: string;
     return admins.filter(u => !isSuperAdmin(u) && (u.id === viewerAdmin.id || u.email?.toLowerCase() === normViewerEmail));
   }
 
-  if (admins.length === 0) {
-    return [{ ...INITIAL_USERS[0], role: 'superadmin' }];
-  }
   return admins;
 }
 
@@ -2794,7 +2804,7 @@ export const DEFAULT_PAYMENT_METHODS: PaymentMethod[] = [
 ];
 
 const PAYMENT_METHODS_STORAGE_KEY = '@einuushi_payment_methods_v2';
-let memoryPaymentMethods: PaymentMethod[] = [...DEFAULT_PAYMENT_METHODS];
+let memoryPaymentMethods: PaymentMethod[] = [];
 
 export async function getPaymentMethods(empresaId?: string): Promise<PaymentMethod[]> {
   // 1. Intentar cargar desde Supabase si la tabla existe
@@ -2805,7 +2815,7 @@ export async function getPaymentMethods(empresaId?: string): Promise<PaymentMeth
         .select('*')
         .order('order_index', { ascending: true });
 
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (!error && Array.isArray(data)) {
         const mapped: PaymentMethod[] = data.map((r: any) => ({
           id: r.id,
           name: r.name,
@@ -3009,7 +3019,7 @@ export async function getEmpresas(): Promise<Empresa[]> {
   if (isSupabaseConfigured()) {
     try {
       const { data, error } = await supabase.from('empresas').select('*');
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (!error && Array.isArray(data)) {
         const mapped: Empresa[] = data.map((r: any) => {
           // Extraer metadatos de configuración en la nube alojados en Supabase
           const rawDesc = r.descripcion || '';
@@ -3093,14 +3103,15 @@ export async function getEmpresas(): Promise<Empresa[]> {
 }
 
 export async function getEmpresaById(id: string = 'einuushi'): Promise<Empresa> {
+  const normId = (id || 'einuushi').toLowerCase().trim();
   const all = await getEmpresas();
-  const found = all.find(e => e.id === id);
+  const found = all.find(e => e.id.toLowerCase() === normId);
   if (found) return found;
 
-  const inMem = memoryEmpresas.find(e => e.id === id);
+  const inMem = memoryEmpresas.find(e => e.id.toLowerCase() === normId);
   if (inMem) return inMem;
 
-  return { ...DEFAULT_EMPRESA_EINUUSHI, id };
+  return { ...DEFAULT_EMPRESA_EINUUSHI, id: normId };
 }
 
 export async function saveEmpresa(empresaData: Partial<Empresa> & { id: string }): Promise<Empresa> {

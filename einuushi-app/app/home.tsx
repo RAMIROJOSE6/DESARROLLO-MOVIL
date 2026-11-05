@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -301,13 +301,13 @@ export default function HomeScreen() {
 
       // Cargar Categorías sincronizadas de la empresa
       const dbCategories = await getCategories(currentEmp.id);
-      if (dbCategories && dbCategories.length > 0) {
+      if (dbCategories && Array.isArray(dbCategories)) {
         setCategories(dbCategories);
       }
 
       // Cargar Medios de Pago dinámicos configurados por la empresa
       const dbPaymentMethods = await getPaymentMethods(currentEmp.id);
-      if (dbPaymentMethods && Array.isArray(dbPaymentMethods) && dbPaymentMethods.length > 0) {
+      if (dbPaymentMethods && Array.isArray(dbPaymentMethods)) {
         setConfiguredPaymentMethods(dbPaymentMethods);
       }
 

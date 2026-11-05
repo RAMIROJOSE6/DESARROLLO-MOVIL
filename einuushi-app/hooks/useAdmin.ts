@@ -604,8 +604,12 @@ export function useAdmin() {
   };
 
   // Crear producto nuevo con trazabilidad
-  const addProduct = async (productData: Omit<Product, 'id' | 'likes'> & { id?: string }) => {
-    const newProd = await createProduct(productData);
+  const addProduct = async (productData: Omit<Product, 'id' | 'likes'> & { id?: string; empresaId?: string }) => {
+    const effectiveEmpresaId = productData.empresaId || adminUser?.empresaId || (selectedStoreFilter !== 'ALL' ? selectedStoreFilter : 'einuushi');
+    const newProd = await createProduct({
+      ...productData,
+      empresaId: effectiveEmpresaId,
+    });
     setProducts(prev => [newProd, ...prev]);
 
     await logAdminActivity({
@@ -617,14 +621,19 @@ export function useAdmin() {
       entityId: newProd.id,
       details: `${adminUser?.fullName || 'Administrador'} añadió la nueva artesanía "${newProd.name}" ($ ${newProd.priceValue.toLocaleString('es-CO')} COP).`,
     });
-    await refreshAll();
+    await refreshAll(effectiveEmpresaId);
     return newProd;
   };
 
   // Crear nueva categoría
-  const addCategory = async (categoryData: Omit<Category, 'id'> & { id?: string }) => {
-    const newCat = await createCategory(categoryData);
+  const addCategory = async (categoryData: Omit<Category, 'id'> & { id?: string; empresaId?: string }) => {
+    const effectiveEmpresaId = categoryData.empresaId || adminUser?.empresaId || (selectedStoreFilter !== 'ALL' ? selectedStoreFilter : 'einuushi');
+    const newCat = await createCategory({
+      ...categoryData,
+      empresaId: effectiveEmpresaId,
+    });
     setCategories(prev => [...prev, newCat]);
+    await refreshAll(effectiveEmpresaId);
     return newCat;
   };
 
