@@ -84,15 +84,19 @@ export function useAdmin() {
   const [activeTrackingOrder, setActiveTrackingOrder] = useState<Order | null>(null);
 
   // Cargar sesión y datos del panel
-  const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async (overrideEmpresaId?: string) => {
     setIsRefreshing(true);
     try {
       const activeSession = await getAdminSession();
       const isSuper = isSuperAdmin(activeSession);
 
+      const effectiveStoreFilter = overrideEmpresaId !== undefined
+        ? (overrideEmpresaId === 'ALL' ? undefined : overrideEmpresaId)
+        : (selectedStoreFilter === 'ALL' ? undefined : selectedStoreFilter);
+
       const targetEmpresaId = isSuper
-        ? (selectedStoreFilter === 'ALL' ? undefined : selectedStoreFilter)
-        : (activeSession?.empresaId || 'einuushi');
+        ? effectiveStoreFilter
+        : (effectiveStoreFilter || activeSession?.empresaId || 'einuushi');
 
       const [ord, prod, cat, qts, msgs, anl, usrs, logs, admins, drvs, pms, emp, allEmps] = await Promise.all([
         getOrders(undefined, targetEmpresaId),
@@ -138,7 +142,7 @@ export function useAdmin() {
       setIsRefreshing(false);
       setIsLoading(false);
     }
-  }, []);
+  }, [selectedStoreFilter]);
 
   useEffect(() => {
     async function initSession() {

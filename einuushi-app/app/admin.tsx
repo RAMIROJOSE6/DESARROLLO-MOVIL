@@ -153,9 +153,11 @@ export default function AdminScreen() {
   const isOwnerReadOnly = Boolean(
     viewMode === 'owner_readonly' ||
     adminUser?.email === 'propietario@todaapp.com' ||
-    adminUser?.id === 'USR-OWNER-TODA' ||
-    isSuperAdminUser
+    adminUser?.id === 'USR-OWNER-TODA'
   );
+
+  // El panel puede ser visualizado si la tienda está autenticada O si el propietario está en Modo Solo Ver (Vista Previa)
+  const canAccessPanel = Boolean(isAuthenticated || isOwnerReadOnly);
 
   const checkOwnerReadOnlyAction = (): boolean => {
     if (isOwnerReadOnly) {
@@ -169,16 +171,28 @@ export default function AdminScreen() {
   };
 
   React.useEffect(() => {
-    if (routeStoreParam) {
-      getEmpresaById(routeStoreParam).then(emp => {
-        if (emp && emp.id.toLowerCase() === routeStoreParam.toLowerCase()) {
-          setRouteStoreInfo(emp);
-        }
-      });
-    } else {
-      setRouteStoreInfo(null);
+    const targetStore = (routeStoreParam || 'einuushi').toLowerCase();
+    getEmpresaById(targetStore).then(emp => {
+      if (emp) {
+        setRouteStoreInfo(emp);
+      }
+    });
+
+    if (isOwnerReadOnly) {
+      setSelectedStoreFilter(targetStore);
+      refreshAll(targetStore);
     }
-  }, [routeStoreParam]);
+  }, [routeStoreParam, isOwnerReadOnly, refreshAll, setSelectedStoreFilter]);
+
+  // Si está en modo solo consulta del propietario, sincronizar periódicamente cada 4s
+  React.useEffect(() => {
+    if (!isOwnerReadOnly) return;
+    const targetStore = (routeStoreParam || 'einuushi').toLowerCase();
+    const interval = setInterval(() => {
+      refreshAll(targetStore);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [isOwnerReadOnly, routeStoreParam, refreshAll]);
 
   // Estados de Modales del Panel de Rendimiento (Ventas, Total Pedidos, Pendientes)
   const [isSalesModalVisible, setIsSalesModalVisible] = useState(false);
@@ -1909,7 +1923,7 @@ export default function AdminScreen() {
   // =========================================================================
   // RENDER: PANTALLA DE ACCESO ADMINISTRATIVO (LOGIN PRIVADO)
   // =========================================================================
-  if (!isAuthenticated) {
+  if (!canAccessPanel) {
     return (
       <View style={styles.authContainer}>
         <View style={styles.authCard}>
@@ -2291,7 +2305,7 @@ export default function AdminScreen() {
               borderWidth: 1,
               borderColor: '#334155',
             }}
-            onPress={() => router.push('/owner' as any)}
+            onPress={() => router.replace('/owner' as any)}
             activeOpacity={0.8}
           >
             <Ionicons name="arrow-back" size={14} color="#38BDF8" />
@@ -2309,7 +2323,13 @@ export default function AdminScreen() {
           <View>
             <Text style={styles.brandTitle}>{(routeStoreInfo?.nombre || empresa?.nombre || 'TIENDA').toUpperCase()} BACKOFFICE</Text>
             <Text style={styles.adminStatusText}>
-              ● Sesión Activa: <Text style={{ fontWeight: 'bold' }}>{adminUser?.fullName}</Text>
+              ● {isOwnerReadOnly ? (
+                <Text style={{ color: '#10B981', fontWeight: 'bold' }}>
+                  Modo Supervisión (Propietario TODÁ APP - Solo Consulta)
+                </Text>
+              ) : (
+                <>Sesión Activa: <Text style={{ fontWeight: 'bold' }}>{adminUser?.fullName || 'Administrador'}</Text></>
+              )}
             </Text>
           </View>
         </View>
@@ -2317,7 +2337,7 @@ export default function AdminScreen() {
         <View style={styles.topActionsRow}>
           <TouchableOpacity
             style={styles.refreshIconButton}
-            onPress={refreshAll}
+            onPress={() => isOwnerReadOnly ? refreshAll(routeStoreParam || 'einuushi') : refreshAll()}
             activeOpacity={0.7}
           >
             <Ionicons
@@ -2329,19 +2349,19 @@ export default function AdminScreen() {
 
           <TouchableOpacity
             style={styles.viewStoreButton}
-            onPress={() => router.push({ pathname: '/home', params: { mode: 'admin_preview' } })}
+            onPress={() => router.push({ pathname: '/home', params: { mode: 'admin_preview', store: routeStoreParam || 'einuushi' } } as any)}
             activeOpacity={0.7}
           >
             <Ionicons name="storefront-outline" size={16} color="#1E2B58" style={{ marginRight: 4 }} />
-            <Text style={styles.viewStoreText}>Ver Tienda</Text>
+            <Text style={styles.viewStoreText}>Ver Catálogo</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.logoutIconButton}
-            onPress={logout}
+            onPress={isOwnerReadOnly ? () => router.replace('/owner' as any) : logout}
             activeOpacity={0.7}
           >
-            <Ionicons name="log-out-outline" size={18} color="#DC2626" />
+            <Ionicons name={isOwnerReadOnly ? "exit-outline" : "log-out-outline"} size={18} color={isOwnerReadOnly ? "#10B981" : "#DC2626"} />
           </TouchableOpacity>
         </View>
       </View>
