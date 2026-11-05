@@ -16,24 +16,28 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import {
   User,
   Order,
   getOrders,
-  getDrivers,
   findUserByEmail,
   updateOrderStatusInDb,
   logAdminActivity,
   saveNotificationToDb,
+  Empresa,
+  getEmpresaById,
+  getActiveEmpresa,
 } from '../services/database';
 
 const DRIVER_SESSION_KEY = '@einuushi_driver_session_v1';
 
 export default function DriverScreen() {
   const router = useRouter();
+  const { store } = useLocalSearchParams<{ store?: string }>();
+  const [storeEmpresa, setStoreEmpresa] = useState<Empresa | null>(null);
 
   // Estados de Sesión de Repartidor
   const [driverUser, setDriverUser] = useState<User | null>(null);
@@ -92,12 +96,24 @@ export default function DriverScreen() {
     checkDriverSession();
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const emp = store ? await getEmpresaById(store) : await getActiveEmpresa();
+        if (isMounted) setStoreEmpresa(emp);
+      } catch (_) {}
+    })();
+    return () => { isMounted = false; };
+  }, [store]);
+
   // Cargar pedidos asignados al repartidor logueado
   const loadDriverOrders = useCallback(async () => {
     if (!driverUser) return;
     setIsRefreshing(true);
     try {
-      const allOrders = await getOrders();
+      const storeSlug = driverUser.empresaId || (driverUser as any).empresa_id || store || 'einuushi';
+      const allOrders = await getOrders(undefined, storeSlug);
       // Filtrar pedidos asignados a este repartidor por ID, email o nombre
       const driverEmailNorm = driverUser.email.toLowerCase().trim();
       const driverNameNorm = driverUser.fullName.toLowerCase().trim();
@@ -124,13 +140,20 @@ export default function DriverScreen() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [driverUser]);
+  }, [driverUser, store]);
 
   useEffect(() => {
     if (driverUser) {
-      loadDriverOrders();
-      const interval = setInterval(loadDriverOrders, 3000);
-      return () => clearInterval(interval);
+      const timer = setTimeout(() => {
+        void loadDriverOrders();
+      }, 0);
+      const interval = setInterval(() => {
+        void loadDriverOrders();
+      }, 3000);
+      return () => {
+        clearTimeout(timer);
+        clearInterval(interval);
+      };
     }
   }, [driverUser, loadDriverOrders]);
 
@@ -479,6 +502,14 @@ export default function DriverScreen() {
   // =========================================================================
   // VISTA 1: PANTALLA DE ACCESO PARA REPARTIDORES & TRANSPORTADORAS
   // =========================================================================
+  if (isLoadingSession) {
+    return (
+      <View style={[styles.loginContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#C5A880" />
+      </View>
+    );
+  }
+
   if (!driverUser) {
     return (
       <KeyboardAvoidingView
@@ -487,20 +518,49 @@ export default function DriverScreen() {
       >
         <StatusBar style="light" />
         <ScrollView contentContainerStyle={styles.loginScrollContainer} showsVerticalScrollIndicator={false}>
+          {/* Botón Volver a la Tienda */}
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 20,
+              alignSelf: 'flex-start',
+              marginBottom: 16,
+            }}
+            onPress={() => router.replace({ pathname: '/', params: store ? { store } : undefined })}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-back" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+            <Text style={{ fontSize: 12, color: '#FFFFFF', fontWeight: 'bold' }}>
+              Volver a {storeEmpresa?.nombre || 'la Tienda'}
+            </Text>
+          </TouchableOpacity>
+
           {/* Logo y Encabezado */}
           <View style={styles.loginHeaderBox}>
-            <Image
-              source={require('../assets/images/logo_einuushi.jpeg')}
-              style={styles.loginLogo}
-              resizeMode="contain"
-            />
+            {storeEmpresa?.logoUrl ? (
+              <Image
+                source={{ uri: storeEmpresa.logoUrl }}
+                style={styles.loginLogo}
+                resizeMode="contain"
+              />
+            ) : (
+              <Image
+                source={require('../assets/images/logo_einuushi.jpeg')}
+                style={styles.loginLogo}
+                resizeMode="contain"
+              />
+            )}
             <View style={styles.loginPillBadge}>
               <Ionicons name="bicycle" size={14} color="#C5A880" style={{ marginRight: 5 }} />
               <Text style={styles.loginPillBadgeText}>LOGÍSTICA & DESPACHOS</Text>
             </View>
             <Text style={styles.loginTitle}>Portal de Repartidores</Text>
             <Text style={styles.loginSubtitle}>
-              Acceso exclusivo para domiciliarios y empresas transportadoras de Einuushi
+              Acceso exclusivo para domiciliarios y empresas transportadoras de {storeEmpresa?.nombre || 'la tienda'}
             </Text>
           </View>
 

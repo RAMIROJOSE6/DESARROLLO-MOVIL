@@ -47,7 +47,8 @@ import {
   DEFAULT_EMPRESA_EINUUSHI,
   getActiveEmpresa,
   setActiveEmpresa,
-  getEmpresas
+  getEmpresas,
+  getEmpresaById
 } from '../services/database';
 
 // Catálogo de imágenes oficiales alojadas 100% en Supabase Storage
@@ -92,7 +93,7 @@ const CITY_OPTIONS = [
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const { mode, store } = useLocalSearchParams<{ mode?: string; store?: string }>();
   const isAdminPreview = mode === 'admin_preview';
   const { currentUser, logout, updateProfile } = useAuth();
 
@@ -309,7 +310,7 @@ export default function HomeScreen() {
   // Cargar datos locales sincronizados desde SQLite con Drizzle ORM (Offline-First)
   const loadLocalDbData = useCallback(async (forcedEmpresa?: Empresa) => {
     try {
-      const currentEmp = forcedEmpresa || (await getActiveEmpresa());
+      const currentEmp = forcedEmpresa || (store ? await getEmpresaById(store) : await getActiveEmpresa());
       setActiveEmpresaState(currentEmp);
 
       const allEmps = await getEmpresas();
@@ -440,7 +441,7 @@ export default function HomeScreen() {
     } catch (err) {
       console.warn('Error sincronizando datos en vista cliente:', err);
     }
-  }, [effectiveUser, notifyOrderArrival]);
+  }, [effectiveUser, notifyOrderArrival, store]);
 
   // Sincronizar al entrar a la pantalla
   useFocusEffect(
