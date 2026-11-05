@@ -83,9 +83,21 @@ export interface Empresa {
   simboloMoneda?: string;
   costoEnvioBase?: number;
   isActiva?: boolean;
+  valorArriendo?: number;
+  estadoPago?: 'al_dia' | 'pendiente' | 'suspendido';
+  fechaCorteArriendo?: string;
+  notasArriendo?: string;
   createdAt?: string;
   updatedAt?: string;
 }
+
+export const PLATFORM_INFO = {
+  name: 'TODÁ APP',
+  brandName: 'TODÁ APP',
+  slogan: 'Plataforma Multitienda & E-commerce Ancestral',
+  defaultOwnerEmail: 'propietario@todaapp.com',
+  defaultOwnerPassword: 'toda2026',
+};
 
 export interface EmailConfig {
   serviceId: string;
@@ -732,7 +744,14 @@ export function isSuperAdmin(user?: { email?: string; role?: string; id?: string
   const email = (user.email || '').trim().toLowerCase();
   const role = (user.role || '').trim().toLowerCase();
   const id = (user.id || '').trim();
-  return role === 'superadmin' || email === 'shailynvangrieken2016@gmail.com' || (id === 'USR-ADMIN-01' && email !== 'admin@einuushi.com');
+  return (
+    role === 'superadmin' ||
+    email === 'propietario@todaapp.com' ||
+    email === 'admin@todaapp.com' ||
+    email === 'shailynvangrieken2016@gmail.com' ||
+    id === 'USR-OWNER-TODA' ||
+    (id === 'USR-ADMIN-01' && email !== 'admin@einuushi.com')
+  );
 }
 
 export async function saveAdminSession(adminUser: User): Promise<void> {
@@ -773,26 +792,57 @@ export async function clearAdminSession(): Promise<void> {
 export async function authenticateAdmin(
   email: string,
   password: string,
+  expectedStoreId?: string
 ): Promise<{ success: boolean; user?: User; message?: string }> {
   const normEmail = email.trim().toLowerCase();
+
+  // 1. Acceso de Propietario / Superadministrador Maestro de TODÁ APP
+  if ((normEmail === 'propietario@todaapp.com' || normEmail === 'admin@todaapp.com') && (password === 'toda2026' || password === 'admin2026')) {
+    const ownerUser: User = {
+      id: 'USR-OWNER-TODA',
+      fullName: 'Propietario TODÁ APP',
+      cedula: '1000000000',
+      email: normEmail,
+      phone: '3000000000',
+      city: 'Colombia',
+      password: password,
+      role: 'superadmin',
+      createdAt: new Date().toISOString(),
+    };
+    await saveAdminSession(ownerUser);
+    return { success: true, user: ownerUser };
+  }
+
   const user = await findUserByEmail(normEmail);
 
-  const isSuper = isSuperAdmin(user) || normEmail === 'admin@einuushi.com';
+  const isSuper = isSuperAdmin(user) || normEmail === 'propietario@todaapp.com' || normEmail === 'admin@todaapp.com';
   const isAdmin = user && (user.role === 'admin' || user.role === 'superadmin' || isSuper);
 
   if (!user || (!isAdmin && !isSuper)) {
     if (normEmail === 'admin@einuushi.com' && password === 'admin2026') {
       const fallbackAdmin: User = {
         ...INITIAL_USERS[0],
-        role: 'superadmin',
+        role: 'admin',
+        empresaId: 'einuushi',
       };
       await saveAdminSession(fallbackAdmin);
       return { success: true, user: fallbackAdmin };
     }
     return {
       success: false,
-      message: 'Acceso denegado: este correo no tiene permisos de administrador.',
+      message: 'Acceso denegado: credenciales incorrectas o usuario no registrado.',
     };
+  }
+
+  // 2. Si la tienda está suspendida por mora de arriendo y quien ingresa es su administrador de tienda
+  if (expectedStoreId && expectedStoreId !== 'ALL' && !isSuper) {
+    const store = await getEmpresaById(expectedStoreId);
+    if (store && store.isActiva === false) {
+      return {
+        success: false,
+        message: `La tienda "${store.nombre}" se encuentra temporalmente suspendida por pago de arriendo pendiente. Contacta al propietario de TODÁ APP para la reactivación.`,
+      };
+    }
   }
 
   if (user.password !== password) {
@@ -2920,6 +2970,10 @@ export const DEFAULT_EMPRESA_EINUUSHI: Empresa = {
   simboloMoneda: '$',
   costoEnvioBase: 16000,
   isActiva: true,
+  valorArriendo: 150000,
+  estadoPago: 'al_dia',
+  fechaCorteArriendo: 'Día 5 de cada mes',
+  notasArriendo: 'Tienda fundadora afiliada a TODÁ APP',
   updatedAt: new Date().toISOString(),
 };
 
@@ -2952,6 +3006,10 @@ export async function getEmpresas(): Promise<Empresa[]> {
           simboloMoneda: r.simbolo_moneda || '$',
           costoEnvioBase: Number(r.costo_envio_base) || 16000,
           isActiva: r.is_activa !== undefined ? Boolean(r.is_activa) : true,
+          valorArriendo: Number(r.valor_arriendo) || 0,
+          estadoPago: (r.estado_pago as any) || 'al_dia',
+          fechaCorteArriendo: r.fecha_corte_arriendo || 'Día 5 de cada mes',
+          notasArriendo: r.notas_arriendo || '',
           updatedAt: r.updated_at,
           createdAt: r.created_at,
         }));
@@ -3013,6 +3071,10 @@ export async function saveEmpresa(empresaData: Partial<Empresa> & { id: string }
     simboloMoneda: empresaData.simboloMoneda !== undefined ? empresaData.simboloMoneda.trim() : (existing?.simboloMoneda || '$'),
     costoEnvioBase: empresaData.costoEnvioBase !== undefined ? Number(empresaData.costoEnvioBase) : (existing?.costoEnvioBase ?? 16000),
     isActiva: empresaData.isActiva !== undefined ? Boolean(empresaData.isActiva) : (existing?.isActiva ?? true),
+    valorArriendo: empresaData.valorArriendo !== undefined ? Number(empresaData.valorArriendo) : (existing?.valorArriendo || 0),
+    estadoPago: empresaData.estadoPago !== undefined ? empresaData.estadoPago : (existing?.estadoPago || 'al_dia'),
+    fechaCorteArriendo: empresaData.fechaCorteArriendo !== undefined ? empresaData.fechaCorteArriendo : (existing?.fechaCorteArriendo || 'Día 5 de cada mes'),
+    notasArriendo: empresaData.notasArriendo !== undefined ? empresaData.notasArriendo : (existing?.notasArriendo || ''),
     updatedAt: new Date().toISOString(),
     createdAt: existing?.createdAt || new Date().toISOString(),
   };
@@ -3051,6 +3113,10 @@ export async function saveEmpresa(empresaData: Partial<Empresa> & { id: string }
         simbolo_moneda: updated.simboloMoneda || '$',
         costo_envio_base: updated.costoEnvioBase,
         is_activa: updated.isActiva,
+        valor_arriendo: updated.valorArriendo,
+        estado_pago: updated.estadoPago,
+        fecha_corte_arriendo: updated.fechaCorteArriendo,
+        notas_arriendo: updated.notasArriendo,
         updated_at: updated.updatedAt,
       });
     } catch (_) {}
@@ -3097,6 +3163,9 @@ export interface RegisterStoreInput {
   email?: string;
   costoEnvioBase?: number;
   logoUrl?: string;
+  valorArriendo?: number;
+  fechaCorteArriendo?: string;
+  notasArriendo?: string;
   adminFullName: string;
   adminEmail: string;
   adminPassword?: string;
@@ -3274,4 +3343,128 @@ export async function registerNewStoreWithAdmin(
     console.error('Error en registerNewStoreWithAdmin:', err);
     return { success: false, message: err?.message || 'Error registrando la nueva empresa.' };
   }
+}
+
+
+/**
+ * =========================================================================
+ * FUNCIONES MAESTRAS DE GESTIÓN TODÁ APP (CONTROL DE ARRIENDO Y SUSPENSIÓN)
+ * =========================================================================
+ */
+
+export async function toggleEmpresaStatus(
+  empresaId: string,
+  isActiva: boolean,
+  motivo?: string,
+  operatorAdmin?: { email?: string; fullName?: string }
+): Promise<{ success: boolean; empresa?: Empresa; message?: string }> {
+  try {
+    const existing = await getEmpresaById(empresaId);
+    if (!existing) {
+      return { success: false, message: 'La tienda especificada no existe.' };
+    }
+
+    const updatedEmpresa = await saveEmpresa({
+      id: empresaId,
+      isActiva: isActiva,
+      estadoPago: isActiva ? 'al_dia' : 'suspendido',
+      notasArriendo: motivo || (isActiva ? 'Reactivada por pago de arriendo al día' : 'Suspendida por mora en el pago del arriendo mensual'),
+    });
+
+    try {
+      await logAdminActivity({
+        adminId: operatorAdmin?.email || 'owner',
+        adminEmail: operatorAdmin?.email || 'propietario@todaapp.com',
+        adminName: operatorAdmin?.fullName || 'Propietario TODÁ APP',
+        actionType: 'ADMIN_PROFILE_UPDATE',
+        entityType: 'CONFIGURACION',
+        entityId: empresaId,
+        details: `TODÁ APP: Tienda "${existing.nombre}" (${empresaId}) ${isActiva ? 'REACTIVADA (Al Día)' : 'SUSPENDIDA (Mora de Arriendo)'}. Motivo: ${motivo || 'N/A'}`,
+      });
+    } catch (_) {}
+
+    notifyDatabaseChange();
+    return { success: true, empresa: updatedEmpresa };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Error al actualizar el estado de la empresa.' };
+  }
+}
+
+export async function updateEmpresaArriendo(
+  empresaId: string,
+  data: {
+    valorArriendo?: number;
+    estadoPago?: 'al_dia' | 'pendiente' | 'suspendido';
+    fechaCorteArriendo?: string;
+    notasArriendo?: string;
+  },
+  operatorAdmin?: { email?: string; fullName?: string }
+): Promise<{ success: boolean; empresa?: Empresa; message?: string }> {
+  try {
+    const existing = await getEmpresaById(empresaId);
+    if (!existing) {
+      return { success: false, message: 'La tienda especificada no existe.' };
+    }
+
+    const updatedEmpresa = await saveEmpresa({
+      id: empresaId,
+      valorArriendo: data.valorArriendo !== undefined ? Number(data.valorArriendo) : existing.valorArriendo,
+      estadoPago: data.estadoPago || existing.estadoPago,
+      fechaCorteArriendo: data.fechaCorteArriendo || existing.fechaCorteArriendo,
+      notasArriendo: data.notasArriendo !== undefined ? data.notasArriendo : existing.notasArriendo,
+    });
+
+    try {
+      await logAdminActivity({
+        adminId: operatorAdmin?.email || 'owner',
+        adminEmail: operatorAdmin?.email || 'propietario@todaapp.com',
+        adminName: operatorAdmin?.fullName || 'Propietario TODÁ APP',
+        actionType: 'ADMIN_PROFILE_UPDATE',
+        entityType: 'CONFIGURACION',
+        entityId: empresaId,
+        details: `TODÁ APP: Arriendo de "${existing.nombre}" actualizado a $${updatedEmpresa.valorArriendo?.toLocaleString()} COP. Estado: ${updatedEmpresa.estadoPago}.`,
+      });
+    } catch (_) {}
+
+    notifyDatabaseChange();
+    return { success: true, empresa: updatedEmpresa };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Error al actualizar el arriendo de la tienda.' };
+  }
+}
+
+export async function getPlatformGlobalMetrics(): Promise<{
+  totalEmpresas: number;
+  empresasActivas: number;
+  empresasSuspendidas: number;
+  arriendoMensualProyectado: number;
+  totalProductos: number;
+  totalPedidos: number;
+  totalVentas: number;
+  totalRepartidores: number;
+}> {
+  const empresas = await getEmpresas();
+  const allOrders = await getOrders(undefined, 'ALL');
+  const allProducts = await getProducts('ALL');
+  const allUsers = await getUsers();
+
+  const activas = empresas.filter(e => e.isActiva !== false);
+  const suspendidas = empresas.filter(e => e.isActiva === false);
+  const totalArriendo = empresas.reduce((acc, curr) => acc + (Number(curr.valorArriendo) || 0), 0);
+  const totalVentas = allOrders.reduce((acc, ord) => {
+    const sumItems = (ord.items || []).reduce((sum, it) => sum + (it.priceValue * it.cartQuantity), 0);
+    return acc + sumItems;
+  }, 0);
+  const totalRepartidores = allUsers.filter(u => u.role === 'driver').length;
+
+  return {
+    totalEmpresas: empresas.length,
+    empresasActivas: activas.length,
+    empresasSuspendidas: suspendidas.length,
+    arriendoMensualProyectado: totalArriendo,
+    totalProductos: allProducts.length,
+    totalPedidos: allOrders.length,
+    totalVentas: totalVentas,
+    totalRepartidores: totalRepartidores,
+  };
 }

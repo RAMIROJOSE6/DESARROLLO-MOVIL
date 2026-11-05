@@ -57,6 +57,8 @@ import {
   getEmpresas,
   RegisterStoreInput,
   registerNewStoreWithAdmin,
+  toggleEmpresaStatus,
+  updateEmpresaArriendo,
 } from '../services/database';
 
 export function useAdmin() {
@@ -183,7 +185,7 @@ export function useAdmin() {
   }, [adminUser, refreshAll]);
 
   // Login de Administrador
-  const login = async (email: string, pass: string) => {
+  const login = async (email: string, pass: string, expectedStoreId?: string) => {
     setIsLoading(true);
     const res = await authenticateAdmin(email, pass);
     if (res.success && res.user) {
@@ -994,6 +996,24 @@ export function useAdmin() {
     } catch (err: any) {
       return { success: false, message: err?.message || 'Error registrando la tienda.' };
     }
+  };
+
+  const setStoreActiveState = async (empresaId: string, isActiva: boolean, motivo?: string) => {
+    const res = await toggleEmpresaStatus(empresaId, isActiva, motivo, adminUser || undefined);
+    if (res.success && res.empresa) {
+      setEmpresasList(prev => prev.map(e => e.id === empresaId ? res.empresa! : e));
+      await refreshAll();
+    }
+    return res;
+  };
+
+  const updateStoreRent = async (empresaId: string, data: { valorArriendo?: number; estadoPago?: 'al_dia' | 'pendiente' | 'suspendido'; fechaCorteArriendo?: string; notasArriendo?: string }) => {
+    const res = await updateEmpresaArriendo(empresaId, data, adminUser || undefined);
+    if (res.success && res.empresa) {
+      setEmpresasList(prev => prev.map(e => e.id === empresaId ? res.empresa! : e));
+      await refreshAll();
+    }
+    return res;
   };
 
   const updateEmpresaProfile = async (changes: Partial<Empresa>): Promise<boolean> => {

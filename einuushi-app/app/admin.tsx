@@ -1032,11 +1032,15 @@ export default function AdminScreen() {
   const handleAdminLogin = async () => {
     setLoginError('');
     if (!adminEmail.trim() || !adminPassword.trim()) {
-      setLoginError('Por favor ingresa tu correo y contraseña maestra.');
+      setLoginError('Por favor ingresa tu correo y contraseña de administrador.');
+      return;
+    }
+    if (routeStoreInfo && routeStoreInfo.isActiva === false && adminEmail.trim().toLowerCase() !== 'propietario@todaapp.com' && adminEmail.trim().toLowerCase() !== 'admin@todaapp.com') {
+      setLoginError(`La tienda "${routeStoreInfo.nombre}" se encuentra temporalmente suspendida por mora de arriendo. Comunícate con el Propietario de TODÁ APP para reactivar el servicio.`);
       return;
     }
     setIsSubmittingLogin(true);
-    const res = await login(adminEmail.trim(), adminPassword);
+    const res = await login(adminEmail.trim(), adminPassword, routeStoreParam);
     setIsSubmittingLogin(false);
     if (!res.success) {
       setLoginError(res.message || 'Error al autenticar administrador.');
@@ -1896,6 +1900,17 @@ export default function AdminScreen() {
                 </Text>
               </View>
             )}
+            {routeStoreInfo && routeStoreInfo.isActiva === false && (
+              <View style={{ marginTop: 12, backgroundColor: '#FEE2E2', padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#FECACA', alignItems: 'center', width: '100%' }}>
+                <Ionicons name="pause-circle" size={26} color="#DC2626" style={{ marginBottom: 4 }} />
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#DC2626', textAlign: 'center' }}>
+                  TIENDA TEMPORALMENTE SUSPENDIDA
+                </Text>
+                <Text style={{ fontSize: 11, color: '#991B1B', textAlign: 'center', marginTop: 2 }}>
+                  Esta tienda se encuentra inactiva por mora de arriendo. Comunícate con el Propietario de TODÁ APP para reactivar el servicio.
+                </Text>
+              </View>
+            )}
           </View>
 
           {loginError ? (
@@ -1970,6 +1985,21 @@ export default function AdminScreen() {
             <Ionicons name="arrow-back" size={16} color="#64748B" style={{ marginRight: 6 }} />
             <Text style={styles.backToStoreText}>Ver Catálogo de la Tienda</Text>
           </TouchableOpacity>
+
+          {/* Acceso directo al Panel Maestro TODÁ APP */}
+          <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#E2E8F0', alignItems: 'center', width: '100%' }}>
+            <Text style={{ fontSize: 12, color: '#64748B' }}>¿Eres el Propietario de la plataforma?</Text>
+            <TouchableOpacity
+              style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0B132B', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 }}
+              onPress={() => router.push('/owner' as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="sparkles" size={15} color="#10B981" />
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
+                Ir al Panel Maestro TODÁ APP (/owner)
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* MODAL: RECUPERACIÓN DE CONTRASEÑA ADMINISTRATIVA (EMAILJS) */}
@@ -2213,6 +2243,26 @@ export default function AdminScreen() {
         </View>
 
         <View style={styles.topActionsRow}>
+          {isSuperAdminUser && (
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#0B132B',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: '#10B981',
+                marginRight: 6,
+              }}
+              onPress={() => router.push('/owner' as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="sparkles" size={13} color="#10B981" style={{ marginRight: 5 }} />
+              <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Panel Maestro TODÁ APP</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.refreshIconButton}
             onPress={refreshAll}
