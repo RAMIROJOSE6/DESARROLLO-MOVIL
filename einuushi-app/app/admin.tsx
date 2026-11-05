@@ -1976,30 +1976,6 @@ export default function AdminScreen() {
             <Ionicons name="help-circle-outline" size={14} color="#C5A880" style={{ marginRight: 5 }} />
             <Text style={styles.forgotAdminPasswordText}>¿Olvidaste tu contraseña? Recupérala con tu correo</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.backToStoreButton}
-            onPress={() => router.push({ pathname: '/home', params: { mode: 'admin_preview' } })}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={16} color="#64748B" style={{ marginRight: 6 }} />
-            <Text style={styles.backToStoreText}>Ver Catálogo de la Tienda</Text>
-          </TouchableOpacity>
-
-          {/* Acceso directo al Panel Maestro TODÁ APP */}
-          <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#E2E8F0', alignItems: 'center', width: '100%' }}>
-            <Text style={{ fontSize: 12, color: '#64748B' }}>¿Eres el Propietario de la plataforma?</Text>
-            <TouchableOpacity
-              style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0B132B', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 }}
-              onPress={() => router.push('/owner' as any)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="sparkles" size={15} color="#10B981" />
-              <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
-                Ir al Panel Maestro TODÁ APP (/owner)
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* MODAL: RECUPERACIÓN DE CONTRASEÑA ADMINISTRATIVA (EMAILJS) */}
