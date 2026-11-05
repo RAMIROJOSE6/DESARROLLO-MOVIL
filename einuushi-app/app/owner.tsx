@@ -20,6 +20,8 @@ import {
   Empresa,
   RegisterStoreInput,
   getEmpresas,
+  saveEmpresa,
+  getUsers,
   toggleEmpresaStatus,
   updateEmpresaArriendo,
   registerNewStoreWithAdmin,
@@ -46,6 +48,7 @@ export default function OwnerScreen() {
 
   // Estados de Datos del Panel Maestro
   const [empresasList, setEmpresasList] = useState<Empresa[]>([]);
+  const [usersList, setUsersList] = useState<User[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'SUSPENDED'>('ALL');
@@ -90,6 +93,51 @@ export default function OwnerScreen() {
     telefono?: string;
   } | null>(null);
 
+  // Modal de Edición de Datos Comerciales de Tienda
+  const [editingStoreData, setEditingStoreData] = useState<Empresa | null>(null);
+  const [editStoreNombre, setEditStoreNombre] = useState('');
+  const [editStoreNit, setEditStoreNit] = useState('');
+  const [editStoreCiudad, setEditStoreCiudad] = useState('');
+  const [editStoreDepto, setEditStoreDepto] = useState('');
+  const [editStoreTelefono, setEditStoreTelefono] = useState('');
+  const [editStoreEmail, setEditStoreEmail] = useState('');
+  const [isSavingStoreData, setIsSavingStoreData] = useState(false);
+
+  const openEditStoreModal = (emp: Empresa) => {
+    const admin = usersList.find(u => u.empresaId === emp.id && (u.role === 'admin' || u.role === 'superadmin')) || usersList.find(u => u.empresaId === emp.id);
+    setEditingStoreData(emp);
+    setEditStoreNombre(emp.nombre);
+    setEditStoreNit(emp.nit || admin?.cedula || '');
+    setEditStoreCiudad(emp.ciudad || admin?.city || 'Riohacha');
+    setEditStoreDepto(emp.departamento || 'La Guajira');
+    setEditStoreTelefono(emp.telefono || emp.whatsapp || admin?.phone || '');
+    setEditStoreEmail(emp.email || admin?.email || '');
+  };
+
+  const handleSaveStoreData = async () => {
+    if (!editingStoreData) return;
+    try {
+      setIsSavingStoreData(true);
+      const updated = await saveEmpresa({
+        id: editingStoreData.id,
+        nombre: editStoreNombre.trim(),
+        nit: editStoreNit.trim(),
+        ciudad: editStoreCiudad.trim(),
+        departamento: editStoreDepto.trim(),
+        telefono: editStoreTelefono.trim(),
+        whatsapp: editStoreTelefono.trim(),
+        email: editStoreEmail.trim(),
+      });
+      setEditingStoreData(null);
+      await loadPlatformData();
+      Alert.alert('Datos Guardados', `La información de "${updated.nombre}" ha sido actualizada en la base de datos.`);
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'No se pudieron actualizar los datos.');
+    } finally {
+      setIsSavingStoreData(false);
+    }
+  };
+
   // Modal de Ajuste de Arriendo
   const [editingRentEmpresa, setEditingRentEmpresa] = useState<Empresa | null>(null);
   const [editRentValor, setEditRentValor] = useState('');
@@ -130,12 +178,14 @@ export default function OwnerScreen() {
   const loadPlatformData = async () => {
     try {
       setIsLoadingData(true);
-      const [allEmpresas, globMetrics] = await Promise.all([
+      const [allEmpresas, globMetrics, allUsers] = await Promise.all([
         getEmpresas(),
         getPlatformGlobalMetrics(),
+        getUsers(),
       ]);
       setEmpresasList(allEmpresas);
       setMetrics(globMetrics);
+      setUsersList(allUsers);
     } catch (err) {
       console.error('Error cargando datos de la plataforma:', err);
     } finally {
@@ -722,6 +772,13 @@ export default function OwnerScreen() {
               const isActive = emp.isActiva !== false;
               const webPath = `/admin?store=${emp.id}`;
               const fullStoreWebUrl = `${originUrl}${webPath}`;
+              
+              // Localizar el usuario administrador real registrado para esta tienda en Supabase
+              const storeAdmin = usersList.find(u => u.empresaId === emp.id && (u.role === 'admin' || u.role === 'superadmin')) || usersList.find(u => u.empresaId === emp.id);
+              const realNit = emp.nit || storeAdmin?.cedula || 'Sin registrar';
+              const realEmail = emp.email || storeAdmin?.email || 'Sin correo registrado';
+              const realPhone = emp.telefono || emp.whatsapp || storeAdmin?.phone || 'Sin teléfono';
+              const adminName = storeAdmin?.fullName || (emp.id === 'einuushi' ? 'Administrador Einuushi' : 'Encargado de Tienda');
 
               return (
                 <View
@@ -759,7 +816,7 @@ export default function OwnerScreen() {
                         </View>
 
                         <Text style={styles.storeLocation}>
-                          {emp.ciudad || 'Colombia'}, {emp.departamento || ''} • NIT: {emp.nit || 'Sin registrar'}
+                          {emp.ciudad || 'Colombia'}, {emp.departamento || ''} • NIT / Cédula: {realNit}
                         </Text>
                       </View>
                     </View>
@@ -844,21 +901,44 @@ export default function OwnerScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Footer con Contacto & Botón de Acción Maestra (Suspender / Activar) */}
+                  {/* Información Real del Administrador Registrado */}
+                  <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, marginTop: 10, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                    <View style={{ flex: 1, minWidth: 240 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <Ionicons name="person-circle" size={16} color="#0284C7" />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#1E293B' }}>
+                          Encargado: {adminName}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 11, color: '#475569' }}>
+                        Correo: <Text style={{ fontWeight: '600', color: '#0F172A' }}>{realEmail}</Text> • Tel: <Text style={{ fontWeight: '600', color: '#0F172A' }}>{realPhone}</Text>
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 }}
+                      onPress={() => openEditStoreModal(emp)}
+                    >
+                      <Ionicons name="pencil" size={12} color="#0284C7" style={{ marginRight: 4 }} />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#0284C7' }}>Editar Datos</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Footer con Botones de Acción */}
                   <View style={styles.storeCardFooter}>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 11, color: '#64748B' }}>
-                        Contacto: {emp.email || 'Sin correo'} • Tel: {emp.telefono || emp.whatsapp || 'N/A'}
+                        Sede oficial: {emp.ciudad || 'La Guajira'} ({emp.pais || 'Colombia'})
                       </Text>
                     </View>
 
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       {/* Botón WhatsApp */}
-                      {(emp.whatsapp || emp.telefono) && (
+                      {realPhone !== 'Sin teléfono' && (
                         <TouchableOpacity
                           style={styles.waButton}
                           onPress={() => {
-                            const clean = (emp.whatsapp || emp.telefono || '').replace(/[^0-9]/g, '');
+                            const clean = realPhone.replace(/[^0-9]/g, '');
                             Linking.openURL(`https://wa.me/57${clean}`);
                           }}
                         >
@@ -1326,6 +1406,114 @@ export default function OwnerScreen() {
                   <Ionicons name="save" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
                 )}
                 <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Guardar Licencia</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================================================================= */}
+      {/* MODAL: EDITAR DATOS COMERCIALES DE LA TIENDA                     */}
+      {/* ================================================================= */}
+      <Modal
+        visible={!!editingStoreData}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setEditingStoreData(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 500 }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.brandIcon, { backgroundColor: '#E0F2FE' }]}>
+                  <Ionicons name="storefront" size={20} color="#0284C7" />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Editar Datos de la Tienda</Text>
+                  <Text style={styles.modalSubtitle}>Actualiza la información comercial registrada en Supabase</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setEditingStoreData(null)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 10, marginTop: 14 }}>
+              <View>
+                <Text style={styles.settingsLabel}>Nombre Comercial de la Tienda:</Text>
+                <TextInput
+                  style={styles.settingsInput}
+                  value={editStoreNombre}
+                  onChangeText={setEditStoreNombre}
+                  placeholder="Nombre de la tienda"
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsLabel}>NIT o Cédula:</Text>
+                  <TextInput
+                    style={styles.settingsInput}
+                    value={editStoreNit}
+                    onChangeText={setEditStoreNit}
+                    placeholder="1124000000"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsLabel}>Ciudad:</Text>
+                  <TextInput
+                    style={styles.settingsInput}
+                    value={editStoreCiudad}
+                    onChangeText={setEditStoreCiudad}
+                    placeholder="Riohacha"
+                  />
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsLabel}>Teléfono / WhatsApp:</Text>
+                  <TextInput
+                    style={styles.settingsInput}
+                    value={editStoreTelefono}
+                    onChangeText={setEditStoreTelefono}
+                    keyboardType="phone-pad"
+                    placeholder="3042039297"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsLabel}>Correo Oficial:</Text>
+                  <TextInput
+                    style={styles.settingsInput}
+                    value={editStoreEmail}
+                    onChangeText={setEditStoreEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    placeholder="correo@ejemplo.com"
+                  />
+                </View>
+              </View>
+            </View>
+
+            <View style={{ marginTop: 22, flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
+              <TouchableOpacity
+                style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#E2E8F0' }}
+                onPress={() => setEditingStoreData(null)}
+              >
+                <Text style={{ fontWeight: '600', color: '#475569' }}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#0284C7', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
+                onPress={handleSaveStoreData}
+                disabled={isSavingStoreData}
+              >
+                {isSavingStoreData ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 6 }} />
+                ) : (
+                  <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                )}
+                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Guardar Cambios</Text>
               </TouchableOpacity>
             </View>
           </View>
