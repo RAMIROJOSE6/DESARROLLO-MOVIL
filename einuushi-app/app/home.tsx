@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -17,7 +17,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { WebView } from 'react-native-webview';
 import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -91,16 +90,6 @@ const CITY_OPTIONS = [
   { label: 'Bogotá (Otra ciudad - $ 16.000 COP)', value: 'Bogotá' },
 ];
 
-const PAYMENT_METHOD_OPTIONS = [
-  { label: 'Efectivo contra entrega', value: 'Efectivo contra entrega' },
-  { label: 'Tarjeta débito', value: 'Tarjeta débito' },
-  { label: 'PSE', value: 'PSE' },
-  { label: 'Tarjeta de crédito', value: 'Tarjeta de crédito' },
-  { label: 'Código QR', value: 'Código QR' },
-];
-
-
-
 export default function HomeScreen() {
   const router = useRouter();
   const { mode } = useLocalSearchParams<{ mode?: string }>();
@@ -165,19 +154,16 @@ export default function HomeScreen() {
     return configuredPaymentMethods.filter((pm: PaymentMethod) => pm.isActive);
   }, [configuredPaymentMethods]);
 
-  const selectedPaymentMethodObj = useMemo(() => {
-    return configuredPaymentMethods.find((pm: PaymentMethod) => pm.name === paymentMethod) || null;
-  }, [configuredPaymentMethods, paymentMethod]);
-
-  // Si el medio seleccionado ya no está activo, seleccionar el primero disponible
-  useEffect(() => {
-    if (activePaymentMethods.length > 0) {
-      const isCurrentActive = activePaymentMethods.some((pm: PaymentMethod) => pm.name === paymentMethod);
-      if (!isCurrentActive) {
-        setPaymentMethod(activePaymentMethods[0].name);
-      }
-    }
+  // Si el medio seleccionado ya no está activo, resolver reactivamente el primero disponible
+  const effectivePaymentMethod = useMemo(() => {
+    if (activePaymentMethods.length === 0) return paymentMethod;
+    const isCurrentActive = activePaymentMethods.some((pm: PaymentMethod) => pm.name === paymentMethod);
+    return isCurrentActive ? paymentMethod : activePaymentMethods[0].name;
   }, [activePaymentMethods, paymentMethod]);
+
+  const selectedPaymentMethodObj = useMemo(() => {
+    return configuredPaymentMethods.find((pm: PaymentMethod) => pm.name === effectivePaymentMethod) || null;
+  }, [configuredPaymentMethods, effectivePaymentMethod]);
   const [nativePickerModal, setNativePickerModal] = useState<{
     title: string;
     options: { label: string; value: string }[];
@@ -187,40 +173,43 @@ export default function HomeScreen() {
 
   // Sincronizar automáticamente datos del cliente si el usuario cambia
   useEffect(() => {
-    if (effectiveUser) {
-      if (effectiveUser.fullName) setClientName(effectiveUser.fullName);
-      if (effectiveUser.cedula) setClientCedula(effectiveUser.cedula);
-      if (effectiveUser.phone) setClientPhone(effectiveUser.phone);
-      if (effectiveUser.city) setClientCity(effectiveUser.city);
-      setProfFullName(effectiveUser.fullName || '');
-      setProfCedula(effectiveUser.cedula || '');
-      setProfPhone(effectiveUser.phone || '');
-      setProfCity(effectiveUser.city || '');
-      setProfAvatar(effectiveUser.avatar || '');
-    } else {
-      setClientName('');
-      setClientCedula('');
-      setClientPhone('');
-      setClientCity('Riohacha');
-      setProfFullName('');
-      setProfCedula('');
-      setProfPhone('');
-      setProfCity('');
-      setProfAvatar('');
-    }
+    const timer = setTimeout(() => {
+      if (effectiveUser) {
+        if (effectiveUser.fullName) setClientName(effectiveUser.fullName);
+        if (effectiveUser.cedula) setClientCedula(effectiveUser.cedula);
+        if (effectiveUser.phone) setClientPhone(effectiveUser.phone);
+        if (effectiveUser.city) setClientCity(effectiveUser.city);
+        setProfFullName(effectiveUser.fullName || '');
+        setProfCedula(effectiveUser.cedula || '');
+        setProfPhone(effectiveUser.phone || '');
+        setProfCity(effectiveUser.city || '');
+        setProfAvatar(effectiveUser.avatar || '');
+      } else {
+        setClientName('');
+        setClientCedula('');
+        setClientPhone('');
+        setClientCity('Riohacha');
+        setProfFullName('');
+        setProfCedula('');
+        setProfPhone('');
+        setProfCity('');
+        setProfAvatar('');
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [effectiveUser]);
 
   const [orderCounter, setOrderCounter] = useState(1);
   const [orders, setOrders] = useState<any[]>([]);
   const [aiUnreadCount, setAiUnreadCount] = useState(1);
-  const [notifications, setNotifications] = useState<Array<{
+  const [notifications, setNotifications] = useState<{
     id: string;
     orderId: string;
     title: string;
     message: string;
     time: string;
     read: boolean;
-  }>>([]);
+  }[]>([]);
   const [notificationsUnreadCount, setNotificationsUnreadCount] = useState(0);
   const [inAppToast, setInAppToast] = useState<{
     id: string;
@@ -228,8 +217,6 @@ export default function HomeScreen() {
     message: string;
     orderId: string;
   } | null>(null);
-
-  const activeOrdersCount = orders.filter(ord => ord.statusCode !== 'DELIVERED').length;
 
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -287,6 +274,37 @@ export default function HomeScreen() {
   const handleCloseImagePreview = () => {
     setPreviewImage(null);
   };
+
+  const notifyOrderArrival = useCallback((order: any) => {
+    const notifId = `notif-${order.id}-${Date.now()}`;
+    const driverLabel = order.driverName ? `El repartidor ${order.driverName}` : 'El repartidor';
+    const newNotif = {
+      id: notifId,
+      orderId: order.id,
+      title: `¡Tu pedido ${order.id} ya llegó a tu dirección!`,
+      message: `${driverLabel} está en tu puerta (${order.client?.address || 'tu dirección'}). Recibe tu paquete y confirma la entrega.`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      read: false,
+    };
+
+    setNotifications(prev => {
+      if (prev.some(n => n.orderId === order.id && n.title.includes('ya llegó'))) {
+        return prev;
+      }
+      // Guardar notificación en Base de Datos SQLite Drizzle
+      saveNotificationToDb(newNotif).catch(e => console.warn('Error saving notif to db:', e));
+      return [newNotif, ...prev];
+    });
+
+    setNotificationsUnreadCount(prev => prev + 1);
+
+    setInAppToast({
+      id: `toast-${Date.now()}`,
+      title: `¡Tu pedido ${order.id} ya llegó a tu dirección! 🛵`,
+      message: `${driverLabel} está esperando en tu puerta. Toca aquí para confirmar la recepción a satisfacción.`,
+      orderId: order.id
+    });
+  }, []);
 
   // Cargar datos locales sincronizados desde SQLite con Drizzle ORM (Offline-First)
   const loadLocalDbData = useCallback(async (forcedEmpresa?: Empresa) => {
@@ -422,7 +440,7 @@ export default function HomeScreen() {
     } catch (err) {
       console.warn('Error sincronizando datos en vista cliente:', err);
     }
-  }, [effectiveUser?.email]);
+  }, [effectiveUser, notifyOrderArrival]);
 
   // Sincronizar al entrar a la pantalla
   useFocusEffect(
@@ -433,45 +451,19 @@ export default function HomeScreen() {
 
   // Sincronización continua cada 2.5s para reflejar cambios del Web Admin en Expo Go en tiempo real
   useEffect(() => {
-    loadLocalDbData();
+    const timer = setTimeout(() => {
+      void loadLocalDbData();
+    }, 0);
 
     const autoSyncInterval = setInterval(() => {
-      loadLocalDbData();
+      void loadLocalDbData();
     }, 2500);
 
-    return () => clearInterval(autoSyncInterval);
-  }, [loadLocalDbData]);
-
-  const notifyOrderArrival = (order: any) => {
-    const notifId = `notif-${order.id}-${Date.now()}`;
-    const driverLabel = order.driverName ? `El repartidor ${order.driverName}` : 'El repartidor';
-    const newNotif = {
-      id: notifId,
-      orderId: order.id,
-      title: `¡Tu pedido ${order.id} ya llegó a tu dirección!`,
-      message: `${driverLabel} está en tu puerta (${order.client?.address || 'tu dirección'}). Recibe tu paquete y confirma la entrega.`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      read: false,
+    return () => {
+      clearTimeout(timer);
+      clearInterval(autoSyncInterval);
     };
-
-    setNotifications(prev => {
-      if (prev.some(n => n.orderId === order.id && n.title.includes('ya llegó'))) {
-        return prev;
-      }
-      // Guardar notificación en Base de Datos SQLite Drizzle
-      saveNotificationToDb(newNotif).catch(e => console.warn('Error saving notif to db:', e));
-      return [newNotif, ...prev];
-    });
-
-    setNotificationsUnreadCount(prev => prev + 1);
-
-    setInAppToast({
-      id: `toast-${Date.now()}`,
-      title: `¡Tu pedido ${order.id} ya llegó a tu dirección! 🛵`,
-      message: `${driverLabel} está esperando en tu puerta. Toca aquí para confirmar la recepción a satisfacción.`,
-      orderId: order.id
-    });
-  };
+  }, [loadLocalDbData]);
 
   useEffect(() => {
     if (inAppToast) {
@@ -534,20 +526,25 @@ export default function HomeScreen() {
     }, 2000);
 
     return () => clearInterval(arrivalInterval);
-  }, []);
+  }, [notifyOrderArrival]);
 
   // Animación suave de la barra de progreso en vivo cuando el modal de seguimiento está abierto
   useEffect(() => {
     let timer: any;
+    let initTimer: any;
     if (isTrackingModalVisible) {
       if (activeTrackingOrder?.statusCode === 'DELIVERED' || activeTrackingOrder?.statusCode === 'ARRIVED') {
-        setSimulationProgress(100);
-        setDeliveryRating(activeTrackingOrder.rating || 0);
+        initTimer = setTimeout(() => {
+          setSimulationProgress(100);
+          setDeliveryRating(activeTrackingOrder.rating || 0);
+        }, 0);
       } else if (activeTrackingOrder?.statusCode === 'DISPATCHED') {
         const elapsed = Date.now() - (activeTrackingOrder.dispatchedAt || (Date.now() - 3000));
         const calcProgress = Math.min(100, Math.max(10, Math.floor((elapsed / 18000) * 100)));
-        setSimulationProgress(calcProgress);
-        setDeliveryRating(activeTrackingOrder.rating || 0);
+        initTimer = setTimeout(() => {
+          setSimulationProgress(calcProgress);
+          setDeliveryRating(activeTrackingOrder?.rating || 0);
+        }, 0);
 
         timer = setInterval(() => {
           setSimulationProgress(prev => {
@@ -560,46 +557,56 @@ export default function HomeScreen() {
         }, 1500);
       } else {
         // Pedido PENDING (Esperando despacho y asignación)
-        setSimulationProgress(0);
-        setDeliveryRating(0);
+        initTimer = setTimeout(() => {
+          setSimulationProgress(0);
+          setDeliveryRating(0);
+        }, 0);
       }
     }
-    return () => clearInterval(timer);
-  }, [isTrackingModalVisible, activeTrackingOrder?.id, activeTrackingOrder?.statusCode, activeTrackingOrder?.dispatchedAt]);
+    return () => {
+      clearTimeout(initTimer);
+      clearInterval(timer);
+    };
+  }, [isTrackingModalVisible, activeTrackingOrder?.id, activeTrackingOrder?.statusCode, activeTrackingOrder?.dispatchedAt, activeTrackingOrder?.rating]);
 
   useEffect(() => {
     if (simulationProgress === 100 && activeTrackingOrder && activeTrackingOrder.statusCode === 'DISPATCHED') {
-      notifyOrderArrival(activeTrackingOrder);
+      const orderToUpdate = activeTrackingOrder;
+      const arrivalTimer = setTimeout(() => {
+        notifyOrderArrival(orderToUpdate);
 
-      // Persistir cambio a ARRIVED en SQLite Drizzle ORM
-      updateOrderStatusInDb(activeTrackingOrder.id, {
-        status: '🛵 ¡El repartidor ha llegado a tu dirección!',
-        statusCode: 'ARRIVED',
-        eta: 'El repartidor está esperando en la puerta'
-      }).catch(e => console.warn('DB update order error:', e));
+        // Persistir cambio a ARRIVED en SQLite Drizzle ORM
+        updateOrderStatusInDb(orderToUpdate.id, {
+          status: '🛵 ¡El repartidor ha llegado a tu dirección!',
+          statusCode: 'ARRIVED',
+          eta: 'El repartidor está esperando en la puerta'
+        }).catch(e => console.warn('DB update order error:', e));
 
-      setOrders(prevOrders =>
-        prevOrders.map(ord => {
-          if (ord.id === activeTrackingOrder.id) {
-            return {
-              ...ord,
-              status: '🛵 ¡El repartidor ha llegado a tu dirección!',
-              statusCode: 'ARRIVED',
-              eta: 'El repartidor está esperando en la puerta'
-            };
-          }
-          return ord;
-        })
-      );
+        setOrders(prevOrders =>
+          prevOrders.map(ord => {
+            if (ord.id === orderToUpdate.id) {
+              return {
+                ...ord,
+                status: '🛵 ¡El repartidor ha llegado a tu dirección!',
+                statusCode: 'ARRIVED',
+                eta: 'El repartidor está esperando en la puerta'
+              };
+            }
+            return ord;
+          })
+        );
 
-      setActiveTrackingOrder((prev: any) => prev ? {
-        ...prev,
-        status: '🛵 ¡El repartidor ha llegado a tu dirección!',
-        statusCode: 'ARRIVED',
-        eta: 'El repartidor está esperando en la puerta'
-      } : null);
+        setActiveTrackingOrder((prev: any) => prev ? {
+          ...prev,
+          status: '🛵 ¡El repartidor ha llegado a tu dirección!',
+          statusCode: 'ARRIVED',
+          eta: 'El repartidor está esperando en la puerta'
+        } : null);
+      }, 0);
+
+      return () => clearTimeout(arrivalTimer);
     }
-  }, [simulationProgress]);
+  }, [simulationProgress, activeTrackingOrder, notifyOrderArrival]);
 
   const handleLogout = async () => {
     if (isAdminPreview) {
@@ -686,7 +693,7 @@ export default function HomeScreen() {
   };
 
   // Abrir chat y marcar mensajes de tienda como leídos
-  const handleOpenChatModal = async () => {
+  const handleOpenChatModal = useCallback(async () => {
     if (isAdminPreview) {
       Alert.alert(
         'Chat Privado de Clientes',
@@ -702,7 +709,7 @@ export default function HomeScreen() {
     setHasUnreadChat(false);
     const clientEmail = effectiveUser?.email || 'cliente@einuushi.com';
     await markChatMessagesAsRead(clientEmail, 'client');
-  };
+  }, [isAdminPreview, router, effectiveUser]);
 
   // Botón flotante arrastrable con límites de pantalla visibles (Clamped Draggable PanResponder)
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -721,70 +728,68 @@ export default function HomeScreen() {
   const maxY = MARGIN_BOTTOM - PADDING_EDGE; // Máximo hacia abajo (+12px del origen)
   const minY = -(windowHeight - BUTTON_SIZE - MARGIN_BOTTOM - TOP_SAFE_HEADER); // Hacia arriba
 
-  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const panOffset = useRef({ x: 0, y: 0 });
-  const boundsRef = useRef({ minX, maxX, minY, maxY });
+  const pan = useMemo(() => new Animated.ValueXY({ x: 0, y: 0 }), []);
+  const boundsState = useMemo(() => ({ minX, maxX, minY, maxY }), [minX, maxX, minY, maxY]);
 
   useEffect(() => {
-    boundsRef.current = { minX, maxX, minY, maxY };
     // Si la posición previa excede los límites (o el usuario lo arrastró fuera), recuperarlo al área visible
-    const safeX = Math.min(Math.max(panOffset.current.x, minX), maxX);
-    const safeY = Math.min(Math.max(panOffset.current.y, minY), maxY);
-    if (panOffset.current.x !== safeX || panOffset.current.y !== safeY) {
-      panOffset.current = { x: safeX, y: safeY };
+    const curX = (pan.x as any)._value || 0;
+    const curY = (pan.y as any)._value || 0;
+    const safeX = Math.min(Math.max(curX, minX), maxX);
+    const safeY = Math.min(Math.max(curY, minY), maxY);
+    if (curX !== safeX || curY !== safeY) {
       Animated.spring(pan, {
         toValue: { x: safeX, y: safeY },
         useNativeDriver: false,
         friction: 6,
       }).start();
     }
-  }, [minX, maxX, minY, maxY]);
+  }, [minX, maxX, minY, maxY, pan]);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 3 || Math.abs(gestureState.dy) > 3;
-      },
-      onPanResponderGrant: () => {
-        pan.setOffset({
-          x: panOffset.current.x,
-          y: panOffset.current.y
-        });
-        pan.setValue({ x: 0, y: 0 });
-      },
-      onPanResponderMove: (_, gestureState) => {
-        const { minX: bMinX, maxX: bMaxX, minY: bMinY, maxY: bMaxY } = boundsRef.current;
-        const rawX = panOffset.current.x + gestureState.dx;
-        const rawY = panOffset.current.y + gestureState.dy;
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return Math.abs(gestureState.dx) > 3 || Math.abs(gestureState.dy) > 3;
+        },
+        onPanResponderGrant: () => {
+          pan.extractOffset();
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const { minX: bMinX, maxX: bMaxX, minY: bMinY, maxY: bMaxY } = boundsState;
+          const curOffsetX = (pan.x as any)._offset || 0;
+          const curOffsetY = (pan.y as any)._offset || 0;
+          const rawX = curOffsetX + gestureState.dx;
+          const rawY = curOffsetY + gestureState.dy;
 
-        // Limitar en tiempo real durante el arrastre
-        const clampedX = Math.min(Math.max(rawX, bMinX), bMaxX);
-        const clampedY = Math.min(Math.max(rawY, bMinY), bMaxY);
+          // Limitar en tiempo real durante el arrastre
+          const clampedX = Math.min(Math.max(rawX, bMinX), bMaxX);
+          const clampedY = Math.min(Math.max(rawY, bMinY), bMaxY);
 
-        pan.setValue({
-          x: clampedX - panOffset.current.x,
-          y: clampedY - panOffset.current.y
-        });
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const { minX: bMinX, maxX: bMaxX, minY: bMinY, maxY: bMaxY } = boundsRef.current;
-        pan.flattenOffset();
+          pan.setValue({
+            x: clampedX - curOffsetX,
+            y: clampedY - curOffsetY,
+          });
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const { minX: bMinX, maxX: bMaxX, minY: bMinY, maxY: bMaxY } = boundsState;
+          pan.flattenOffset();
 
-        const rawX = panOffset.current.x + gestureState.dx;
-        const rawY = panOffset.current.y + gestureState.dy;
-        const finalX = Math.min(Math.max(rawX, bMinX), bMaxX);
-        const finalY = Math.min(Math.max(rawY, bMinY), bMaxY);
+          const curX = (pan.x as any)._value || 0;
+          const curY = (pan.y as any)._value || 0;
+          const clampedX = Math.min(Math.max(curX, bMinX), bMaxX);
+          const clampedY = Math.min(Math.max(curY, bMinY), bMaxY);
 
-        panOffset.current = { x: finalX, y: finalY };
-        pan.setValue({ x: finalX, y: finalY });
+          pan.setValue({ x: clampedX, y: clampedY });
 
-        if (Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5) {
-          handleOpenChatModal();
+          if (Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5) {
+            handleOpenChatModal();
+          }
         }
-      }
-    })
-  ).current;
+      }),
+    [pan, boundsState, handleOpenChatModal]
+  );
 
   // Enviar mensaje del cliente al Administrador
   const handleSendClientMessage = async () => {
@@ -1319,8 +1324,6 @@ export default function HomeScreen() {
     ? `${activeTrackingOrder.client.address}, ${activeTrackingOrder.city || 'Riohacha'}, La Guajira, Colombia`
     : 'Riohacha, La Guajira, Colombia';
 
-  const googleMapEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(targetMapAddress)}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
-  const osmMapEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=-72.94%2C11.52%2C-72.88%2C11.56&layer=mapnik&marker=11.5444%2C-72.9072`;
   const externalGoogleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(targetMapAddress)}`;
 
   const handleOpenExternalMap = () => {
@@ -3749,7 +3752,7 @@ export default function HomeScreen() {
         style={[
           styles.floatingChatBtn,
           {
-            transform: [{ translateX: pan.x }, { translateY: pan.y }],
+            transform: pan.getTranslateTransform(),
           }
         ]}
       >
