@@ -145,9 +145,28 @@ export default function AdminScreen() {
     setSelectedStoreFilter,
   } = useAdmin();
 
-  // Detección de Tienda por Parámetro de URL Web (/admin?store=slug)
-  const { store: routeStoreParam } = useLocalSearchParams<{ store?: string }>();
+  // Detección de Tienda y Modo de Vista por Parámetros de URL Web
+  const { store: routeStoreParam, viewMode } = useLocalSearchParams<{ store?: string; viewMode?: string }>();
   const [routeStoreInfo, setRouteStoreInfo] = useState<Empresa | null>(null);
+
+  // Modo Solo Ver exclusivo del Propietario de la plataforma TODÁ APP
+  const isOwnerReadOnly = Boolean(
+    viewMode === 'owner_readonly' ||
+    adminUser?.email === 'propietario@todaapp.com' ||
+    adminUser?.id === 'USR-OWNER-TODA' ||
+    isSuperAdminUser
+  );
+
+  const checkOwnerReadOnlyAction = (): boolean => {
+    if (isOwnerReadOnly) {
+      Alert.alert(
+        'Modo Solo Ver (Propietario TODÁ APP)',
+        'Como propietario de la plataforma tienes acceso en modo solo consulta. La edición de productos, precios, despachos y configuración corresponde exclusivamente al administrador de la tienda.'
+      );
+      return true;
+    }
+    return false;
+  };
 
   React.useEffect(() => {
     if (routeStoreParam) {
@@ -302,6 +321,7 @@ export default function AdminScreen() {
   };
 
   const handleSavePaymentMethod = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     if (!pmName.trim()) {
       Alert.alert('Campo Requerido', 'Por favor ingresa el nombre del medio de pago.');
       return;
@@ -330,6 +350,7 @@ export default function AdminScreen() {
   };
 
   const handleTogglePaymentMethod = async (pm: PaymentMethod) => {
+    if (checkOwnerReadOnlyAction()) return;
     try {
       await togglePaymentMethodActive(pm.id, !pm.isActive);
     } catch (err: any) {
@@ -338,6 +359,7 @@ export default function AdminScreen() {
   };
 
   const handleDeletePaymentMethod = (pm: PaymentMethod) => {
+    if (checkOwnerReadOnlyAction()) return;
     Alert.alert(
       'Confirmar Eliminación',
       `¿Estás seguro de que deseas eliminar el medio de pago "${pm.name}"?`,
@@ -490,6 +512,7 @@ export default function AdminScreen() {
   }, [empresa]);
 
   const handlePickEmpresaLogo = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     try {
       setIsUploadingEmpresaLogo(true);
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -525,6 +548,7 @@ export default function AdminScreen() {
   };
 
   const handleSaveEmpresa = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     if (!empresaNombre.trim()) {
       setEmpresaFeedback({ type: 'error', text: 'El nombre comercial de la tienda es obligatorio.' });
       return;
@@ -719,6 +743,7 @@ export default function AdminScreen() {
   }, [adminUser]);
 
   const handleSaveAdminProfile = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     setProfileMsg(null);
     if (!adminEditName.trim()) {
       setProfileMsg({ type: 'error', text: 'El nombre del administrador es obligatorio.' });
@@ -751,6 +776,7 @@ export default function AdminScreen() {
   };
 
   const handleCreateNewAdmin = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     setCreateAdminMsg(null);
     if (!newAdminName.trim()) {
       setCreateAdminMsg({ type: 'error', text: 'El nombre del nuevo administrador es obligatorio.' });
@@ -1183,6 +1209,7 @@ export default function AdminScreen() {
   };
   // Confirmar eliminación permanente de un producto
   const handleConfirmDelete = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     if (productToDelete) {
       const id = productToDelete.id;
       setIsDeleteModalVisible(false);
@@ -1193,6 +1220,7 @@ export default function AdminScreen() {
 
   // Abrir modal de edición con los datos actuales del artículo
   const handleOpenEditProduct = (prod: Product) => {
+    if (checkOwnerReadOnlyAction()) return;
     setProductToEdit(prod);
     setEditProdName(prod.name);
     setEditProdCategory(prod.categoryId || (categories[0]?.id || 'Mochilas'));
@@ -1206,6 +1234,7 @@ export default function AdminScreen() {
 
   // Guardar cambios del artículo editado
   const handleSaveEditedProduct = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     if (!productToEdit) return;
     if (!editProdName.trim() || !editProdPrice.trim()) {
       Alert.alert('Campos requeridos', 'Por favor ingresa el nombre y el precio del artículo.');
@@ -1353,6 +1382,7 @@ export default function AdminScreen() {
 
   // Abrir modal de nuevo producto completamente limpio y refrescado
   const handleOpenNewProductModal = () => {
+    if (checkOwnerReadOnlyAction()) return;
     setNewProdName('');
     setNewProdCategory(categories[0]?.id || 'Mochilas');
     setNewProdPrice('');
@@ -1368,6 +1398,7 @@ export default function AdminScreen() {
 
   // Guardar nuevo producto y limpiar/refrescar la ventana modal
   const handleSaveProduct = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     if (!newProdName.trim() || !newProdPrice.trim()) {
       Alert.alert('Campos incompletos', 'Ingresa el nombre y precio del artículo.');
       return;
@@ -1421,6 +1452,7 @@ export default function AdminScreen() {
 
   // Iniciar edición de categoría
   const handleStartEditCategory = (cat: Category) => {
+    if (checkOwnerReadOnlyAction()) return;
     setEditingCategory(cat);
     setEditCatName(cat.name);
     setEditCatIcon(cat.icon || 'sparkles-outline');
@@ -1429,6 +1461,7 @@ export default function AdminScreen() {
 
   // Guardar edición de categoría
   const handleSaveEditCategory = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     if (!editingCategory) return;
     if (!editCatName.trim()) {
       Alert.alert('Campo requerido', 'El nombre de la categoría no puede estar vacío.');
@@ -1452,6 +1485,7 @@ export default function AdminScreen() {
 
   // Eliminar categoría
   const handleDeleteCategory = (cat: Category) => {
+    if (checkOwnerReadOnlyAction()) return;
     const associatedProducts = products.filter(
       p => p.categoryId === cat.id || p.categoryId === cat.name
     );
@@ -1486,6 +1520,7 @@ export default function AdminScreen() {
 
   // Guardar nueva categoría
   const handleSaveCategory = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     if (!newCatName.trim()) {
       Alert.alert('Campo requerido', 'Ingresa el nombre de la nueva categoría.');
       return;
@@ -1503,6 +1538,7 @@ export default function AdminScreen() {
 
   // Enviar cotización
   const handleSendQuoteResponse = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     if (!selectedQuote) return;
     const priceNum = parseInt(quotePriceInput.replace(/[^0-9]/g, ''), 10) || 150000;
     const daysNum = parseInt(quoteDaysInput, 10) || 7;
@@ -1523,6 +1559,7 @@ export default function AdminScreen() {
 
   // Enviar mensaje en chat
   const handleSendAdminReply = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     if (!selectedChatUserEmail || !replyMessageText.trim()) return;
     await sendMessage(
       selectedChatUserEmail,
@@ -1685,6 +1722,7 @@ export default function AdminScreen() {
 
   // Abrir modal de liquidación y Paz y Salvo
   const openSettlementModal = (order: Order) => {
+    if (checkOwnerReadOnlyAction()) return;
     setSelectedOrderForSettlement(order);
     const isTransfer = (order.client.payment || '').toLowerCase().includes('transfer') || (order.client.payment || '').toLowerCase().includes('qr');
     setSettlementType(isTransfer ? 'TRANSFERENCIA_TIENDA' : 'EFECTIVO_EN_TIENDA');
@@ -1695,6 +1733,7 @@ export default function AdminScreen() {
 
   // Confirmar liquidación y otorgar Paz y Salvo
   const handleConfirmSettlement = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     if (!selectedOrderForSettlement) return;
     if (settlementType === 'TRANSFERENCIA_TIENDA' && !settlementTransferRef.trim()) {
       if (Platform.OS === 'web') {
@@ -1732,6 +1771,7 @@ export default function AdminScreen() {
 
   // Abrir modal de asignación y despacho a repartidor o transportadora registrada
   const openDispatchModal = (order: Order) => {
+    if (checkOwnerReadOnlyAction()) return;
     setSelectedOrderToDispatch(order);
     setSelectedDriverId(drivers[0]?.id || '');
     setCustomGuideNumber(order.trackingGuideNumber || '');
@@ -1741,6 +1781,7 @@ export default function AdminScreen() {
 
   // Confirmar despacho y asignación
   const handleConfirmDispatchWithDriver = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     if (!selectedOrderToDispatch) return;
 
     const matchedDriver = drivers.find(d => d.id === selectedDriverId) || drivers[0];
@@ -1786,6 +1827,7 @@ export default function AdminScreen() {
 
   // Guardar nuevo repartidor o transportadora
   const handleSaveNewDriver = async () => {
+    if (checkOwnerReadOnlyAction()) return;
     if (!newDriverName.trim() || !newDriverEmail.trim() || !newDriverPhone.trim() || !newDriverCedulaOrNit.trim()) {
       if (Platform.OS === 'web') {
         window.alert('Por favor complete todos los campos obligatorios (*).');
@@ -2204,6 +2246,60 @@ export default function AdminScreen() {
   // =========================================================================
   return (
     <View style={styles.dashboardContainer}>
+      {/* BANNER MODO SOLO VER DEL PROPIETARIO DE TODÁ APP */}
+      {isOwnerReadOnly && (
+        <View style={{
+          backgroundColor: '#0B132B',
+          borderBottomWidth: 1.5,
+          borderBottomColor: '#10B981',
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 10,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#064E3B', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="eye" size={18} color="#34D399" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
+                  MODO SOLO VER (PROPIETARIO TODÁ APP)
+                </Text>
+                <View style={{ backgroundColor: '#047857', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>SOLO CONSULTA</Text>
+                </View>
+              </View>
+              <Text style={{ color: '#94A3B8', fontSize: 11, marginTop: 1 }}>
+                Supervisión de tienda: visualización de datos sin permisos de edición ni despacho.
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: '#1E293B',
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: '#334155',
+            }}
+            onPress={() => router.push('/owner' as any)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-back" size={14} color="#38BDF8" />
+            <Text style={{ color: '#38BDF8', fontSize: 12, fontWeight: '700' }}>Volver a TODÁ APP</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* HEADER SUPERIOR */}
       <View style={styles.topBar}>
         <View style={styles.brandRow}>
@@ -2211,7 +2307,7 @@ export default function AdminScreen() {
             <Ionicons name="shield-checkmark" size={18} color="#C5A880" />
           </View>
           <View>
-            <Text style={styles.brandTitle}>EINUUSHI BACKOFFICE</Text>
+            <Text style={styles.brandTitle}>{(routeStoreInfo?.nombre || empresa?.nombre || 'TIENDA').toUpperCase()} BACKOFFICE</Text>
             <Text style={styles.adminStatusText}>
               ● Sesión Activa: <Text style={{ fontWeight: 'bold' }}>{adminUser?.fullName}</Text>
             </Text>
@@ -2219,26 +2315,6 @@ export default function AdminScreen() {
         </View>
 
         <View style={styles.topActionsRow}>
-          {isSuperAdminUser && (
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: '#0B132B',
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: '#10B981',
-                marginRight: 6,
-              }}
-              onPress={() => router.push('/owner' as any)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="sparkles" size={13} color="#10B981" style={{ marginRight: 5 }} />
-              <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Panel Maestro TODÁ APP</Text>
-            </TouchableOpacity>
-          )}
           <TouchableOpacity
             style={styles.refreshIconButton}
             onPress={refreshAll}
@@ -3092,7 +3168,7 @@ export default function AdminScreen() {
                     {order.paymentStatus !== 'PAID' && (
                       <TouchableOpacity
                         style={styles.confirmPayButton}
-                        onPress={() => confirmPayment(order.id)}
+                        onPress={() => checkOwnerReadOnlyAction() ? null : confirmPayment(order.id)}
                         activeOpacity={0.8}
                       >
                         <Ionicons name="checkmark-done" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
@@ -3125,7 +3201,7 @@ export default function AdminScreen() {
                     {order.statusCode === 'ARRIVED' && (
                       <TouchableOpacity
                         style={[styles.deliverButton, { backgroundColor: '#10B981' }]}
-                        onPress={() => markOrderDelivered(order.id)}
+                        onPress={() => checkOwnerReadOnlyAction() ? null : markOrderDelivered(order.id)}
                         activeOpacity={0.8}
                       >
                         <Ionicons name="checkmark-done" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
@@ -3201,23 +3277,32 @@ export default function AdminScreen() {
                   <Text style={styles.createCategoryBtnText}>📂 Categorías ({categories.length})</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.createCategoryBtn}
-                  onPress={() => setIsNewCategoryModalVisible(true)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="add-circle-outline" size={16} color="#1E2B58" style={{ marginRight: 4 }} />
-                  <Text style={styles.createCategoryBtnText}>+ Nueva Categoría</Text>
-                </TouchableOpacity>
+                {isOwnerReadOnly ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1' }}>
+                    <Ionicons name="eye-outline" size={16} color="#64748B" style={{ marginRight: 6 }} />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>Catálogo en Modo Solo Ver</Text>
+                  </View>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.createCategoryBtn}
+                      onPress={() => setIsNewCategoryModalVisible(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="add-circle-outline" size={16} color="#1E2B58" style={{ marginRight: 4 }} />
+                      <Text style={styles.createCategoryBtnText}>+ Nueva Categoría</Text>
+                    </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.addProductMainBtn}
-                  onPress={handleOpenNewProductModal}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="add" size={18} color="#FFFFFF" style={{ marginRight: 4 }} />
-                  <Text style={styles.addProductMainBtnText}>+ Nuevo Artículo</Text>
-                </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.addProductMainBtn}
+                      onPress={handleOpenNewProductModal}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="add" size={18} color="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={styles.addProductMainBtnText}>+ Nuevo Artículo</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             </View>
 
@@ -3532,50 +3617,52 @@ export default function AdminScreen() {
                         </View>
 
                         {/* ACCIONES: EDITAR, INACTIVAR / ACTIVAR Y ELIMINAR */}
-                        <View style={styles.cardActionsFooter}>
-                          <TouchableOpacity
-                            style={styles.editProdBtn}
-                            onPress={() => handleOpenEditProduct(prod)}
-                            activeOpacity={0.8}
-                          >
-                            <Ionicons name="create-outline" size={13} color="#1E2B58" style={{ marginRight: 4 }} />
-                            <Text style={styles.editProdBtnText}>Editar</Text>
-                          </TouchableOpacity>
+                        {!isOwnerReadOnly && (
+                          <View style={styles.cardActionsFooter}>
+                            <TouchableOpacity
+                              style={styles.editProdBtn}
+                              onPress={() => handleOpenEditProduct(prod)}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="create-outline" size={13} color="#1E2B58" style={{ marginRight: 4 }} />
+                              <Text style={styles.editProdBtnText}>Editar</Text>
+                            </TouchableOpacity>
 
-                          <TouchableOpacity
-                            style={[
-                              styles.toggleActiveBtn,
-                              isItemInactive ? styles.toggleActiveBtnActivate : styles.toggleActiveBtnPause,
-                            ]}
-                            onPress={() => toggleProductActive(prod.id, isItemInactive ? 1 : 0)}
-                            activeOpacity={0.8}
-                          >
-                            <Ionicons
-                              name={isItemInactive ? "play" : "pause"}
-                              size={13}
-                              color={isItemInactive ? "#059669" : "#D97706"}
-                              style={{ marginRight: 4 }}
-                            />
-                            <Text style={[
-                              styles.toggleActiveBtnText,
-                              { color: isItemInactive ? "#059669" : "#D97706" }
-                            ]}>
-                              {isItemInactive ? "Reactivar" : "Inactivar"}
-                            </Text>
-                          </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[
+                                styles.toggleActiveBtn,
+                                isItemInactive ? styles.toggleActiveBtnActivate : styles.toggleActiveBtnPause,
+                              ]}
+                              onPress={() => toggleProductActive(prod.id, isItemInactive ? 1 : 0)}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons
+                                name={isItemInactive ? "play" : "pause"}
+                                size={13}
+                                color={isItemInactive ? "#059669" : "#D97706"}
+                                style={{ marginRight: 4 }}
+                              />
+                              <Text style={[
+                                styles.toggleActiveBtnText,
+                                { color: isItemInactive ? "#059669" : "#D97706" }
+                              ]}>
+                                {isItemInactive ? "Reactivar" : "Inactivar"}
+                              </Text>
+                            </TouchableOpacity>
 
-                          <TouchableOpacity
-                            style={styles.deleteProdBtn}
-                            onPress={() => {
-                              setProductToDelete(prod);
-                              setIsDeleteModalVisible(true);
-                            }}
-                            activeOpacity={0.8}
-                          >
-                            <Ionicons name="trash-outline" size={14} color="#DC2626" style={{ marginRight: 4 }} />
-                            <Text style={styles.deleteProdBtnText}>Eliminar</Text>
-                          </TouchableOpacity>
-                        </View>
+                            <TouchableOpacity
+                              style={styles.deleteProdBtn}
+                              onPress={() => {
+                                setProductToDelete(prod);
+                                setIsDeleteModalVisible(true);
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="trash-outline" size={14} color="#DC2626" style={{ marginRight: 4 }} />
+                              <Text style={styles.deleteProdBtnText}>Eliminar</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
                       </View>
                     </View>
                   );
@@ -3966,116 +4053,6 @@ export default function AdminScreen() {
             {/* SUB-PESTAÑA 0: DATOS DE LA EMPRESA / TIENDA REGISTRADA */}
             {settingsSubTab === 'empresa' && (
               <>
-                {/* SECCIÓN PROPIETARIO: DIRECTORIO Y REGISTRO DE NUEVAS TIENDAS */}
-                {isSuperAdminUser && (
-                  <View style={[styles.settingsCard, { marginBottom: 20 }]}>
-                    <View style={styles.settingsCardHeader}>
-                      <View style={[styles.settingsIconCircle, { backgroundColor: '#FEF3C7' }]}>
-                        <Ionicons name="storefront" size={24} color="#B45309" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.settingsCardTitle}>Directorio de Tiendas & Talleres Afiliados</Text>
-                        <Text style={styles.settingsCardSubtitle}>
-                          Como propietario puedes afiliar nuevas tiendas, generarles su enlace web exclusivo y supervisar sus datos
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 }}
-                        onPress={() => setIsRegisterStoreModalVisible(true)}
-                        activeOpacity={0.85}
-                      >
-                        <Ionicons name="add-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Dar de Alta Nueva Tienda</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Tarjetas de Tiendas Registradas */}
-                    <View style={{ marginTop: 12, gap: 12 }}>
-                      {empresasList.map((emp) => {
-                        const isEinuushi = emp.id === 'einuushi';
-                        const isFiltered = selectedStoreFilter === emp.id;
-                        const webPath = `/admin?store=${emp.id}`;
-                        const originUrl = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : 'https://einuushi-artesanias.web.app';
-                        const fullStoreWebUrl = `${originUrl}${webPath}`;
-
-                        return (
-                          <View
-                            key={emp.id}
-                            style={{
-                              backgroundColor: '#FFFFFF',
-                              borderWidth: 1.5,
-                              borderColor: isFiltered ? '#10B981' : '#E2E8F0',
-                              borderRadius: 14,
-                              padding: 14,
-                              shadowColor: '#000',
-                              shadowOpacity: 0.04,
-                              shadowRadius: 3,
-                              elevation: 1,
-                            }}
-                          >
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                              <View style={{ width: 50, height: 50, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
-                                {emp.logoUrl ? (
-                                  <Image source={{ uri: emp.logoUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-                                ) : (
-                                  <Ionicons name="business" size={24} color="#94A3B8" />
-                                )}
-                              </View>
-                              <View style={{ flex: 1, minWidth: 200 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#1E2B58' }}>
-                                    {emp.nombre}
-                                  </Text>
-                                  <View style={{ backgroundColor: isEinuushi ? '#DBEAFE' : '#DCFCE7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                                    <Text style={{ fontSize: 10, fontWeight: '700', color: isEinuushi ? '#1D4ED8' : '#15803D' }}>
-                                      {isEinuushi ? 'TIENDA PRINCIPAL' : 'AFILIADA'}
-                                    </Text>
-                                  </View>
-                                </View>
-                                <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                                  {emp.ciudad || 'Riohacha'} • NIT: {emp.nit || 'Por configurar'} • Envío: ${Number(emp.costoEnvioBase || 16000).toLocaleString()}
-                                </Text>
-                              </View>
-
-                              {/* Enlace Web Asignado */}
-                              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                                <TouchableOpacity
-                                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1' }}
-                                  onPress={() => handleCopyText(fullStoreWebUrl, 'Enlace Web de ' + emp.nombre)}
-                                  activeOpacity={0.7}
-                                >
-                                  <Ionicons name="copy-outline" size={14} color="#1E2B58" style={{ marginRight: 4 }} />
-                                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#1E2B58' }}>Copiar Enlace Web</Text>
-                                </TouchableOpacity>
-
-                                {emp.whatsapp ? (
-                                  <TouchableOpacity
-                                    style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#DCFCE7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#86EFAC' }}
-                                    onPress={() => handleShareCredentialsWhatsApp(emp.whatsapp || '', { nombre: emp.nombre, slug: emp.id, adminEmail: emp.email || '', adminPassword: '***', webUrl: webPath })}
-                                    activeOpacity={0.7}
-                                  >
-                                    <Ionicons name="logo-whatsapp" size={14} color="#15803D" style={{ marginRight: 4 }} />
-                                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#15803D' }}>Enviar Acceso</Text>
-                                  </TouchableOpacity>
-                                ) : null}
-                              </View>
-                            </View>
-
-                            <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <Text style={{ fontSize: 11, color: '#94A3B8' }}>
-                                URL Web: <Text style={{ color: '#0284C7', fontWeight: '600' }}>{webPath}</Text>
-                              </Text>
-                              <Text style={{ fontSize: 11, color: emp.isActiva !== false ? '#15803D' : '#DC2626', fontWeight: '700' }}>
-                                {emp.isActiva !== false ? '● Operando' : '○ Inactiva'}
-                              </Text>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-                )}
-
                 <View style={styles.settingsCard}>
                   <View style={styles.settingsCardHeader}>
                     <View style={[styles.settingsIconCircle, { backgroundColor: '#E0F2FE' }]}>
@@ -4306,21 +4283,30 @@ export default function AdminScreen() {
 
                 {/* Botón Guardar */}
                 <View style={{ marginTop: 24, flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
-                  <TouchableOpacity
-                    style={[styles.settingsPrimaryBtn, { backgroundColor: '#0284C7' }, isSavingEmpresa && { opacity: 0.7 }]}
-                    onPress={handleSaveEmpresa}
-                    disabled={isSavingEmpresa}
-                    activeOpacity={0.85}
-                  >
-                    {isSavingEmpresa ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
-                    ) : (
-                      <Ionicons name="save-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                    )}
-                    <Text style={styles.settingsPrimaryBtnText}>
-                      {isSavingEmpresa ? 'Guardando...' : 'Guardar Información de Empresa'}
-                    </Text>
-                  </TouchableOpacity>
+                  {isOwnerReadOnly ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1' }}>
+                      <Ionicons name="eye-outline" size={16} color="#64748B" style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>
+                        Modo Solo Ver: Configuración reservada para la tienda
+                      </Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.settingsPrimaryBtn, { backgroundColor: '#0284C7' }, isSavingEmpresa && { opacity: 0.7 }]}
+                      onPress={handleSaveEmpresa}
+                      disabled={isSavingEmpresa}
+                      activeOpacity={0.85}
+                    >
+                      {isSavingEmpresa ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                      ) : (
+                        <Ionicons name="save-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                      )}
+                      <Text style={styles.settingsPrimaryBtnText}>
+                        {isSavingEmpresa ? 'Guardando...' : 'Guardar Información de Empresa'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
               </>

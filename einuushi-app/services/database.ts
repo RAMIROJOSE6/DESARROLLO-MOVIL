@@ -367,7 +367,7 @@ const INITIAL_USERS: User[] = [
     phone: "3042039297",
     city: "Riohacha",
     password: "admin",
-    role: "superadmin",
+    role: "admin",
     createdAt: "2026-10-22T15:31:02.976344+00:00",
   },
 ];
@@ -415,7 +415,7 @@ export async function getUsers(): Promise<User[]> {
           phone: u.phone,
           city: u.city,
           password: u.password,
-          role: (u.role === 'superadmin' || u.id === 'USR-ADMIN-01' || u.email?.toLowerCase() === 'shailynvangrieken2016@gmail.com')
+          role: (u.role === 'superadmin' || u.email?.toLowerCase() === 'propietario@todaapp.com' || u.id === 'USR-OWNER-TODA')
             ? ('superadmin' as const)
             : (u.role === 'driver' || u.id?.startsWith('USR-DRIVER')
               ? ('driver' as const)
@@ -459,7 +459,7 @@ export async function findUserByEmail(email: string): Promise<User | null> {
           phone: data.phone,
           city: data.city,
           password: data.password,
-          role: (data.role === 'superadmin' || data.id === 'USR-ADMIN-01' || data.email?.toLowerCase() === 'admin@einuushi.com')
+          role: (data.role === 'superadmin' || data.email?.toLowerCase() === 'propietario@todaapp.com' || data.id === 'USR-OWNER-TODA')
             ? ('superadmin' as const)
             : ((data.role as "client" | "admin" | "superadmin") || "client"),
           avatar: data.avatar || undefined,
@@ -744,13 +744,12 @@ export function isSuperAdmin(user?: { email?: string; role?: string; id?: string
   const email = (user.email || '').trim().toLowerCase();
   const role = (user.role || '').trim().toLowerCase();
   const id = (user.id || '').trim();
+  // Exclusivo para la cuenta Propietario de la plataforma TODÁ APP
   return (
-    role === 'superadmin' ||
     email === 'propietario@todaapp.com' ||
     email === 'admin@todaapp.com' ||
-    email === 'shailynvangrieken2016@gmail.com' ||
     id === 'USR-OWNER-TODA' ||
-    (id === 'USR-ADMIN-01' && email !== 'admin@einuushi.com')
+    (role === 'superadmin' && email.includes('todaapp.com'))
   );
 }
 

@@ -966,11 +966,11 @@ export default function OwnerScreen() {
 
                       <TouchableOpacity
                         style={[styles.urlActionButton, { backgroundColor: '#1E2B58' }]}
-                        onPress={() => router.push(webPath as any)}
-                        
+                        onPress={() => router.push(`/admin?store=${emp.id}&viewMode=owner_readonly` as any)}
+                        activeOpacity={0.85}
                       >
-                        <Ionicons name="open-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                        <Text style={[styles.urlActionText, { color: '#FFFFFF' }]}>Abrir Panel</Text>
+                        <Ionicons name="eye-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={[styles.urlActionText, { color: '#FFFFFF' }]}>Ver Tienda</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
