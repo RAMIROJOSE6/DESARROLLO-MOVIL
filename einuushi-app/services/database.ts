@@ -115,6 +115,7 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  empresaId?: string;
   userId?: string;
   userEmail?: string;
   clientName?: string;
@@ -826,8 +827,15 @@ export async function authenticateAdmin(
     };
   }
 
-  // 2. Si la tienda está suspendida por mora de arriendo y quien ingresa es su administrador de tienda
+  // 2. Validación de pertenencia estricta a la tienda solicitada (Aislamiento Multi-tienda)
   if (expectedStoreId && expectedStoreId !== 'ALL' && !isSuper) {
+    if (user.empresaId && user.empresaId.toLowerCase() !== expectedStoreId.toLowerCase()) {
+      return {
+        success: false,
+        message: `Acceso restringido: Esta cuenta de administrador pertenece a otra tienda y no tiene autorización para acceder a este panel.`,
+      };
+    }
+
     const store = await getEmpresaById(expectedStoreId);
     if (store && store.isActiva === false) {
       return {
@@ -999,6 +1007,7 @@ export async function saveOrder(order: Order): Promise<void> {
     try {
       const supaPayload: any = {
         id: order.id,
+        empresa_id: order.empresaId || (order as any).empresa_id || 'einuushi',
         user_id: order.userId || null,
         user_email: order.userEmail || null,
         date: order.date,
@@ -1040,6 +1049,7 @@ export async function saveOrder(order: Order): Promise<void> {
         // Fallback básico sin columnas adicionales si la tabla Supabase no las tiene todavía
         await supabase.from('orders').upsert({
           id: order.id,
+          empresa_id: order.empresaId || (order as any).empresa_id || 'einuushi',
           user_id: order.userId || null,
           user_email: order.userEmail || null,
           date: order.date,
