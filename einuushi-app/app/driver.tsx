@@ -13,6 +13,7 @@ import {
   Linking,
   KeyboardAvoidingView,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -102,7 +103,7 @@ export default function DriverScreen() {
       try {
         const emp = store ? await getEmpresaById(store) : await getActiveEmpresa();
         if (isMounted) setStoreEmpresa(emp);
-      } catch (_) {}
+      } catch {}
     })();
     return () => { isMounted = false; };
   }, [store]);
@@ -304,7 +305,7 @@ export default function DriverScreen() {
           setDeliveryPhotoUri(result.assets[0].uri);
         }
       }
-    } catch (err) {
+    } catch {
       showNotification('Error', 'No se pudo abrir la cámara.');
     }
   };
@@ -329,7 +330,7 @@ export default function DriverScreen() {
           setDeliveryPhotoUri(result.assets[0].uri);
         }
       }
-    } catch (err) {
+    } catch {
       showNotification('Error', 'No se pudo abrir la galería.');
     }
   };
@@ -389,7 +390,7 @@ export default function DriverScreen() {
         ? `¡Entrega confirmada! Has recaudado $ ${(selectedOrderForDelivery.total || 0).toLocaleString('es-CO')} COP en efectivo. Recuerda entregar el dinero en la tienda para tu Paz y Salvo.`
         : `¡Entrega confirmada con éxito para el pedido #${selectedOrderForDelivery.id}!`;
       showNotification('Entrega Exitosa', successMsg);
-    } catch (err: any) {
+    } catch {
       showNotification('Error', 'No se pudo confirmar la entrega del pedido.');
     } finally {
       setIsSubmittingDelivery(false);
@@ -444,7 +445,7 @@ export default function DriverScreen() {
       setIsHandoverModalVisible(false);
       await loadDriverOrders();
       showNotification('Reporte Enviado', 'Tu reporte de liquidación fue enviado al administrador. La tienda revisará y emitirá el Paz y Salvo oficial.');
-    } catch (err) {
+    } catch {
       showNotification('Error', 'No se pudo enviar el reporte.');
     } finally {
       setIsSubmittingHandover(false);
@@ -723,6 +724,9 @@ export default function DriverScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollList}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={loadDriverOrders} tintColor="#C5A880" colors={['#C5A880']} />
+        }
       >
         {filteredOrders.length > 0 ? (
           filteredOrders.map(order => {
