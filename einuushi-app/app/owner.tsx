@@ -645,7 +645,7 @@ export default function OwnerScreen() {
             activeOpacity={0.85}
           >
             <Ionicons name="add-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={styles.createStoreButtonText}>Dar de Alta Nueva Tienda</Text>
+            <Text style={styles.createStoreButtonText}>Crear Nueva Tienda</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1025,8 +1025,8 @@ export default function OwnerScreen() {
                   <Ionicons name="storefront" size={20} color="#15803D" />
                 </View>
                 <View>
-                  <Text style={styles.modalTitle}>Dar de Alta Nueva Tienda</Text>
-                  <Text style={styles.modalSubtitle}>Asigna su dirección web, datos de arriendo y credenciales</Text>
+                  <Text style={styles.modalTitle}>Crear Nueva Tienda</Text>
+                  <Text style={styles.modalSubtitle}>Asigna su dirección web, condiciones de licencia y credenciales de acceso</Text>
                 </View>
               </View>
               <TouchableOpacity onPress={() => setIsRegisterModalOpen(false)}>
@@ -1041,7 +1041,7 @@ export default function OwnerScreen() {
               </View>
             ) : null}
 
-            <ScrollView style={{ marginTop: 12, maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ marginTop: 12, maxHeight: 480 }} showsVerticalScrollIndicator={true} persistentScrollbar={true} contentContainerStyle={{ paddingRight: 6, paddingBottom: 16 }}>
               {/* SECCIÓN 1: DATOS DE LA TIENDA */}
               <Text style={styles.formSectionTitle}>1. Datos Comerciales de la Tienda</Text>
 
@@ -1075,29 +1075,15 @@ export default function OwnerScreen() {
                   </Text>
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.settingsLabel}>NIT o Cédula:</Text>
-                    <TextInput
-                      style={styles.settingsInput}
-                      value={newNit}
-                      onChangeText={setNewNit}
-                      placeholder="901.123.456-7"
-                      placeholderTextColor="#94A3B8"
-                    />
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.settingsLabel}>Tarifa Base Envío (COP):</Text>
-                    <TextInput
-                      style={styles.settingsInput}
-                      value={newCostoEnvio}
-                      onChangeText={setNewCostoEnvio}
-                      keyboardType="numeric"
-                      placeholder="16000"
-                      placeholderTextColor="#94A3B8"
-                    />
-                  </View>
+                <View>
+                  <Text style={styles.settingsLabel}>NIT o Cédula:</Text>
+                  <TextInput
+                    style={styles.settingsInput}
+                    value={newNit}
+                    onChangeText={setNewNit}
+                    placeholder="901.123.456-7"
+                    placeholderTextColor="#94A3B8"
+                  />
                 </View>
 
                 <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -1241,7 +1227,7 @@ export default function OwnerScreen() {
                     <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
                   )}
                   <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>
-                    {isRegistering ? 'Creando Tienda...' : 'Dar de Alta y Generar Acceso'}
+                    {isRegistering ? 'Guardando Tienda...' : 'Guardar y Dar Acceso'}
                   </Text>
                 </TouchableOpacity>
               </View>
