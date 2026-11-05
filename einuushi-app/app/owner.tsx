@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,6 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Empresa,
-  RegisterStoreInput,
   getEmpresas,
   saveEmpresa,
   getUsers,
@@ -32,7 +31,6 @@ import {
   isSuperAdmin,
   User,
   getPlatformGlobalMetrics,
-  PLATFORM_INFO,
   updatePassword,
   onDatabaseChange,
   subscribeToEmpresasRealtime,
@@ -80,7 +78,6 @@ export default function OwnerScreen() {
   const [newWhatsapp, setNewWhatsapp] = useState('');
   const [newLogoUrl, setNewLogoUrl] = useState('');
   const [isUploadingNewLogo, setIsUploadingNewLogo] = useState(false);
-  const [newCostoEnvio, setNewCostoEnvio] = useState('16000');
   const [newValorArriendo, setNewValorArriendo] = useState('150000');
   const [newFechaCorte, setNewFechaCorte] = useState('Día 5 de cada mes');
   const [newAdminName, setNewAdminName] = useState('');
@@ -181,6 +178,63 @@ export default function OwnerScreen() {
     }
   };
 
+  const loadPlatformData = useCallback(async () => {
+    try {
+      setIsLoadingData(true);
+      const [allEmpresas, globMetrics, allUsers] = await Promise.all([
+        getEmpresas(),
+        getPlatformGlobalMetrics(),
+        getUsers(),
+      ]);
+      setEmpresasList(allEmpresas);
+      setMetrics(globMetrics);
+      setUsersList(allUsers);
+    } catch (err) {
+      console.error('Error cargando datos de la plataforma:', err);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, []);
+
+  // 1. Cargar Sesión Inicial y Suscripción en Tiempo Real
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initSession() {
+      try {
+        const session = await getAdminSession();
+        if (!isMounted) return;
+        if (session && isSuperAdmin(session)) {
+          setCurrentUser(session);
+          await loadPlatformData();
+        } else {
+          setCurrentUser(null);
+        }
+      } catch {
+        if (isMounted) setCurrentUser(null);
+      } finally {
+        if (isMounted) setIsLoadingAuth(false);
+      }
+    }
+
+    initSession();
+
+    // Sincronización instantánea ante cualquier cambio en base de datos o paneles
+    const unsubDb = onDatabaseChange(() => {
+      if (isMounted) loadPlatformData();
+    });
+
+    const unsubRealtime = subscribeToEmpresasRealtime(() => {
+      if (isMounted) loadPlatformData();
+    });
+
+    return () => {
+      isMounted = false;
+      unsubDb();
+      unsubRealtime();
+    };
+  }, [loadPlatformData]);
+
   const openEditStoreModal = (emp: Empresa) => {
     const admin = usersList.find(u => u.empresaId === emp.id && (u.role === 'admin' || u.role === 'superadmin')) || usersList.find(u => u.empresaId === emp.id);
     setEditingStoreData(emp);
@@ -232,60 +286,6 @@ export default function OwnerScreen() {
   const [confirmOwnerPassword, setConfirmOwnerPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-
-  // 1. Cargar Sesión Inicial y Suscripción en Tiempo Real
-  useEffect(() => {
-    checkInitialSession();
-
-    // Sincronización instantánea ante cualquier cambio en base de datos o paneles
-    const unsubDb = onDatabaseChange(() => {
-      loadPlatformData();
-    });
-
-    const unsubRealtime = subscribeToEmpresasRealtime(() => {
-      loadPlatformData();
-    });
-
-    return () => {
-      unsubDb();
-      unsubRealtime();
-    };
-  }, []);
-
-  const checkInitialSession = async () => {
-    try {
-      setIsLoadingAuth(true);
-      const session = await getAdminSession();
-      if (session && isSuperAdmin(session)) {
-        setCurrentUser(session);
-        await loadPlatformData();
-      } else {
-        setCurrentUser(null);
-      }
-    } catch (_) {
-      setCurrentUser(null);
-    } finally {
-      setIsLoadingAuth(false);
-    }
-  };
-
-  const loadPlatformData = async () => {
-    try {
-      setIsLoadingData(true);
-      const [allEmpresas, globMetrics, allUsers] = await Promise.all([
-        getEmpresas(),
-        getPlatformGlobalMetrics(),
-        getUsers(),
-      ]);
-      setEmpresasList(allEmpresas);
-      setMetrics(globMetrics);
-      setUsersList(allUsers);
-    } catch (err) {
-      console.error('Error cargando datos de la plataforma:', err);
-    } finally {
-      setIsLoadingData(false);
-    }
-  };
 
   // Manejo de Inicio de Sesión del Propietario
   const handleOwnerLogin = async () => {
@@ -368,7 +368,7 @@ export default function OwnerScreen() {
           departamento: newDepto.trim(),
           telefono: newTelefono.trim(),
           whatsapp: newWhatsapp.trim() || newTelefono.trim(),
-          costoEnvioBase: parseFloat(newCostoEnvio) || 16000,
+          costoEnvioBase: 16000,
           logoUrl: newLogoUrl.trim() || undefined,
           valorArriendo: parseFloat(newValorArriendo) || 150000,
           fechaCorteArriendo: newFechaCorte.trim() || 'Día 5 de cada mes',
@@ -1389,7 +1389,7 @@ export default function OwnerScreen() {
               ¡Tienda Registrada en TODÁ APP!
             </Text>
             <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginTop: 4, marginBottom: 18 }}>
-              "{createdData?.nombre}" ya está habilitada en la plataforma con su propia dirección web.
+              {`"${createdData?.nombre}" ya está habilitada en la plataforma con su propia dirección web.`}
             </Text>
 
             <View style={{ width: '100%', backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', gap: 10 }}>
