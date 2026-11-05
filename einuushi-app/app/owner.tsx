@@ -699,7 +699,6 @@ export default function OwnerScreen() {
                 <Text style={styles.masterBadgeText}>SUPERADMIN</Text>
               </View>
             </View>
-            <Text style={styles.topbarSubtitle}>Panel Maestro del Propietario de la Plataforma</Text>
           </View>
         </View>
 
