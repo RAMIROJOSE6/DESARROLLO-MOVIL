@@ -44,6 +44,7 @@ export interface User {
   plateOrNit?: string; // Placa de rodamiento o NIT de la empresa
   carrierTrackingUrl?: string; // Portal de rastreo web corporativo
   isActive?: boolean;
+  empresaId?: string;
 }
 
 export interface PaymentMethod {
@@ -59,6 +60,7 @@ export interface PaymentMethod {
   isActive: boolean;
   requiresProof?: boolean;
   orderIndex: number;
+  empresaId?: string;
 }
 
 export interface Empresa {
@@ -413,6 +415,7 @@ export async function getUsers(): Promise<User[]> {
           plateOrNit: u.plate_or_nit || undefined,
           carrierTrackingUrl: u.carrier_tracking_url || undefined,
           isActive: u.is_active !== undefined ? u.is_active : true,
+          empresaId: u.empresa_id || 'einuushi',
           createdAt: u.created_at || new Date().toISOString(),
         }));
         
@@ -448,6 +451,7 @@ export async function findUserByEmail(email: string): Promise<User | null> {
             ? ('superadmin' as const)
             : ((data.role as "client" | "admin" | "superadmin") || "client"),
           avatar: data.avatar || undefined,
+          empresaId: data.empresa_id || 'einuushi',
           createdAt: data.created_at || new Date().toISOString(),
         };
       }
@@ -810,12 +814,15 @@ export async function authenticateAdmin(
  * =========================================================================
  */
 
-export async function getOrders(filterUserEmail?: string): Promise<Order[]> {
+export async function getOrders(filterUserEmail?: string, filterEmpresaId?: string): Promise<Order[]> {
   if (isSupabaseConfigured()) {
     try {
       let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
       if (filterUserEmail) {
         query = query.eq('user_email', filterUserEmail.trim().toLowerCase());
+      }
+      if (filterEmpresaId && filterEmpresaId !== 'ALL') {
+        query = query.eq('empresa_id', filterEmpresaId);
       }
       const { data, error } = await query;
       if (!error && Array.isArray(data)) {
@@ -902,6 +909,7 @@ export async function getOrders(filterUserEmail?: string): Promise<Order[]> {
             paymentStatus: r.payment_status || 'PENDING',
             eta: r.eta,
             rating: r.rating || 0,
+            empresaId: r.empresa_id || 'einuushi',
             items: parsedItems,
             dispatchedAt: r.dispatched_at || undefined,
             receivedAt: r.received_at || undefined,
@@ -2226,10 +2234,10 @@ export function calculateAdminAnalytics(
   };
 }
 
-export async function getStoreAnalytics(): Promise<StoreAnalytics> {
+export async function getStoreAnalytics(empresaId?: string): Promise<StoreAnalytics> {
   const [orders, products, users] = await Promise.all([
-    getOrders(),
-    getProducts(),
+    getOrders(undefined, empresaId),
+    getProducts(empresaId),
     getUsers(),
   ]);
   return calculateAdminAnalytics(orders, products, users);
@@ -3072,4 +3080,198 @@ export async function setActiveEmpresa(empresaOrId: Empresa | string): Promise<E
   const loaded = await getEmpresaById(targetId);
   notifyDatabaseChange();
   return loaded;
+}
+
+
+export interface RegisterStoreInput {
+  nombre: string;
+  slug: string;
+  razonSocial?: string;
+  nit?: string;
+  slogan?: string;
+  descripcion?: string;
+  ciudad?: string;
+  departamento?: string;
+  telefono?: string;
+  whatsapp?: string;
+  email?: string;
+  costoEnvioBase?: number;
+  logoUrl?: string;
+  adminFullName: string;
+  adminEmail: string;
+  adminPassword?: string;
+  adminPhone?: string;
+  adminCedula?: string;
+}
+
+export async function registerNewStoreWithAdmin(
+  input: RegisterStoreInput,
+  operatorAdmin?: { email?: string; fullName?: string; id?: string }
+): Promise<{ success: boolean; empresa?: Empresa; adminUser?: User; webUrl?: string; message?: string }> {
+  try {
+    const rawSlug = (input.slug || input.nombre).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    const slug = rawSlug || `store_${Date.now()}`;
+
+    // 1. Validar que la empresa no exista
+    const existingEmpresas = await getEmpresas();
+    if (existingEmpresas.some(e => e.id.toLowerCase() === slug)) {
+      return { success: false, message: `Ya existe una tienda con el identificador web "${slug}". Elige otro diferente.` };
+    }
+
+    // 2. Validar que el correo del administrador no esté registrado
+    const normalizedAdminEmail = input.adminEmail.trim().toLowerCase();
+    const existingUser = await findUserByEmail(normalizedAdminEmail);
+    if (existingUser) {
+      return { success: false, message: `Ya existe un usuario registrado con el correo "${normalizedAdminEmail}". Usa otro correo para el administrador.` };
+    }
+
+    // 3. Crear y guardar la Empresa
+    const newEmpresa: Empresa = {
+      id: slug,
+      nombre: input.nombre.trim(),
+      razonSocial: input.razonSocial?.trim() || `${input.nombre.trim()} S.A.S.`,
+      nit: input.nit?.trim() || '',
+      slogan: input.slogan?.trim() || 'Artesanías y Tradición',
+      descripcion: input.descripcion?.trim() || `Tienda oficial de artesanías de ${input.ciudad || 'La Guajira'}.`,
+      logoUrl: input.logoUrl?.trim() || DEFAULT_EMPRESA_EINUUSHI.logoUrl,
+      telefono: input.telefono?.trim() || input.whatsapp?.trim() || '',
+      whatsapp: input.whatsapp?.trim() || input.telefono?.trim() || '',
+      email: input.email?.trim() || normalizedAdminEmail,
+      direccion: 'Sede Principal',
+      ciudad: input.ciudad?.trim() || 'Riohacha',
+      departamento: input.departamento?.trim() || 'La Guajira',
+      pais: 'Colombia',
+      moneda: 'COP',
+      simboloMoneda: '$',
+      costoEnvioBase: input.costoEnvioBase !== undefined ? Number(input.costoEnvioBase) : 16000,
+      isActiva: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const savedEmpresa = await saveEmpresa(newEmpresa);
+
+    // 4. Crear el Usuario Administrador exclusivo para esta tienda
+    const storeAdminUser: User = {
+      id: `USR-ADMIN-${slug.toUpperCase()}-${Date.now()}`,
+      fullName: input.adminFullName.trim(),
+      cedula: input.adminCedula?.trim() || '1124000000',
+      email: normalizedAdminEmail,
+      phone: input.adminPhone?.trim() || input.telefono?.trim() || '3000000000',
+      city: input.ciudad?.trim() || 'Riohacha',
+      password: input.adminPassword?.trim() || 'admin123',
+      role: 'admin',
+      empresaId: slug,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (isSupabaseConfigured()) {
+      await supabase.from('users').insert({
+        id: storeAdminUser.id,
+        full_name: storeAdminUser.fullName,
+        cedula: storeAdminUser.cedula,
+        email: storeAdminUser.email,
+        phone: storeAdminUser.phone,
+        city: storeAdminUser.city,
+        password: storeAdminUser.password,
+        role: 'admin',
+        empresa_id: slug,
+      });
+    }
+    memoryUsers = [storeAdminUser, ...memoryUsers];
+
+    // 5. Inicializar Medios de Pago por defecto para la nueva tienda
+    const defaultStorePaymentMethods: PaymentMethod[] = [
+      {
+        id: `pm_${slug}_efectivo`,
+        name: 'Efectivo contra entrega',
+        type: 'cash',
+        icon: 'cash-outline',
+        description: `Pagas al repartidor en efectivo al recibir tu pedido de ${newEmpresa.nombre}.`,
+        instructions: 'Ten a mano el valor exacto en efectivo para agilizar la entrega.',
+        isActive: true,
+        requiresProof: false,
+        orderIndex: 1,
+        empresaId: slug,
+      },
+      {
+        id: `pm_${slug}_nequi`,
+        name: 'Transferencia Nequi / Daviplata',
+        type: 'transfer',
+        icon: 'phone-portrait-outline',
+        description: `Transfiere directamente a las cuentas oficiales de ${newEmpresa.nombre}.`,
+        instructions: `Número oficial: ${newEmpresa.telefono || 'Por configurar'}. Envía el comprobante para confirmar despacho.`,
+        accountNumber: newEmpresa.telefono || '',
+        accountHolder: newEmpresa.nombre,
+        isActive: true,
+        requiresProof: true,
+        orderIndex: 2,
+        empresaId: slug,
+      },
+      {
+        id: `pm_${slug}_qr`,
+        name: 'Código QR',
+        type: 'qr',
+        icon: 'qr-code-outline',
+        description: `Escanea el código QR oficial de ${newEmpresa.nombre}.`,
+        instructions: 'Escanea desde tu app bancaria para pagar en segundos.',
+        isActive: true,
+        requiresProof: true,
+        orderIndex: 3,
+        empresaId: slug,
+      },
+      {
+        id: `pm_${slug}_pse`,
+        name: 'PSE',
+        type: 'transfer',
+        icon: 'swap-horizontal-outline',
+        description: 'Débito bancario seguro en línea a través de PSE.',
+        instructions: 'Disponible para cuentas de ahorros y corrientes.',
+        isActive: true,
+        requiresProof: false,
+        orderIndex: 4,
+        empresaId: slug,
+      },
+      {
+        id: `pm_${slug}_card`,
+        name: 'Tarjeta de Crédito / Débito',
+        type: 'card',
+        icon: 'card-outline',
+        description: 'Pago seguro en línea con tarjetas bancarias (Visa, Mastercard, Amex).',
+        isActive: true,
+        requiresProof: false,
+        orderIndex: 5,
+        empresaId: slug,
+      },
+    ];
+
+    for (const pm of defaultStorePaymentMethods) {
+      await savePaymentMethod(pm);
+    }
+
+    // 6. Registrar en auditoría
+    await logAdminActivity({
+      adminId: operatorAdmin?.id || 'superadmin',
+      adminEmail: operatorAdmin?.email || 'admin@einuushi.com',
+      adminName: operatorAdmin?.fullName || 'Propietario Plataforma',
+      actionType: 'ADMIN_PROFILE_UPDATE',
+      entityType: 'CONFIGURACION',
+      entityId: slug,
+      details: `El Propietario registró la nueva tienda afiliada "${newEmpresa.nombre}" (Slug: ${slug}, Admin: ${normalizedAdminEmail}).`,
+    });
+
+    const webUrl = `/admin?store=${slug}`;
+
+    notifyDatabaseChange();
+
+    return {
+      success: true,
+      empresa: savedEmpresa,
+      adminUser: storeAdminUser,
+      webUrl,
+    };
+  } catch (err: any) {
+    console.error('Error en registerNewStoreWithAdmin:', err);
+    return { success: false, message: err?.message || 'Error registrando la nueva empresa.' };
+  }
 }

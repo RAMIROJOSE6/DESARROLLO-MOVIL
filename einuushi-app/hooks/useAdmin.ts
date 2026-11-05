@@ -54,6 +54,9 @@ import {
   DEFAULT_EMPRESA_EINUUSHI,
   getEmpresaById,
   saveEmpresa as dbSaveEmpresa,
+  getEmpresas,
+  RegisterStoreInput,
+  registerNewStoreWithAdmin,
 } from '../services/database';
 
 export function useAdmin() {
@@ -73,6 +76,8 @@ export function useAdmin() {
   const [analytics, setAnalytics] = useState<StoreAnalytics | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [empresa, setEmpresa] = useState<Empresa>(DEFAULT_EMPRESA_EINUUSHI);
+  const [empresasList, setEmpresasList] = useState<Empresa[]>([DEFAULT_EMPRESA_EINUUSHI]);
+  const [selectedStoreFilter, setSelectedStoreFilter] = useState<string>('ALL');
 
   const [activeTrackingOrder, setActiveTrackingOrder] = useState<Order | null>(null);
 
@@ -83,19 +88,24 @@ export function useAdmin() {
       const activeSession = await getAdminSession();
       const isSuper = isSuperAdmin(activeSession);
 
-      const [ord, prod, cat, qts, msgs, anl, usrs, logs, admins, drvs, pms, emp] = await Promise.all([
-        getOrders(),
-        getProducts(),
-        getCategories(),
+      const targetEmpresaId = isSuper
+        ? (selectedStoreFilter === 'ALL' ? undefined : selectedStoreFilter)
+        : (activeSession?.empresaId || 'einuushi');
+
+      const [ord, prod, cat, qts, msgs, anl, usrs, logs, admins, drvs, pms, emp, allEmps] = await Promise.all([
+        getOrders(undefined, targetEmpresaId),
+        getProducts(targetEmpresaId),
+        getCategories(targetEmpresaId),
         getCustomQuotes(),
         getChatMessages(),
-        getStoreAnalytics(),
+        getStoreAnalytics(targetEmpresaId),
         isSuper ? getUsers() : Promise.resolve([]),
         getAdminActivityLogs(100),
         getAdminUsers(activeSession),
         getDrivers(),
-        getPaymentMethods(),
-        getEmpresaById('einuushi'),
+        getPaymentMethods(targetEmpresaId),
+        getEmpresaById(targetEmpresaId || 'einuushi'),
+        getEmpresas(),
       ]);
       setOrders(ord);
       setProducts(prod);
@@ -103,6 +113,7 @@ export function useAdmin() {
       setQuotes(qts);
       setPaymentMethods(pms);
       if (emp) setEmpresa(emp);
+      if (allEmps && allEmps.length > 0) setEmpresasList(allEmps);
       setMessages(msgs);
       setAnalytics(anl);
       setUsersList(isSuper ? usrs : []);
@@ -972,6 +983,19 @@ export function useAdmin() {
     return res;
   };
 
+  const registerStore = async (input: RegisterStoreInput): Promise<{ success: boolean; empresa?: Empresa; adminUser?: User; webUrl?: string; message?: string; }> => {
+    try {
+      const res = await registerNewStoreWithAdmin(input, adminUser || undefined);
+      if (res.success && res.empresa) {
+        setEmpresasList(prev => [...prev.filter(e => e.id !== res.empresa!.id), res.empresa!]);
+        await refreshAll();
+      }
+      return res;
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Error registrando la tienda.' };
+    }
+  };
+
   const updateEmpresaProfile = async (changes: Partial<Empresa>): Promise<boolean> => {
     try {
       const updated = await dbSaveEmpresa({
@@ -1029,6 +1053,10 @@ export function useAdmin() {
     empresa,
     updateEmpresaProfile,
     setEmpresa,
+    empresasList,
+    registerStore,
+    selectedStoreFilter,
+    setSelectedStoreFilter,
     createDriver,
     updateDriver,
     updateStock,

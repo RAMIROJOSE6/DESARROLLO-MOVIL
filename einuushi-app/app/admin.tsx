@@ -13,15 +13,16 @@ import {
   Platform,
   useWindowDimensions,
   KeyboardAvoidingView,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 import * as ImagePicker from 'expo-image-picker';
 import { useAdmin } from '../hooks/useAdmin';
-import { Order, OrderItem, Product, Category, CustomQuote, User, isSuperAdmin, parseOrderDate, PaymentMethod, uploadMediaToSupabase } from '../services/database';
+import { Order, OrderItem, Product, Category, CustomQuote, User, isSuperAdmin, parseOrderDate, PaymentMethod, uploadMediaToSupabase, getEmpresaById, Empresa, RegisterStoreInput } from '../services/database';
 
 const SUPABASE_FALLBACK_IMAGES: Record<string, string> = {
   mochila1: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/mochila1.jpg',
@@ -138,7 +139,27 @@ export default function AdminScreen() {
     deletePaymentMethod,
     empresa,
     updateEmpresaProfile,
+    empresasList,
+    registerStore,
+    selectedStoreFilter,
+    setSelectedStoreFilter,
   } = useAdmin();
+
+  // Detección de Tienda por Parámetro de URL Web (/admin?store=slug)
+  const { store: routeStoreParam } = useLocalSearchParams<{ store?: string }>();
+  const [routeStoreInfo, setRouteStoreInfo] = useState<Empresa | null>(null);
+
+  React.useEffect(() => {
+    if (routeStoreParam) {
+      getEmpresaById(routeStoreParam).then(emp => {
+        if (emp && emp.id.toLowerCase() === routeStoreParam.toLowerCase()) {
+          setRouteStoreInfo(emp);
+        }
+      });
+    } else {
+      setRouteStoreInfo(null);
+    }
+  }, [routeStoreParam]);
 
   // Estados de Modales del Panel de Rendimiento (Ventas, Total Pedidos, Pendientes)
   const [isSalesModalVisible, setIsSalesModalVisible] = useState(false);
@@ -541,6 +562,128 @@ export default function AdminScreen() {
     } finally {
       setIsSavingEmpresa(false);
     }
+  };
+
+  // Estados de Registro de Nuevas Tiendas (Exclusivo Propietario / Superadmin)
+  const [isRegisterStoreModalVisible, setIsRegisterStoreModalVisible] = useState(false);
+  const [newStoreNombre, setNewStoreNombre] = useState('');
+  const [newStoreSlug, setNewStoreSlug] = useState('');
+  const [newStoreNit, setNewStoreNit] = useState('');
+  const [newStoreCiudad, setNewStoreCiudad] = useState('Riohacha');
+  const [newStoreDepartamento, setNewStoreDepartamento] = useState('La Guajira');
+  const [newStoreTelefono, setNewStoreTelefono] = useState('');
+  const [newStoreWhatsapp, setNewStoreWhatsapp] = useState('');
+  const [newStoreCostoEnvio, setNewStoreCostoEnvio] = useState('16000');
+  const [newStoreAdminName, setNewStoreAdminName] = useState('');
+  const [newStoreAdminEmail, setNewStoreAdminEmail] = useState('');
+  const [newStoreAdminPassword, setNewStoreAdminPassword] = useState('admin123');
+  const [isRegisteringStore, setIsRegisteringStore] = useState(false);
+  const [registerStoreError, setRegisterStoreError] = useState('');
+
+  // Modal de Confirmación y Entrega de Credenciales
+  const [createdStoreData, setCreatedStoreData] = useState<{
+    nombre: string;
+    slug: string;
+    adminEmail: string;
+    adminPassword?: string;
+    webUrl: string;
+    telefono?: string;
+  } | null>(null);
+
+  const handleStoreNameChange = (text: string) => {
+    setNewStoreNombre(text);
+    const autoSlug = text
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/g, '_')
+      .replace(/_+/g, '_');
+    setNewStoreSlug(autoSlug);
+  };
+
+  const handleCreateStore = async () => {
+    if (!newStoreNombre.trim()) {
+      setRegisterStoreError('Ingresa el nombre comercial de la nueva tienda.');
+      return;
+    }
+    if (!newStoreSlug.trim()) {
+      setRegisterStoreError('El identificador web (slug) es obligatorio.');
+      return;
+    }
+    if (!newStoreAdminEmail.trim() || !newStoreAdminEmail.includes('@')) {
+      setRegisterStoreError('Ingresa un correo válido para el administrador de la tienda.');
+      return;
+    }
+    if (!newStoreAdminName.trim()) {
+      setRegisterStoreError('Ingresa el nombre completo del administrador.');
+      return;
+    }
+
+    try {
+      setIsRegisteringStore(true);
+      setRegisterStoreError('');
+
+      const res = await registerStore({
+        nombre: newStoreNombre.trim(),
+        slug: newStoreSlug.trim().toLowerCase(),
+        nit: newStoreNit.trim(),
+        ciudad: newStoreCiudad.trim(),
+        departamento: newStoreDepartamento.trim(),
+        telefono: newStoreTelefono.trim(),
+        whatsapp: newStoreWhatsapp.trim() || newStoreTelefono.trim(),
+        costoEnvioBase: parseFloat(newStoreCostoEnvio) || 16000,
+        adminFullName: newStoreAdminName.trim(),
+        adminEmail: newStoreAdminEmail.trim(),
+        adminPassword: newStoreAdminPassword.trim() || 'admin123',
+      });
+
+      if (!res.success) {
+        setRegisterStoreError(res.message || 'No se pudo crear la tienda.');
+        return;
+      }
+
+      setCreatedStoreData({
+        nombre: newStoreNombre.trim(),
+        slug: newStoreSlug.trim().toLowerCase(),
+        adminEmail: newStoreAdminEmail.trim().toLowerCase(),
+        adminPassword: newStoreAdminPassword.trim() || 'admin123',
+        webUrl: res.webUrl || `/admin?store=${newStoreSlug.trim().toLowerCase()}`,
+        telefono: newStoreWhatsapp.trim() || newStoreTelefono.trim(),
+      });
+
+      setIsRegisterStoreModalVisible(false);
+      setNewStoreNombre('');
+      setNewStoreSlug('');
+      setNewStoreNit('');
+      setNewStoreTelefono('');
+      setNewStoreWhatsapp('');
+      setNewStoreAdminName('');
+      setNewStoreAdminEmail('');
+      setNewStoreAdminPassword('admin123');
+    } catch (err: any) {
+      setRegisterStoreError(err?.message || 'Error inesperado al registrar la tienda.');
+    } finally {
+      setIsRegisteringStore(false);
+    }
+  };
+
+  const handleCopyText = (text: string, label: string) => {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      Alert.alert('Copiado', `${label} copiado al portapapeles.`);
+    } else {
+      Alert.alert(label, text);
+    }
+  };
+
+  const handleShareCredentialsWhatsApp = (phone: string, storeData: { nombre: string; slug: string; adminEmail: string; adminPassword?: string; webUrl: string }) => {
+    const origin = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : 'https://einuushi-artesanias.web.app';
+    const fullUrl = `${origin}${storeData.webUrl}`;
+    const message = `¡Hola! Tu tienda "${storeData.nombre}" ha sido registrada exitosamente en la plataforma artesanal.\n\n🌐 Enlace Web exclusivo de tu panel:\n${fullUrl}\n\n👤 Usuario de acceso:\n${storeData.adminEmail}\n🔑 Contraseña inicial:\n${storeData.adminPassword}\n\nAl ingresar podrás configurar tu código QR, medios de pago y cargar tus productos.`;
+    const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
+    const waUrl = cleanPhone 
+      ? `https://wa.me/57${cleanPhone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+    Linking.openURL(waUrl);
   };
 
   // Formulario Mi Perfil Administrador
@@ -1725,14 +1868,34 @@ export default function AdminScreen() {
       <View style={styles.authContainer}>
         <View style={styles.authCard}>
           <View style={styles.authHeader}>
-            <View style={styles.authIconCircle}>
-              <Ionicons name="shield-checkmark" size={36} color="#C5A880" />
-            </View>
-            <Text style={styles.authBadgeText}>PORTAL INTERNO EXCLUSIVO</Text>
-            <Text style={styles.authTitle}>Backoffice Einuushi</Text>
-            <Text style={styles.authSubtitle}>
-              Panel de Administración, Despacho y Gestión Comercial
+            {routeStoreInfo && routeStoreInfo.logoUrl ? (
+              <View style={{ width: 68, height: 68, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#CBD5E1', marginBottom: 12, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+                <Image source={{ uri: routeStoreInfo.logoUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+              </View>
+            ) : (
+              <View style={styles.authIconCircle}>
+                <Ionicons name="shield-checkmark" size={36} color="#C5A880" />
+              </View>
+            )}
+            <Text style={styles.authBadgeText}>
+              {routeStoreInfo ? 'PORTAL DE TIENDA AFILIADA' : 'PORTAL ADMINISTRATIVO'}
             </Text>
+            <Text style={styles.authTitle}>
+              {routeStoreInfo ? routeStoreInfo.nombre : 'Backoffice Plataforma'}
+            </Text>
+            <Text style={styles.authSubtitle}>
+              {routeStoreInfo 
+                ? `Panel de Administración y Despachos (${routeStoreInfo.ciudad || 'Colombia'})`
+                : 'Acceso para el Propietario y Administradores de Tiendas'}
+            </Text>
+            {routeStoreInfo && (
+              <View style={{ marginTop: 6, backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: '#BBF7D0', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="business" size={13} color="#15803D" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#15803D' }}>
+                  Sede Asignada: {routeStoreInfo.nombre}
+                </Text>
+              </View>
+            )}
           </View>
 
           {loginError ? (
@@ -3776,17 +3939,128 @@ export default function AdminScreen() {
 
             {/* SUB-PESTAÑA 0: DATOS DE LA EMPRESA / TIENDA REGISTRADA */}
             {settingsSubTab === 'empresa' && (
-              <View style={styles.settingsCard}>
-                <View style={styles.settingsCardHeader}>
-                  <View style={[styles.settingsIconCircle, { backgroundColor: '#E0F2FE' }]}>
-                    <Ionicons name="business" size={24} color="#0284C7" />
+              <>
+                {/* SECCIÓN PROPIETARIO: DIRECTORIO Y REGISTRO DE NUEVAS TIENDAS */}
+                {isSuperAdminUser && (
+                  <View style={[styles.settingsCard, { marginBottom: 20 }]}>
+                    <View style={styles.settingsCardHeader}>
+                      <View style={[styles.settingsIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                        <Ionicons name="storefront" size={24} color="#B45309" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.settingsCardTitle}>Directorio de Tiendas & Talleres Afiliados</Text>
+                        <Text style={styles.settingsCardSubtitle}>
+                          Como propietario puedes afiliar nuevas tiendas, generarles su enlace web exclusivo y supervisar sus datos
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 }}
+                        onPress={() => setIsRegisterStoreModalVisible(true)}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons name="add-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Dar de Alta Nueva Tienda</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Tarjetas de Tiendas Registradas */}
+                    <View style={{ marginTop: 12, gap: 12 }}>
+                      {empresasList.map((emp) => {
+                        const isEinuushi = emp.id === 'einuushi';
+                        const isFiltered = selectedStoreFilter === emp.id;
+                        const webPath = `/admin?store=${emp.id}`;
+                        const originUrl = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : 'https://einuushi-artesanias.web.app';
+                        const fullStoreWebUrl = `${originUrl}${webPath}`;
+
+                        return (
+                          <View
+                            key={emp.id}
+                            style={{
+                              backgroundColor: '#FFFFFF',
+                              borderWidth: 1.5,
+                              borderColor: isFiltered ? '#10B981' : '#E2E8F0',
+                              borderRadius: 14,
+                              padding: 14,
+                              shadowColor: '#000',
+                              shadowOpacity: 0.04,
+                              shadowRadius: 3,
+                              elevation: 1,
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                              <View style={{ width: 50, height: 50, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
+                                {emp.logoUrl ? (
+                                  <Image source={{ uri: emp.logoUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                                ) : (
+                                  <Ionicons name="business" size={24} color="#94A3B8" />
+                                )}
+                              </View>
+                              <View style={{ flex: 1, minWidth: 200 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#1E2B58' }}>
+                                    {emp.nombre}
+                                  </Text>
+                                  <View style={{ backgroundColor: isEinuushi ? '#DBEAFE' : '#DCFCE7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: isEinuushi ? '#1D4ED8' : '#15803D' }}>
+                                      {isEinuushi ? 'TIENDA PRINCIPAL' : 'AFILIADA'}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                                  {emp.ciudad || 'Riohacha'} • NIT: {emp.nit || 'Por configurar'} • Envío: ${Number(emp.costoEnvioBase || 16000).toLocaleString()}
+                                </Text>
+                              </View>
+
+                              {/* Enlace Web Asignado */}
+                              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                                <TouchableOpacity
+                                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1' }}
+                                  onPress={() => handleCopyText(fullStoreWebUrl, 'Enlace Web de ' + emp.nombre)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Ionicons name="copy-outline" size={14} color="#1E2B58" style={{ marginRight: 4 }} />
+                                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#1E2B58' }}>Copiar Enlace Web</Text>
+                                </TouchableOpacity>
+
+                                {emp.whatsapp ? (
+                                  <TouchableOpacity
+                                    style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#DCFCE7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#86EFAC' }}
+                                    onPress={() => handleShareCredentialsWhatsApp(emp.whatsapp || '', { nombre: emp.nombre, slug: emp.id, adminEmail: emp.email || '', adminPassword: '***', webUrl: webPath })}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Ionicons name="logo-whatsapp" size={14} color="#15803D" style={{ marginRight: 4 }} />
+                                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#15803D' }}>Enviar Acceso</Text>
+                                  </TouchableOpacity>
+                                ) : null}
+                              </View>
+                            </View>
+
+                            <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <Text style={{ fontSize: 11, color: '#94A3B8' }}>
+                                URL Web: <Text style={{ color: '#0284C7', fontWeight: '600' }}>{webPath}</Text>
+                              </Text>
+                              <Text style={{ fontSize: 11, color: emp.isActiva !== false ? '#15803D' : '#DC2626', fontWeight: '700' }}>
+                                {emp.isActiva !== false ? '● Operando' : '○ Inactiva'}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.settingsCardTitle}>Identidad y Datos de la Empresa</Text>
-                    <Text style={styles.settingsCardSubtitle}>
-                      Gestiona la información corporativa, logotipo oficial, NIT, ubicación y datos de contacto de {empresa?.nombre || 'la tienda'}
-                    </Text>
-                  </View>
+                )}
+
+                <View style={styles.settingsCard}>
+                  <View style={styles.settingsCardHeader}>
+                    <View style={[styles.settingsIconCircle, { backgroundColor: '#E0F2FE' }]}>
+                      <Ionicons name="business" size={24} color="#0284C7" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.settingsCardTitle}>Identidad y Configuración de {empresa?.nombre || 'la Empresa'}</Text>
+                      <Text style={styles.settingsCardSubtitle}>
+                        Edita el logotipo oficial, NIT, ubicación y datos de contacto de esta tienda
+                      </Text>
+                    </View>
                   <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#ECFDF5' }}>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669' }}>
                       {empresa?.isActiva !== false ? 'EMPRESA ACTIVA' : 'INACTIVA'}
@@ -4023,6 +4297,7 @@ export default function AdminScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+              </>
             )}
 
             {/* SUB-PESTAÑA 1: MI PERFIL Y CREDENCIALES */}
@@ -8832,6 +9107,287 @@ export default function AdminScreen() {
           </View>
         </View>
       </Modal>
+      {/* MODAL PROPIETARIO: REGISTRAR NUEVA TIENDA / TALLER */}
+      <Modal
+        visible={isRegisterStoreModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsRegisterStoreModalVisible(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 16 }}
+        >
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, width: '100%', maxWidth: 580, maxHeight: '90%', padding: 22, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 10, elevation: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingBottom: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#DCFCE7', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="storefront" size={22} color="#15803D" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 17, fontWeight: '700', color: '#1E2B58' }}>Dar de Alta Nueva Tienda</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B' }}>Crea su perfil, genera su acceso web y usuario administrador</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setIsRegisterStoreModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {registerStoreError ? (
+              <View style={{ backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 12, flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#DC2626', fontSize: 12, flex: 1 }}>{registerStoreError}</Text>
+              </View>
+            ) : null}
+
+            <ScrollView style={{ marginTop: 12 }} showsVerticalScrollIndicator={false}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0284C7', marginBottom: 8, textTransform: 'uppercase' }}>1. Datos de la Tienda</Text>
+              
+              <View style={{ gap: 10 }}>
+                <View>
+                  <Text style={styles.settingsLabel}>Nombre Comercial de la Tienda *</Text>
+                  <TextInput
+                    style={styles.settingsInput}
+                    value={newStoreNombre}
+                    onChangeText={handleStoreNameChange}
+                    placeholder="Ej. Artesanías del Desierto"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                <View>
+                  <Text style={styles.settingsLabel}>Identificador Web (Slug de Acceso) *</Text>
+                  <TextInput
+                    style={[styles.settingsInput, { backgroundColor: '#F8FAFC' }]}
+                    value={newStoreSlug}
+                    onChangeText={setNewStoreSlug}
+                    autoCapitalize="none"
+                    placeholder="ej. artesanias_desierto"
+                    placeholderTextColor="#94A3B8"
+                  />
+                  <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                    Su enlace web será: <Text style={{ fontWeight: '600', color: '#0284C7' }}>/admin?store={newStoreSlug || 'identificador'}</Text>
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settingsLabel}>NIT o Cédula:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={newStoreNit}
+                      onChangeText={setNewStoreNit}
+                      placeholder="901.123.456-7"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settingsLabel}>Tarifa Base Envío (COP):</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={newStoreCostoEnvio}
+                      onChangeText={setNewStoreCostoEnvio}
+                      keyboardType="numeric"
+                      placeholder="16000"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settingsLabel}>Ciudad:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={newStoreCiudad}
+                      onChangeText={setNewStoreCiudad}
+                      placeholder="Uribia"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settingsLabel}>Departamento:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={newStoreDepartamento}
+                      onChangeText={setNewStoreDepartamento}
+                      placeholder="La Guajira"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settingsLabel}>Teléfono:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={newStoreTelefono}
+                      onChangeText={setNewStoreTelefono}
+                      keyboardType="phone-pad"
+                      placeholder="310 123 4567"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settingsLabel}>WhatsApp de Atención:</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={newStoreWhatsapp}
+                      onChangeText={setNewStoreWhatsapp}
+                      keyboardType="phone-pad"
+                      placeholder="310 123 4567"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0284C7', marginTop: 18, marginBottom: 8, textTransform: 'uppercase' }}>
+                2. Cuenta del Administrador de la Tienda
+              </Text>
+
+              <View style={{ gap: 10 }}>
+                <View>
+                  <Text style={styles.settingsLabel}>Nombre del Administrador *</Text>
+                  <TextInput
+                    style={styles.settingsInput}
+                    value={newStoreAdminName}
+                    onChangeText={setNewStoreAdminName}
+                    placeholder="Ej. Carmen Ipuana"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                <View>
+                  <Text style={styles.settingsLabel}>Correo de Acceso (Usuario) *</Text>
+                  <TextInput
+                    style={styles.settingsInput}
+                    value={newStoreAdminEmail}
+                    onChangeText={setNewStoreAdminEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    placeholder="carmen@artesaniasdesierto.com"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                <View>
+                  <Text style={styles.settingsLabel}>Contraseña Inicial *</Text>
+                  <TextInput
+                    style={styles.settingsInput}
+                    value={newStoreAdminPassword}
+                    onChangeText={setNewStoreAdminPassword}
+                    placeholder="Mínimo 6 caracteres"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              <View style={{ marginTop: 22, flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
+                <TouchableOpacity
+                  style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#E2E8F0' }}
+                  onPress={() => setIsRegisterStoreModalVisible(false)}
+                >
+                  <Text style={{ fontWeight: '600', color: '#475569' }}>Cancelar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
+                  onPress={handleCreateStore}
+                  disabled={isRegisteringStore}
+                >
+                  {isRegisteringStore ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                  ) : (
+                    <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  )}
+                  <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>
+                    {isRegisteringStore ? 'Creando Tienda...' : 'Dar de Alta y Generar Acceso'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* MODAL DE ÉXITO: ENTREGA DE ACCESO Y CREDENCIALES */}
+      <Modal
+        visible={!!createdStoreData}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setCreatedStoreData(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, width: '100%', maxWidth: 500, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, elevation: 8 }}>
+            <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: '#DCFCE7', justifyContent: 'center', alignItems: 'center', marginBottom: 14 }}>
+              <Ionicons name="checkmark-circle" size={38} color="#15803D" />
+            </View>
+
+            <Text style={{ fontSize: 19, fontWeight: '700', color: '#1E2B58', textAlign: 'center' }}>
+              ¡Tienda Registrada Exitosamente!
+            </Text>
+            <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginTop: 4, marginBottom: 18 }}>
+              "{createdStoreData?.nombre}" ya está dada de alta en la plataforma y tiene su dirección web asignada.
+            </Text>
+
+            <View style={{ width: '100%', backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', gap: 10 }}>
+              <View>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>DIRECCIÓN WEB ASIGNADA:</Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0284C7', marginTop: 2 }}>
+                  {Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : 'https://einuushi-artesanias.web.app'}{createdStoreData?.webUrl}
+                </Text>
+              </View>
+
+              <View style={{ borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 8 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>USUARIO (CORREO):</Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#1E2B58', marginTop: 1 }}>{createdStoreData?.adminEmail}</Text>
+              </View>
+
+              <View>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>CONTRASEÑA TEMPORAL:</Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#1E2B58', marginTop: 1 }}>{createdStoreData?.adminPassword}</Text>
+              </View>
+            </View>
+
+            <View style={{ width: '100%', flexDirection: 'row', gap: 10, marginTop: 20 }}>
+              <TouchableOpacity
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1E2B58', paddingVertical: 12, borderRadius: 10 }}
+                onPress={() => {
+                  const origin = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : 'https://einuushi-artesanias.web.app';
+                  const fullUrl = `${origin}${createdStoreData?.webUrl}`;
+                  handleCopyText(fullUrl, 'Enlace Web');
+                }}
+              >
+                <Ionicons name="copy-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Copiar Enlace</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#15803D', paddingVertical: 12, borderRadius: 10 }}
+                onPress={() => {
+                  if (createdStoreData) {
+                    handleShareCredentialsWhatsApp(createdStoreData.telefono || '', createdStoreData);
+                  }
+                }}
+              >
+                <Ionicons name="logo-whatsapp" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Enviar por WhatsApp</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={{ marginTop: 14 }}
+              onPress={() => setCreatedStoreData(null)}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#64748B' }}>Cerrar Ventana</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
