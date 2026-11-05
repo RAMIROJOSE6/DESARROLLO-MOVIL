@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import {
   Empresa,
   RegisterStoreInput,
@@ -35,6 +36,7 @@ import {
   updatePassword,
   onDatabaseChange,
   subscribeToEmpresasRealtime,
+  uploadMediaToSupabase,
 } from '../services/database';
 
 export default function OwnerScreen() {
@@ -76,6 +78,8 @@ export default function OwnerScreen() {
   const [newDepto, setNewDepto] = useState('La Guajira');
   const [newTelefono, setNewTelefono] = useState('');
   const [newWhatsapp, setNewWhatsapp] = useState('');
+  const [newLogoUrl, setNewLogoUrl] = useState('');
+  const [isUploadingNewLogo, setIsUploadingNewLogo] = useState(false);
   const [newCostoEnvio, setNewCostoEnvio] = useState('16000');
   const [newValorArriendo, setNewValorArriendo] = useState('150000');
   const [newFechaCorte, setNewFechaCorte] = useState('Día 5 de cada mes');
@@ -103,7 +107,79 @@ export default function OwnerScreen() {
   const [editStoreDepto, setEditStoreDepto] = useState('');
   const [editStoreTelefono, setEditStoreTelefono] = useState('');
   const [editStoreEmail, setEditStoreEmail] = useState('');
+  const [editStoreLogo, setEditStoreLogo] = useState('');
+  const [isUploadingEditLogo, setIsUploadingEditLogo] = useState(false);
   const [isSavingStoreData, setIsSavingStoreData] = useState(false);
+
+  // Cargar imagen para Nueva Tienda
+  const handlePickNewStoreLogo = async () => {
+    try {
+      setIsUploadingNewLogo(true);
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso Requerido', 'Se requiere acceso a las fotos para seleccionar el logotipo de la tienda.');
+        setIsUploadingNewLogo(false);
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        setIsUploadingNewLogo(false);
+        return;
+      }
+
+      const asset = result.assets[0];
+      const sourceUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      const uploadedUrl = await uploadMediaToSupabase(sourceUri, 'branding', `store_logo_${Date.now()}`);
+      setNewLogoUrl(uploadedUrl);
+    } catch (err: any) {
+      Alert.alert('Error al subir logo', err?.message || 'No se pudo cargar la imagen seleccionada.');
+    } finally {
+      setIsUploadingNewLogo(false);
+    }
+  };
+
+  // Cargar imagen para Tienda en Edición
+  const handlePickEditStoreLogo = async () => {
+    try {
+      setIsUploadingEditLogo(true);
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso Requerido', 'Se requiere acceso a las fotos para seleccionar el logotipo de la tienda.');
+        setIsUploadingEditLogo(false);
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        setIsUploadingEditLogo(false);
+        return;
+      }
+
+      const asset = result.assets[0];
+      const sourceUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      const uploadedUrl = await uploadMediaToSupabase(sourceUri, 'branding', `store_logo_${Date.now()}`);
+      setEditStoreLogo(uploadedUrl);
+    } catch (err: any) {
+      Alert.alert('Error al subir logo', err?.message || 'No se pudo cargar la imagen seleccionada.');
+    } finally {
+      setIsUploadingEditLogo(false);
+    }
+  };
 
   const openEditStoreModal = (emp: Empresa) => {
     const admin = usersList.find(u => u.empresaId === emp.id && (u.role === 'admin' || u.role === 'superadmin')) || usersList.find(u => u.empresaId === emp.id);
@@ -114,6 +190,7 @@ export default function OwnerScreen() {
     setEditStoreDepto(emp.departamento || 'La Guajira');
     setEditStoreTelefono(emp.telefono || emp.whatsapp || admin?.phone || '');
     setEditStoreEmail(emp.email || admin?.email || '');
+    setEditStoreLogo(emp.logoUrl || '');
   };
 
   const handleSaveStoreData = async () => {
@@ -129,6 +206,7 @@ export default function OwnerScreen() {
         telefono: editStoreTelefono.trim(),
         whatsapp: editStoreTelefono.trim(),
         email: editStoreEmail.trim(),
+        logoUrl: editStoreLogo.trim() || undefined,
       });
       setEditingStoreData(null);
       await loadPlatformData();
@@ -291,6 +369,7 @@ export default function OwnerScreen() {
           telefono: newTelefono.trim(),
           whatsapp: newWhatsapp.trim() || newTelefono.trim(),
           costoEnvioBase: parseFloat(newCostoEnvio) || 16000,
+          logoUrl: newLogoUrl.trim() || undefined,
           valorArriendo: parseFloat(newValorArriendo) || 150000,
           fechaCorteArriendo: newFechaCorte.trim() || 'Día 5 de cada mes',
           adminFullName: newAdminName.trim(),
@@ -320,6 +399,7 @@ export default function OwnerScreen() {
       setNewNit('');
       setNewTelefono('');
       setNewWhatsapp('');
+      setNewLogoUrl('');
       setNewAdminName('');
       setNewAdminEmail('');
       setNewAdminPassword('admin123');
@@ -1046,6 +1126,76 @@ export default function OwnerScreen() {
               <Text style={styles.formSectionTitle}>1. Datos Comerciales de la Tienda</Text>
 
               <View style={{ gap: 10 }}>
+                {/* LOGO DE LA TIENDA */}
+                <View>
+                  <Text style={styles.settingsLabel}>Logotipo Oficial de la Tienda</Text>
+                  {newLogoUrl ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Image
+                        source={{ uri: newLogoUrl }}
+                        style={{ width: 64, height: 64, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1' }}
+                        resizeMode="contain"
+                      />
+                      <View style={{ flex: 1, gap: 6 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#0F172A' }}>Logo cargado exitosamente</Text>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#BFDBFE' }}
+                            onPress={handlePickNewStoreLogo}
+                            disabled={isUploadingNewLogo}
+                          >
+                            <Ionicons name="cloud-upload-outline" size={14} color="#2563EB" style={{ marginRight: 4 }} />
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#2563EB' }}>Cambiar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#FECACA' }}
+                            onPress={() => setNewLogoUrl('')}
+                          >
+                            <Ionicons name="trash-outline" size={14} color="#EF4444" style={{ marginRight: 4 }} />
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#EF4444' }}>Quitar</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 10,
+                        paddingVertical: 14,
+                        paddingHorizontal: 16,
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: '#CBD5E1',
+                        borderStyle: 'dashed',
+                        backgroundColor: '#F8FAFC',
+                      }}
+                      onPress={handlePickNewStoreLogo}
+                      disabled={isUploadingNewLogo}
+                      activeOpacity={0.7}
+                    >
+                      {isUploadingNewLogo ? (
+                        <>
+                          <ActivityIndicator size="small" color="#0284C7" />
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: '#0284C7' }}>Subiendo logotipo a la nube...</Text>
+                        </>
+                      ) : (
+                        <>
+                          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' }}>
+                            <Ionicons name="image-outline" size={20} color="#0284C7" />
+                          </View>
+                          <View>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#1E293B' }}>Cargar Logotipo de la Tienda</Text>
+                            <Text style={{ fontSize: 11, color: '#64748B' }}>PNG, JPG o WebP (cuadrado recomendado)</Text>
+                          </View>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+
                 <View>
                   <Text style={styles.settingsLabel}>Nombre Comercial de la Tienda *</Text>
                   <TextInput
@@ -1456,6 +1606,71 @@ export default function OwnerScreen() {
             </View>
 
             <View style={{ gap: 10, marginTop: 14 }}>
+              {/* LOGO DE LA TIENDA EN EDICIÓN */}
+              <View>
+                <Text style={styles.settingsLabel}>Logotipo de la Tienda:</Text>
+                {editStoreLogo ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    <Image
+                      source={{ uri: editStoreLogo }}
+                      style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1' }}
+                      resizeMode="contain"
+                    />
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#0F172A' }}>Logo actual asignado</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity
+                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#BFDBFE' }}
+                          onPress={handlePickEditStoreLogo}
+                          disabled={isUploadingEditLogo}
+                        >
+                          <Ionicons name="cloud-upload-outline" size={13} color="#2563EB" style={{ marginRight: 3 }} />
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: '#2563EB' }}>Cambiar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#FECACA' }}
+                          onPress={() => setEditStoreLogo('')}
+                        >
+                          <Ionicons name="trash-outline" size={13} color="#EF4444" style={{ marginRight: 3 }} />
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: '#EF4444' }}>Quitar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 8,
+                      borderWidth: 1.5,
+                      borderColor: '#CBD5E1',
+                      borderStyle: 'dashed',
+                      backgroundColor: '#F8FAFC',
+                    }}
+                    onPress={handlePickEditStoreLogo}
+                    disabled={isUploadingEditLogo}
+                    activeOpacity={0.7}
+                  >
+                    {isUploadingEditLogo ? (
+                      <>
+                        <ActivityIndicator size="small" color="#0284C7" />
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#0284C7' }}>Subiendo logo a la nube...</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Ionicons name="image-outline" size={18} color="#0284C7" />
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#1E293B' }}>Cargar nuevo logo</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+
               <View>
                 <Text style={styles.settingsLabel}>Nombre Comercial de la Tienda:</Text>
                 <TextInput
