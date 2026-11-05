@@ -33,6 +33,8 @@ import {
   getPlatformGlobalMetrics,
   PLATFORM_INFO,
   updatePassword,
+  onDatabaseChange,
+  subscribeToEmpresasRealtime,
 } from '../services/database';
 
 export default function OwnerScreen() {
@@ -153,9 +155,23 @@ export default function OwnerScreen() {
   const [passwordError, setPasswordError] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  // 1. Cargar Sesión Inicial
+  // 1. Cargar Sesión Inicial y Suscripción en Tiempo Real
   useEffect(() => {
     checkInitialSession();
+
+    // Sincronización instantánea ante cualquier cambio en base de datos o paneles
+    const unsubDb = onDatabaseChange(() => {
+      loadPlatformData();
+    });
+
+    const unsubRealtime = subscribeToEmpresasRealtime(() => {
+      loadPlatformData();
+    });
+
+    return () => {
+      unsubDb();
+      unsubRealtime();
+    };
   }, []);
 
   const checkInitialSession = async () => {
@@ -371,10 +387,11 @@ export default function OwnerScreen() {
 
     try {
       setIsSavingRent(true);
+      const newNumericValor = parseFloat(editRentValor) || 0;
       const res = await updateEmpresaArriendo(
         editingRentEmpresa.id,
         {
-          valorArriendo: parseFloat(editRentValor) || 0,
+          valorArriendo: newNumericValor,
           fechaCorteArriendo: editRentFechaCorte.trim(),
           estadoPago: editRentEstado,
           notasArriendo: editRentNotas.trim(),
@@ -383,9 +400,23 @@ export default function OwnerScreen() {
       );
 
       if (res.success) {
+        // Actualizar el estado local de inmediato para respuesta visual instantánea
+        setEmpresasList(prev =>
+          prev.map(e =>
+            e.id === editingRentEmpresa.id
+              ? {
+                  ...e,
+                  valorArriendo: newNumericValor,
+                  fechaCorteArriendo: editRentFechaCorte.trim(),
+                  estadoPago: editRentEstado,
+                  notasArriendo: editRentNotas.trim(),
+                }
+              : e
+          )
+        );
         setEditingRentEmpresa(null);
         await loadPlatformData();
-        Alert.alert('Éxito', 'Datos de arriendo actualizados correctamente.');
+        Alert.alert('Licencia Guardada', `El valor de la licencia de "${editingRentEmpresa.nombre}" se actualizó a $${newNumericValor.toLocaleString()} COP/mes.`);
       } else {
         Alert.alert('Error', res.message || 'No se pudo guardar la configuración de arriendo.');
       }
@@ -885,7 +916,7 @@ export default function OwnerScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.rentLabel}>Licencia Mensual Acordada:</Text>
                       <Text style={styles.rentValue}>
-                        ${(emp.valorArriendo || 150000).toLocaleString()} COP / mes
+                        ${(emp.valorArriendo !== undefined ? Number(emp.valorArriendo) : 150000).toLocaleString()} COP / mes
                       </Text>
                       <Text style={styles.rentCutDate}>
                         Corte: {emp.fechaCorteArriendo || 'Día 5 de cada mes'}

@@ -2978,9 +2978,34 @@ export const DEFAULT_EMPRESA_EINUUSHI: Empresa = {
 };
 
 const EMPRESAS_STORAGE_KEY = '@einuushi_empresas_db_v1';
+const LICENSES_STORAGE_KEY = '@toda_app_store_licenses_v1';
 let memoryEmpresas: Empresa[] = [{ ...DEFAULT_EMPRESA_EINUUSHI }];
 
+interface StoredLicenseData {
+  valorArriendo?: number;
+  estadoPago?: 'al_dia' | 'pendiente' | 'suspendido';
+  fechaCorteArriendo?: string;
+  notasArriendo?: string;
+}
+
+export async function getStoredLicensesMap(): Promise<Record<string, StoredLicenseData>> {
+  try {
+    const raw = await AsyncStorage.getItem(LICENSES_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (_) {}
+  return {};
+}
+
+export async function saveStoredLicenseData(storeId: string, data: StoredLicenseData): Promise<void> {
+  try {
+    const current = await getStoredLicensesMap();
+    current[storeId] = { ...(current[storeId] || {}), ...data };
+    await AsyncStorage.setItem(LICENSES_STORAGE_KEY, JSON.stringify(current));
+  } catch (_) {}
+}
+
 export async function getEmpresas(): Promise<Empresa[]> {
+  const storedLicenses = await getStoredLicensesMap();
   // 1. Intentar cargar desde Supabase si la tabla empresas existe
   if (isSupabaseConfigured()) {
     try {
@@ -3006,10 +3031,12 @@ export async function getEmpresas(): Promise<Empresa[]> {
           simboloMoneda: r.simbolo_moneda || '$',
           costoEnvioBase: Number(r.costo_envio_base) || 16000,
           isActiva: r.is_activa !== undefined ? Boolean(r.is_activa) : true,
-          valorArriendo: Number(r.valor_arriendo) || 0,
-          estadoPago: (r.estado_pago as any) || 'al_dia',
-          fechaCorteArriendo: r.fecha_corte_arriendo || 'Día 5 de cada mes',
-          notasArriendo: r.notas_arriendo || '',
+          valorArriendo: (r.valor_arriendo !== undefined && r.valor_arriendo !== null)
+            ? Number(r.valor_arriendo)
+            : (storedLicenses[r.id]?.valorArriendo !== undefined ? Number(storedLicenses[r.id]?.valorArriendo) : 150000),
+          estadoPago: (r.estado_pago as any) || storedLicenses[r.id]?.estadoPago || 'al_dia',
+          fechaCorteArriendo: r.fecha_corte_arriendo || storedLicenses[r.id]?.fechaCorteArriendo || 'Día 5 de cada mes',
+          notasArriendo: r.notas_arriendo || storedLicenses[r.id]?.notasArriendo || '',
           updatedAt: r.updated_at,
           createdAt: r.created_at,
         }));
@@ -3090,10 +3117,25 @@ export async function saveEmpresa(empresaData: Partial<Empresa> & { id: string }
     await AsyncStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(memoryEmpresas));
   } catch (_) {}
 
-  // Sincronizar en Supabase si la tabla existe
+  // 1. Guardar licencia en almacenamiento persistente
+  if (
+    empresaData.valorArriendo !== undefined ||
+    empresaData.estadoPago !== undefined ||
+    empresaData.fechaCorteArriendo !== undefined ||
+    empresaData.notasArriendo !== undefined
+  ) {
+    await saveStoredLicenseData(empId, {
+      valorArriendo: updated.valorArriendo,
+      estadoPago: updated.estadoPago,
+      fechaCorteArriendo: updated.fechaCorteArriendo,
+      notasArriendo: updated.notasArriendo,
+    });
+  }
+
+  // 2. Sincronizar en Supabase con auto-recuperación si faltan columnas
   if (isSupabaseConfigured()) {
     try {
-      await supabase.from('empresas').upsert({
+      const payload: any = {
         id: updated.id,
         nombre: updated.nombre,
         razon_social: updated.razonSocial || null,
@@ -3113,12 +3155,22 @@ export async function saveEmpresa(empresaData: Partial<Empresa> & { id: string }
         simbolo_moneda: updated.simboloMoneda || '$',
         costo_envio_base: updated.costoEnvioBase,
         is_activa: updated.isActiva,
-        valor_arriendo: updated.valorArriendo,
-        estado_pago: updated.estadoPago,
-        fecha_corte_arriendo: updated.fechaCorteArriendo,
-        notas_arriendo: updated.notasArriendo,
         updated_at: updated.updatedAt,
-      });
+      };
+
+      if (updated.valorArriendo !== undefined) payload.valor_arriendo = updated.valorArriendo;
+      if (updated.estadoPago !== undefined) payload.estado_pago = updated.estadoPago;
+      if (updated.fechaCorteArriendo !== undefined) payload.fecha_corte_arriendo = updated.fechaCorteArriendo;
+      if (updated.notasArriendo !== undefined) payload.notas_arriendo = updated.notasArriendo;
+
+      const { error } = await supabase.from('empresas').upsert(payload);
+      if (error && (error.code === 'PGRST204' || error.code === '42703')) {
+        delete payload.valor_arriendo;
+        delete payload.estado_pago;
+        delete payload.fecha_corte_arriendo;
+        delete payload.notas_arriendo;
+        await supabase.from('empresas').upsert(payload);
+      }
     } catch (_) {}
   }
 
@@ -3467,4 +3519,33 @@ export async function getPlatformGlobalMetrics(): Promise<{
     totalVentas: totalVentas,
     totalRepartidores: totalRepartidores,
   };
+}
+
+
+export function onDatabaseChange(callback: () => void): () => void {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const handler = () => callback();
+    window.addEventListener('einuushi_db_updated', handler);
+    return () => window.removeEventListener('einuushi_db_updated', handler);
+  }
+  return () => {};
+}
+
+export function subscribeToEmpresasRealtime(callback: () => void): () => void {
+  if (!isSupabaseConfigured()) return () => {};
+  try {
+    const channel = supabase
+      .channel('public:empresas_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'empresas' }, () => {
+        notifyDatabaseChange();
+        callback();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  } catch (_) {
+    return () => {};
+  }
 }
