@@ -455,7 +455,7 @@ export default function OwnerScreen() {
               <View style={styles.ownerNoticeBox}>
                 <Ionicons name="shield-checkmark" size={15} color="#10B981" />
                 <Text style={styles.ownerNoticeText}>
-                  Control Maestro: Alta de Tiendas, Rutas Web y Gestión de Arriendos
+                  Control Maestro: Alta de Tiendas, Rutas Web y Control de Licencias
                 </Text>
               </View>
             </View>
@@ -608,7 +608,7 @@ export default function OwnerScreen() {
             <View>
               <Text style={styles.metricLabel}>Tiendas Activas</Text>
               <Text style={[styles.metricValue, { color: '#15803D' }]}>{metrics.empresasActivas}</Text>
-              <Text style={styles.metricSub}>Al día con el arriendo</Text>
+              <Text style={styles.metricSub}>Al día con su licencia</Text>
             </View>
           </View>
 
@@ -630,7 +630,7 @@ export default function OwnerScreen() {
               <Ionicons name="cash" size={22} color="#B45309" />
             </View>
             <View>
-              <Text style={styles.metricLabel}>Arriendos Mensuales</Text>
+              <Text style={styles.metricLabel}>Licencias Mensuales</Text>
               <Text style={[styles.metricValue, { color: '#B45309', fontSize: 20 }]}>
                 ${metrics.arriendoMensualProyectado.toLocaleString()}
               </Text>
@@ -638,26 +638,13 @@ export default function OwnerScreen() {
             </View>
           </View>
 
-          {/* Card 5: Pedidos Globales */}
-          <View style={styles.metricCard}>
-            <View style={[styles.metricIconWrap, { backgroundColor: '#F3E8FF' }]}>
-              <Ionicons name="cube" size={22} color="#7E22CE" />
-            </View>
-            <View>
-              <Text style={styles.metricLabel}>Pedidos Globales</Text>
-              <Text style={styles.metricValue}>{metrics.totalPedidos}</Text>
-              <Text style={styles.metricSub}>Ventas: ${metrics.totalVentas.toLocaleString()}</Text>
-            </View>
-          </View>
+
         </View>
 
         {/* SECCIÓN PRINCIPAL: DIRECTORIO & GESTIÓN DE TIENDAS */}
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Directorio de Tiendas & Control de Arriendos</Text>
-            <Text style={styles.sectionSubtitle}>
-              Activa, suspende o edita el arriendo de cada comercio. Cada tienda opera de manera 100% independiente en su ruta web.
-            </Text>
+            <Text style={styles.sectionTitle}>Directorio de Tiendas & Control de Licencias</Text>
           </View>
 
           <TouchableOpacity
@@ -839,7 +826,7 @@ export default function OwnerScreen() {
                   {/* Fila de Arriendo & Pagos */}
                   <View style={styles.rentInfoBox}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.rentLabel}>Arriendo Mensual Acordado:</Text>
+                      <Text style={styles.rentLabel}>Licencia Mensual Acordada:</Text>
                       <Text style={styles.rentValue}>
                         ${(emp.valorArriendo || 150000).toLocaleString()} COP / mes
                       </Text>
@@ -853,7 +840,7 @@ export default function OwnerScreen() {
                       onPress={() => openEditRentModal(emp)}
                     >
                       <Ionicons name="create-outline" size={15} color="#475569" style={{ marginRight: 4 }} />
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>Ajustar Arriendo</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>Ajustar Licencia</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -1054,12 +1041,12 @@ export default function OwnerScreen() {
               </View>
 
               {/* SECCIÓN 2: CONTROL DE ARRIENDO */}
-              <Text style={[styles.formSectionTitle, { marginTop: 18 }]}>2. Condiciones de Arriendo Mensual</Text>
+              <Text style={[styles.formSectionTitle, { marginTop: 18 }]}>2. Condiciones de Licencia Mensual</Text>
 
               <View style={{ gap: 10 }}>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.settingsLabel}>Valor Arriendo Mensual (COP) *</Text>
+                    <Text style={styles.settingsLabel}>Valor Licencia Mensual (COP) *</Text>
                     <TextInput
                       style={styles.settingsInput}
                       value={newValorArriendo}
@@ -1245,7 +1232,7 @@ export default function OwnerScreen() {
                   <Ionicons name="cash" size={20} color="#B45309" />
                 </View>
                 <View>
-                  <Text style={styles.modalTitle}>Configuración de Arriendo</Text>
+                  <Text style={styles.modalTitle}>Configuración de Licencia</Text>
                   <Text style={styles.modalSubtitle}>{editingRentEmpresa?.nombre}</Text>
                 </View>
               </View>
@@ -1256,7 +1243,7 @@ export default function OwnerScreen() {
 
             <View style={{ gap: 12, marginTop: 16 }}>
               <View>
-                <Text style={styles.settingsLabel}>Valor Mensual de Arriendo (COP):</Text>
+                <Text style={styles.settingsLabel}>Valor Mensual de Licencia (COP):</Text>
                 <TextInput
                   style={styles.settingsInput}
                   value={editRentValor}
@@ -1277,7 +1264,7 @@ export default function OwnerScreen() {
               </View>
 
               <View>
-                <Text style={styles.settingsLabel}>Estado de Pago del Mes:</Text>
+                <Text style={styles.settingsLabel}>Estado de Licencia del Mes:</Text>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   {(['al_dia', 'pendiente', 'suspendido'] as const).map(st => (
                     <TouchableOpacity
@@ -1309,7 +1296,7 @@ export default function OwnerScreen() {
               </View>
 
               <View>
-                <Text style={styles.settingsLabel}>Notas Internas de Cobro / Arriendo:</Text>
+                <Text style={styles.settingsLabel}>Notas Internas de Licencia:</Text>
                 <TextInput
                   style={[styles.settingsInput, { height: 60, textAlignVertical: 'top' }]}
                   value={editRentNotas}
@@ -1338,7 +1325,7 @@ export default function OwnerScreen() {
                 ) : (
                   <Ionicons name="save" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
                 )}
-                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Guardar Arriendo</Text>
+                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Guardar Licencia</Text>
               </TouchableOpacity>
             </View>
           </View>

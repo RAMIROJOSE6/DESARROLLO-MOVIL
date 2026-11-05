@@ -52,3 +52,4 @@ INSERT INTO users (
 
 -- 4. Notificar confirmación en consola de Supabase
 SELECT 'Migración V4 TODÁ APP completada con éxito. Tabla empresas y Superadministrador actualizados.' AS resultado;
+
