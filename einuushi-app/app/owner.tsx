@@ -610,9 +610,6 @@ export default function OwnerScreen() {
               </View>
               <Text style={styles.platformBadge}>CENTRAL DE OPERACIONES SAAS</Text>
               <Text style={styles.platformTitle}>TODÁ APP</Text>
-              <Text style={styles.platformSubtitle}>
-                Portal Maestro Exclusivo para el Propietario de la Plataforma
-              </Text>
               <View style={styles.ownerNoticeBox}>
                 <Ionicons name="shield-checkmark" size={15} color="#10B981" />
                 <Text style={styles.ownerNoticeText}>
@@ -672,22 +669,10 @@ export default function OwnerScreen() {
               ) : (
                 <>
                   <Ionicons name="key" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                  <Text style={styles.loginButtonText}>Ingresar al Panel Maestro</Text>
+                  <Text style={styles.loginButtonText}>Ingresar</Text>
                 </>
               )}
             </TouchableOpacity>
-
-            <View style={{ marginTop: 24, borderTopWidth: 1, borderTopColor: '#334155', paddingTop: 16, alignItems: 'center' }}>
-              <Text style={{ color: '#94A3B8', fontSize: 12 }}>¿Eres administrador de una tienda específica?</Text>
-              <TouchableOpacity
-                style={{ marginTop: 6 }}
-                onPress={() => router.push('/admin')}
-              >
-                <Text style={{ color: '#38BDF8', fontWeight: '700', fontSize: 13 }}>
-                  Ir al Acceso de Tiendas Afiliadas (/admin)
-                </Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
