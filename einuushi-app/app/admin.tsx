@@ -593,7 +593,10 @@ export default function AdminScreen() {
       setEmpresaFeedback(null);
       const numEnvio = parseFloat(empresaCostoEnvioBase.replace(/[^0-9.]/g, '')) || 16000;
 
+      const targetStoreId = empresa?.id || (routeStoreParam || 'einuushi').toLowerCase();
+
       const ok = await updateEmpresaProfile({
+        id: targetStoreId,
         nombre: empresaNombre.trim(),
         razonSocial: empresaRazonSocial.trim(),
         nit: empresaNit.trim(),
@@ -610,10 +613,10 @@ export default function AdminScreen() {
       });
 
       if (ok) {
-        setEmpresaFeedback({ type: 'success', text: '¡Datos oficiales de la empresa actualizados correctamente en la base de datos!' });
-        Alert.alert('Empresa Actualizada', 'Los datos oficiales de la empresa han sido guardados exitosamente.');
+        setEmpresaFeedback({ type: 'success', text: '¡Datos y configuración de la tienda actualizados y guardados correctamente en la base de datos!' });
+        Alert.alert('Datos Guardados', 'La información de tu tienda (teléfono, dirección, redes y datos comerciales) ha sido guardada exitosamente.');
       } else {
-        setEmpresaFeedback({ type: 'error', text: 'No se pudieron guardar los cambios de la empresa.' });
+        setEmpresaFeedback({ type: 'error', text: 'No se pudieron guardar los cambios de la tienda.' });
       }
     } catch (err: any) {
       setEmpresaFeedback({ type: 'error', text: err?.message || 'Ocurrió un error al guardar los datos de la empresa.' });
@@ -4111,14 +4114,6 @@ export default function AdminScreen() {
                       {empresa?.isActiva !== false ? 'EMPRESA ACTIVA' : 'INACTIVA'}
                     </Text>
                   </View>
-                </View>
-
-                {/* Banner Informativo Arquitectura Multitienda */}
-                <View style={{ marginBottom: 18, backgroundColor: '#F0F9FF', borderColor: '#BAE6FD', borderWidth: 1, borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'flex-start' }}>
-                  <Ionicons name="information-circle" size={20} color="#0284C7" style={{ marginRight: 8, marginTop: 2 }} />
-                  <Text style={{ color: '#0369A1', fontSize: 13, lineHeight: 18, flex: 1 }}>
-                    Esta configuración representa los datos oficiales de la empresa registrada ({empresa?.nombre || 'Einuushi'}). La información está centralizada en la tabla de base de datos <Text style={{ fontWeight: '700' }}>empresas</Text>, permitiendo que en el futuro registres nuevas empresas o tiendas bajo este mismo esquema unificado sin interferir con la operación actual.
-                  </Text>
                 </View>
 
                 {empresaFeedback && (

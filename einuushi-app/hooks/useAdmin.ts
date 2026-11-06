@@ -1035,12 +1035,15 @@ export function useAdmin() {
 
   const updateEmpresaProfile = async (changes: Partial<Empresa>): Promise<boolean> => {
     try {
+      const activeSession = await getAdminSession();
+      const targetId = changes.id || empresa?.id || activeSession?.empresaId || 'einuushi';
       const updated = await dbSaveEmpresa({
         ...empresa,
         ...changes,
-        id: empresa.id || 'einuushi',
+        id: targetId,
       });
       setEmpresa(updated);
+      setEmpresasList(prev => prev.map(e => e.id === updated.id ? updated : e));
       await logAdminActivity({
         adminId: adminUser?.id,
         adminEmail: adminUser?.email || 'admin@einuushi.com',
