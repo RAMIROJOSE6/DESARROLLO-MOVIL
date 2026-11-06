@@ -122,7 +122,32 @@ export function useAdmin() {
       setCategories(cat);
       setQuotes(qts);
       setPaymentMethods(pms);
-      if (emp) setEmpresa(emp);
+      if (emp) {
+        setEmpresa(prev => {
+          if (
+            prev &&
+            prev.id === emp.id &&
+            prev.nombre === emp.nombre &&
+            prev.telefono === emp.telefono &&
+            prev.whatsapp === emp.whatsapp &&
+            prev.email === emp.email &&
+            prev.direccion === emp.direccion &&
+            prev.ciudad === emp.ciudad &&
+            prev.departamento === emp.departamento &&
+            prev.nit === emp.nit &&
+            prev.razonSocial === emp.razonSocial &&
+            prev.slogan === emp.slogan &&
+            prev.descripcion === emp.descripcion &&
+            prev.logoUrl === emp.logoUrl &&
+            prev.costoEnvioBase === emp.costoEnvioBase &&
+            prev.isActiva === emp.isActiva &&
+            prev.updatedAt === emp.updatedAt
+          ) {
+            return prev;
+          }
+          return emp;
+        });
+      }
       if (allEmps && allEmps.length > 0) setEmpresasList(allEmps);
       setMessages(msgs);
       setAnalytics(anl);

@@ -527,23 +527,38 @@ export default function AdminScreen() {
   const [isUploadingEmpresaLogo, setIsUploadingEmpresaLogo] = useState(false);
   const [empresaFeedback, setEmpresaFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Control para no sobreescribir los campos que el usuario está editando activamente cuando hay sincronizaciones en segundo plano
+  const isEmpresaFormDirtyRef = React.useRef(false);
+  const loadedEmpresaIdRef = React.useRef<string | null>(null);
+
   React.useEffect(() => {
     if (empresa) {
-      setEmpresaNombre(empresa.nombre || 'Einuushi');
-      setEmpresaRazonSocial(empresa.razonSocial || '');
-      setEmpresaNit(empresa.nit || '');
-      setEmpresaSlogan(empresa.slogan || '');
-      setEmpresaDescripcion(empresa.descripcion || '');
-      setEmpresaLogo(empresa.logoUrl || '');
-      setEmpresaTelefono(empresa.telefono || '');
-      setEmpresaWhatsapp(empresa.whatsapp || '');
-      setEmpresaEmail(empresa.email || '');
-      setEmpresaDireccion(empresa.direccion || '');
-      setEmpresaCiudad(empresa.ciudad || '');
-      setEmpresaDepartamento(empresa.departamento || '');
-      setEmpresaCostoEnvioBase(String(empresa.costoEnvioBase || 16000));
+      const isStoreChanged = loadedEmpresaIdRef.current !== empresa.id;
+      // Solo inicializamos o actualizamos campos si cambió de tienda o si el usuario no tiene cambios en edición
+      if (isStoreChanged || !isEmpresaFormDirtyRef.current) {
+        setEmpresaNombre(empresa.nombre || 'Einuushi');
+        setEmpresaRazonSocial(empresa.razonSocial || '');
+        setEmpresaNit(empresa.nit || '');
+        setEmpresaSlogan(empresa.slogan || '');
+        setEmpresaDescripcion(empresa.descripcion || '');
+        setEmpresaLogo(empresa.logoUrl || '');
+        setEmpresaTelefono(empresa.telefono || '');
+        setEmpresaWhatsapp(empresa.whatsapp || '');
+        setEmpresaEmail(empresa.email || '');
+        setEmpresaDireccion(empresa.direccion || '');
+        setEmpresaCiudad(empresa.ciudad || '');
+        setEmpresaDepartamento(empresa.departamento || '');
+        setEmpresaCostoEnvioBase(String(empresa.costoEnvioBase || 16000));
+        loadedEmpresaIdRef.current = empresa.id;
+        isEmpresaFormDirtyRef.current = false;
+      }
     }
   }, [empresa]);
+
+  const handleEmpresaFieldChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (val: string) => {
+    setter(val);
+    isEmpresaFormDirtyRef.current = true;
+  };
 
   const handlePickEmpresaLogo = async () => {
     if (checkOwnerReadOnlyAction()) return;
@@ -613,6 +628,7 @@ export default function AdminScreen() {
       });
 
       if (ok) {
+        isEmpresaFormDirtyRef.current = false;
         setEmpresaFeedback({ type: 'success', text: '¡Datos y configuración de la tienda actualizados y guardados correctamente en la base de datos!' });
         Alert.alert('Datos Guardados', 'La información de tu tienda (teléfono, dirección, redes y datos comerciales) ha sido guardada exitosamente.');
       } else {
@@ -770,12 +786,20 @@ export default function AdminScreen() {
   const [auditFilterType, setAuditFilterType] = useState<'ALL' | 'PEDIDO' | 'PRODUCTO' | 'COTIZACION' | 'SEGURIDAD'>('ALL');
   const [auditSearchQuery, setAuditSearchQuery] = useState('');
 
-  // Sincronizar datos del perfil admin actual
+  // Sincronizar datos del perfil admin actual sin sobreescribir edición activa
+  const isAdminUserFormDirtyRef = React.useRef(false);
+  const loadedAdminIdRef = React.useRef<string | null>(null);
+
   React.useEffect(() => {
     if (adminUser) {
-      setAdminEditName(adminUser.fullName || '');
-      setAdminEditEmail(adminUser.email || '');
-      setAdminEditPhone(adminUser.phone || '');
+      const isUserChanged = loadedAdminIdRef.current !== adminUser.id;
+      if (isUserChanged || !isAdminUserFormDirtyRef.current) {
+        setAdminEditName(adminUser.fullName || '');
+        setAdminEditEmail(adminUser.email || '');
+        setAdminEditPhone(adminUser.phone || '');
+        loadedAdminIdRef.current = adminUser.id;
+        isAdminUserFormDirtyRef.current = false;
+      }
     }
   }, [adminUser]);
 
@@ -4171,7 +4195,7 @@ export default function AdminScreen() {
                     <TextInput
                       style={[styles.settingsInput, { height: 38, fontSize: 12 }]}
                       value={empresaLogo}
-                      onChangeText={setEmpresaLogo}
+                      onChangeText={handleEmpresaFieldChange(setEmpresaLogo)}
                       placeholder="https://.../logo.jpg"
                       placeholderTextColor="#94A3B8"
                       autoCapitalize="none"
@@ -4186,7 +4210,7 @@ export default function AdminScreen() {
                     <TextInput
                       style={styles.settingsInput}
                       value={empresaNombre}
-                      onChangeText={setEmpresaNombre}
+                      onChangeText={handleEmpresaFieldChange(setEmpresaNombre)}
                       placeholder="Ej. Einuushi"
                       placeholderTextColor="#94A3B8"
                     />
@@ -4197,7 +4221,7 @@ export default function AdminScreen() {
                     <TextInput
                       style={styles.settingsInput}
                       value={empresaRazonSocial}
-                      onChangeText={setEmpresaRazonSocial}
+                      onChangeText={handleEmpresaFieldChange(setEmpresaRazonSocial)}
                       placeholder="Ej. Einuushi Artesanías Wayuu S.A.S."
                       placeholderTextColor="#94A3B8"
                     />
@@ -4208,7 +4232,7 @@ export default function AdminScreen() {
                     <TextInput
                       style={styles.settingsInput}
                       value={empresaNit}
-                      onChangeText={setEmpresaNit}
+                      onChangeText={handleEmpresaFieldChange(setEmpresaNit)}
                       placeholder="Ej. 900.123.456-7"
                       placeholderTextColor="#94A3B8"
                     />
@@ -4219,7 +4243,7 @@ export default function AdminScreen() {
                     <TextInput
                       style={styles.settingsInput}
                       value={empresaSlogan}
-                      onChangeText={setEmpresaSlogan}
+                      onChangeText={handleEmpresaFieldChange(setEmpresaSlogan)}
                       placeholder="Ej. Arte, Cultura y Tradición Wayuu"
                       placeholderTextColor="#94A3B8"
                     />
@@ -4230,7 +4254,7 @@ export default function AdminScreen() {
                     <TextInput
                       style={styles.settingsInput}
                       value={empresaTelefono}
-                      onChangeText={setEmpresaTelefono}
+                      onChangeText={handleEmpresaFieldChange(setEmpresaTelefono)}
                       keyboardType="phone-pad"
                       placeholder="Ej. 3009998877"
                       placeholderTextColor="#94A3B8"
@@ -4242,7 +4266,7 @@ export default function AdminScreen() {
                     <TextInput
                       style={styles.settingsInput}
                       value={empresaWhatsapp}
-                      onChangeText={setEmpresaWhatsapp}
+                      onChangeText={handleEmpresaFieldChange(setEmpresaWhatsapp)}
                       keyboardType="phone-pad"
                       placeholder="Ej. 3009998877"
                       placeholderTextColor="#94A3B8"
@@ -4250,16 +4274,19 @@ export default function AdminScreen() {
                   </View>
 
                   <View style={styles.settingsFormGroup}>
-                    <Text style={styles.settingsLabel}>Correo Electrónico Oficial:</Text>
+                    <Text style={styles.settingsLabel}>Correo Electrónico de Contacto Oficial:</Text>
                     <TextInput
                       style={styles.settingsInput}
                       value={empresaEmail}
-                      onChangeText={setEmpresaEmail}
+                      onChangeText={handleEmpresaFieldChange(setEmpresaEmail)}
                       keyboardType="email-address"
                       autoCapitalize="none"
                       placeholder="admin@einuushi.com"
                       placeholderTextColor="#94A3B8"
                     />
+                    <Text style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+                      * Correo comercial de atención a clientes. No modifica ni altera tu usuario de inicio de sesión de administrador.
+                    </Text>
                   </View>
 
                   <View style={styles.settingsFormGroup}>
@@ -4267,7 +4294,7 @@ export default function AdminScreen() {
                     <TextInput
                       style={styles.settingsInput}
                       value={empresaCostoEnvioBase}
-                      onChangeText={setEmpresaCostoEnvioBase}
+                      onChangeText={handleEmpresaFieldChange(setEmpresaCostoEnvioBase)}
                       keyboardType="numeric"
                       placeholder="16000"
                       placeholderTextColor="#94A3B8"
@@ -4279,7 +4306,7 @@ export default function AdminScreen() {
                     <TextInput
                       style={styles.settingsInput}
                       value={empresaDireccion}
-                      onChangeText={setEmpresaDireccion}
+                      onChangeText={handleEmpresaFieldChange(setEmpresaDireccion)}
                       placeholder="Calle 1 # 2-3, Centro"
                       placeholderTextColor="#94A3B8"
                     />
@@ -4291,14 +4318,14 @@ export default function AdminScreen() {
                       <TextInput
                         style={[styles.settingsInput, { flex: 1 }]}
                         value={empresaCiudad}
-                        onChangeText={setEmpresaCiudad}
+                        onChangeText={handleEmpresaFieldChange(setEmpresaCiudad)}
                         placeholder="Ciudad (Ej. Riohacha)"
                         placeholderTextColor="#94A3B8"
                       />
                       <TextInput
                         style={[styles.settingsInput, { flex: 1 }]}
                         value={empresaDepartamento}
-                        onChangeText={setEmpresaDepartamento}
+                        onChangeText={handleEmpresaFieldChange(setEmpresaDepartamento)}
                         placeholder="Departamento (Ej. La Guajira)"
                         placeholderTextColor="#94A3B8"
                       />
@@ -4311,7 +4338,7 @@ export default function AdminScreen() {
                   <TextInput
                     style={[styles.settingsInput, { height: 75, textAlignVertical: 'top' }]}
                     value={empresaDescripcion}
-                    onChangeText={setEmpresaDescripcion}
+                    onChangeText={handleEmpresaFieldChange(setEmpresaDescripcion)}
                     multiline
                     placeholder="Describe la historia, misión y especialidad de la tienda..."
                     placeholderTextColor="#94A3B8"
