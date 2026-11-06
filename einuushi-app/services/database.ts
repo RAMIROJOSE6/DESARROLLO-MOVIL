@@ -2108,17 +2108,22 @@ export async function getChatMessages(
       }
       const { data, error } = await query;
       if (!error && Array.isArray(data)) {
-        const mapped: ChatMessage[] = data.map((m: any) => ({
-          id: m.id,
-          userId: m.user_id || undefined,
-          userEmail: m.user_email,
-          userName: m.userName || m.user_name || 'Usuario',
-          senderRole: m.sender_role as any,
-          message: m.message,
-          quoteId: m.quote_id || undefined,
-          createdAt: m.created_at,
-          read: m.read || 0,
-        }));
+        const mapped: ChatMessage[] = data.map((m: any) => {
+          const registered = memoryUsers.find(u => (u.email || '').trim().toLowerCase() === (m.user_email || '').trim().toLowerCase());
+          const candidateName = m.userName || m.username || m.user_name;
+          const resolvedName = registered?.fullName || (candidateName && candidateName !== 'Usuario' ? candidateName : '') || candidateName || m.user_email || 'Usuario';
+          return {
+            id: m.id,
+            userId: m.user_id || registered?.id || undefined,
+            userEmail: m.user_email,
+            userName: resolvedName,
+            senderRole: m.sender_role as any,
+            message: m.message,
+            quoteId: m.quote_id || undefined,
+            createdAt: m.created_at,
+            read: m.read || 0,
+          };
+        });
         memoryChat = mapped;
         return mapped;
       }
@@ -2144,17 +2149,33 @@ export async function sendChatMessage(
 
   if (isSupabaseConfigured()) {
     try {
-      await supabase.from('chat_messages').insert({
+      const supaPayload: any = {
         id: newMsg.id,
         user_id: newMsg.userId || null,
         user_email: newMsg.userEmail,
         username: newMsg.userName,
+        userName: newMsg.userName,
+        user_name: newMsg.userName,
         sender_role: newMsg.senderRole,
         message: newMsg.message,
         quote_id: newMsg.quoteId || null,
         created_at: newMsg.createdAt,
         read: 0,
-      });
+      };
+      const { error } = await supabase.from('chat_messages').insert(supaPayload);
+      if (error) {
+        await supabase.from('chat_messages').insert({
+          id: newMsg.id,
+          user_id: newMsg.userId || null,
+          user_email: newMsg.userEmail,
+          userName: newMsg.userName,
+          sender_role: newMsg.senderRole,
+          message: newMsg.message,
+          quote_id: newMsg.quoteId || null,
+          created_at: newMsg.createdAt,
+          read: 0,
+        });
+      }
     } catch (_) {}
   }
 

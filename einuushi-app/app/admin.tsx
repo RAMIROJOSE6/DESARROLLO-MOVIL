@@ -1624,7 +1624,7 @@ export default function AdminScreen() {
     if (!selectedChatUserEmail || !replyMessageText.trim()) return;
     await sendMessage(
       selectedChatUserEmail,
-      'Cliente Einuushi',
+      selectedCustomerName || 'Cliente',
       replyMessageText.trim()
     );
     setReplyMessageText('');
@@ -1946,15 +1946,21 @@ export default function AdminScreen() {
     }
   };
 
-  // Agrupar mensajes de chat por usuario
+  // Agrupar mensajes de chat por usuario resolviendo su nombre real según datos registrados
   const chatUsersMap = new Map<string, { email: string; name: string; lastMessage: string; unreadCount: number }>();
   messages.forEach(m => {
+    const normEmail = (m.userEmail || '').trim().toLowerCase();
+    const registeredUser = users?.find(u => (u.email || '').trim().toLowerCase() === normEmail);
+    const orderWithUser = orders?.find(o => (o.userEmail || '').trim().toLowerCase() === normEmail);
+    const resolvedName = registeredUser?.fullName || orderWithUser?.client?.name || orderWithUser?.clientName || (m.userName && m.userName !== 'Usuario' ? m.userName : '') || m.userEmail;
+
     const existing = chatUsersMap.get(m.userEmail) || {
       email: m.userEmail,
-      name: m.userName || m.userEmail,
+      name: resolvedName,
       lastMessage: m.message,
       unreadCount: 0,
     };
+    existing.name = resolvedName;
     existing.lastMessage = m.message;
     if (m.senderRole === 'client' && m.read === 0) {
       existing.unreadCount += 1;
@@ -1966,6 +1972,10 @@ export default function AdminScreen() {
   const activeConversationMessages = selectedChatUserEmail
     ? messages.filter(m => m.userEmail.toLowerCase() === selectedChatUserEmail.toLowerCase())
     : [];
+
+  const selectedCustomer = users?.find(u => (u.email || '').trim().toLowerCase() === (selectedChatUserEmail || '').trim().toLowerCase());
+  const selectedOrderClient = orders?.find(o => (o.userEmail || '').trim().toLowerCase() === (selectedChatUserEmail || '').trim().toLowerCase());
+  const selectedCustomerName = selectedCustomer?.fullName || selectedOrderClient?.client?.name || selectedOrderClient?.clientName || (activeConversationMessages.find(m => m.userName && m.userName !== 'Usuario')?.userName) || selectedChatUserEmail;
 
   // =========================================================================
   // RENDER: PANTALLA DE ACCESO ADMINISTRATIVO (LOGIN PRIVADO)
@@ -3901,6 +3911,9 @@ export default function AdminScreen() {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.convNameText} numberOfLines={1}>{conv.name}</Text>
+                        {conv.name !== conv.email && (
+                          <Text style={{ fontSize: 10, color: '#64748B' }} numberOfLines={1}>{conv.email}</Text>
+                        )}
                         <Text style={styles.convLastMsgText} numberOfLines={1}>{conv.lastMessage}</Text>
                       </View>
                       {conv.unreadCount > 0 && (
@@ -3920,13 +3933,21 @@ export default function AdminScreen() {
                 {selectedChatUserEmail ? (
                   <>
                     <View style={styles.chatWindowHeader}>
-                      <Ionicons name="chatbubble-ellipses" size={18} color="#C5A880" style={{ marginRight: 6 }} />
-                      <Text style={styles.chatWindowHeaderText}>Chat con {selectedChatUserEmail}</Text>
+                      <Ionicons name="chatbubble-ellipses" size={18} color="#C5A880" style={{ marginRight: 8 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.chatWindowHeaderText}>Chat con {selectedCustomerName}</Text>
+                        {selectedCustomerName !== selectedChatUserEmail && (
+                          <Text style={{ fontSize: 11, color: '#CBD5E1', marginTop: 1 }}>
+                            {selectedChatUserEmail} {selectedCustomer?.phone ? `• 📞 ${selectedCustomer.phone}` : ''} {selectedCustomer?.city ? `• 📍 ${selectedCustomer.city}` : ''}
+                          </Text>
+                        )}
+                      </View>
                     </View>
 
                     <ScrollView style={styles.chatMessagesArea} contentContainerStyle={{ padding: 12 }}>
                       {activeConversationMessages.map(msg => {
                         const isAdmin = msg.senderRole === 'admin';
+                        const clientDisplayName = selectedCustomerName || (msg.userName && msg.userName !== 'Usuario' ? msg.userName : 'Cliente');
                         return (
                           <View
                             key={msg.id}
@@ -3936,7 +3957,7 @@ export default function AdminScreen() {
                             ]}
                           >
                             <Text style={[styles.chatSenderName, isAdmin && { color: '#C5A880' }]}>
-                              {isAdmin ? 'Taller Einuushi' : msg.userName}
+                              {isAdmin ? (empresa?.nombre || 'Taller Einuushi') : clientDisplayName}
                             </Text>
                             <Text style={[styles.chatBubbleText, isAdmin && { color: '#FFFFFF' }]}>
                               {msg.message}
