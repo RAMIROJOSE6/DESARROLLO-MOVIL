@@ -200,7 +200,7 @@ export default function AdminScreen() {
 
     if (isOwnerReadOnly) {
       setSelectedStoreFilter(targetStore);
-      refreshAll(targetStore);
+      refreshAll(targetStore, true);
     }
   }, [routeStoreParam, isOwnerReadOnly, refreshAll, setSelectedStoreFilter]);
 
@@ -209,7 +209,7 @@ export default function AdminScreen() {
     if (!isOwnerReadOnly) return;
     const targetStore = (routeStoreParam || 'einuushi').toLowerCase();
     const interval = setInterval(() => {
-      refreshAll(targetStore);
+      refreshAll(targetStore, true);
     }, 4000);
     return () => clearInterval(interval);
   }, [isOwnerReadOnly, routeStoreParam, refreshAll]);
@@ -2357,7 +2357,7 @@ export default function AdminScreen() {
         <View style={styles.topActionsRow}>
           <TouchableOpacity
             style={styles.refreshIconButton}
-            onPress={() => isOwnerReadOnly ? refreshAll(routeStoreParam || 'einuushi') : refreshAll()}
+            onPress={() => isOwnerReadOnly ? refreshAll(routeStoreParam || 'einuushi', true) : refreshAll()}
             activeOpacity={0.7}
           >
             <Ionicons
@@ -2612,14 +2612,14 @@ export default function AdminScreen() {
                   } as any
                 ]}
                 onPress={() => {
-                  if (isSuperAdminUser) {
-                    setIsUsersModalVisible(true);
-                  } else {
+                  if (isOwnerReadOnly) {
                     Alert.alert(
-                      'Acceso Restringido',
-                      'Por políticas de privacidad y protección de datos, los administradores operativos no tienen acceso a visualizar datos de otros usuarios. Únicamente tienes acceso a tus propios datos de cuenta.'
+                      'Directorio Confidencial',
+                      'Por políticas de protección de datos (Habeas Data) y privacidad comercial, la lista de clientes registrados es confidencial y de acceso exclusivo para la administración interna de cada tienda.'
                     );
+                    return;
                   }
+                  setIsUsersModalVisible(true);
                 }}
                 activeOpacity={0.8}
               >
@@ -2630,19 +2630,21 @@ export default function AdminScreen() {
                   <View style={{ 
                     flexDirection: 'row', 
                     alignItems: 'center', 
-                    backgroundColor: isSuperAdminUser ? '#8B5CF6' : '#94A3B8', 
+                    backgroundColor: isOwnerReadOnly ? '#94A3B8' : '#8B5CF6', 
                     paddingHorizontal: 7, 
                     paddingVertical: 2, 
                     borderRadius: 10 
                   }}>
-                    <Ionicons name={isSuperAdminUser ? "eye-outline" : "lock-closed-outline"} size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
-                    <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: 'bold' }}>{isSuperAdminUser ? 'Ver' : 'Privado'}</Text>
+                    <Ionicons name={isOwnerReadOnly ? "lock-closed-outline" : "eye-outline"} size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
+                    <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: 'bold' }}>{isOwnerReadOnly ? 'Privado' : 'Ver'}</Text>
                   </View>
                 </View>
-                <Text style={styles.kpiValue}>{analytics?.totalClients || (users?.filter(isPureClientUser).length || 0)}</Text>
+                <Text style={styles.kpiValue}>
+                  {isOwnerReadOnly ? '🔒' : (users?.filter(isPureClientUser).length || analytics?.totalClients || 0)}
+                </Text>
                 <Text style={styles.kpiLabel}>Clientes Registrados</Text>
-                <Text style={{ fontSize: 10, color: isSuperAdminUser ? '#7C3AED' : '#64748B', marginTop: 4, fontWeight: '600' }}>
-                  {isSuperAdminUser ? 'Toca para ver lista ➔' : 'Solo Superadministrador'}
+                <Text style={{ fontSize: 10, color: isOwnerReadOnly ? '#64748B' : '#7C3AED', marginTop: 4, fontWeight: '600' }}>
+                  {isOwnerReadOnly ? 'Confidencial de la Tienda' : 'Toca para ver lista ➔'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -7861,9 +7863,9 @@ export default function AdminScreen() {
         </View>
       </Modal>
 
-      {/* MODAL DE DIRECTORIO DE CLIENTES REGISTRADOS (SOLO CLIENTES, ADMINISTRADORES SE GESTIONAN EN CONFIGURACIÓN) */}
+      {/* MODAL DE DIRECTORIO DE CLIENTES REGISTRADOS (SOLO CLIENTES DE LA TIENDA, CONFIDENCIAL PARA PROPIETARIO) */}
       <Modal 
-        visible={isUsersModalVisible} 
+        visible={isUsersModalVisible && !isOwnerReadOnly} 
         transparent 
         animationType="slide" 
         onRequestClose={() => setIsUsersModalVisible(false)}
@@ -7894,10 +7896,10 @@ export default function AdminScreen() {
                 </View>
                 <View>
                   <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#FFFFFF' }}>
-                    Directorio de Clientes Registrados
+                    Directorio de Clientes • {empresa?.nombre || 'Mi Tienda'}
                   </Text>
                   <Text style={{ fontSize: 11, color: '#C5A880' }}>
-                    Base de Datos en Supabase • Solo Clientes ({(users || []).filter(isPureClientUser).length} registrados)
+                    Base de Datos en Supabase • Clientes de la Tienda ({(users || []).filter(isPureClientUser).length} registrados)
                   </Text>
                 </View>
               </View>
@@ -8122,7 +8124,7 @@ export default function AdminScreen() {
               borderColor: '#E2E8F0',
             }}>
               <Text style={{ fontSize: 12, color: '#64748B' }}>
-                Total: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{(users || []).filter(isPureClientUser).length}</Text> clientes en Supabase
+                Total: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{(users || []).filter(isPureClientUser).length}</Text> clientes en {empresa?.nombre || 'la tienda'}
               </Text>
               <TouchableOpacity
                 onPress={() => setIsUsersModalVisible(false)}

@@ -406,12 +406,13 @@ export function ensureUsersAvatarColumn() {
  * =========================================================================
  */
 
-export async function getUsers(): Promise<User[]> {
+export async function getUsers(empresaId?: string): Promise<User[]> {
+  let mappedUsers: User[] = [];
   if (isSupabaseConfigured()) {
     try {
       const { data, error } = await supabase.from('users').select('*');
       if (!error && Array.isArray(data)) {
-        const mappedUsers: User[] = data.map((u: any) => ({
+        mappedUsers = data.map((u: any) => ({
           id: u.id,
           fullName: u.full_name,
           cedula: u.cedula,
@@ -436,11 +437,33 @@ export async function getUsers(): Promise<User[]> {
         }));
         
         memoryUsers = mappedUsers;
-        return mappedUsers;
       }
     } catch (_) {}
   }
-  return memoryUsers;
+  if (mappedUsers.length === 0) {
+    mappedUsers = memoryUsers.length > 0 ? memoryUsers : INITIAL_USERS;
+  }
+
+  if (empresaId && empresaId !== 'ALL') {
+    const targetStore = empresaId.trim().toLowerCase();
+    
+    // Obtener correos o IDs de clientes que han comprado en esta tienda
+    const storeOrders = memoryOrders.filter(o => (o.empresaId || 'einuushi').toLowerCase() === targetStore);
+    const storeBuyerEmails = new Set(storeOrders.map(o => (o.userEmail || '').trim().toLowerCase()).filter(Boolean));
+    const storeBuyerIds = new Set(storeOrders.map(o => o.userId).filter(Boolean));
+
+    return mappedUsers.filter(u => {
+      const userStore = (u.empresaId || 'einuushi').toLowerCase();
+      // Si el cliente pertenece a esta tienda
+      if (userStore === targetStore) return true;
+      // O si el cliente ha realizado al menos un pedido en esta tienda
+      const email = (u.email || '').trim().toLowerCase();
+      if (storeBuyerEmails.has(email) || (u.id && storeBuyerIds.has(u.id))) return true;
+      return false;
+    });
+  }
+
+  return mappedUsers;
 }
 
 export async function findUserByEmail(email: string): Promise<User | null> {
@@ -501,17 +524,20 @@ export async function registerUser(
       } catch (_) {}
     }
 
+    const targetEmpresaId = userData.empresaId || (userData as any).empresa_id || 'einuushi';
+
     const newUser: User = {
       ...userData,
       id: nextId,
       email: normalizedEmail,
       avatar: finalAvatar,
       role: "client",
+      empresaId: targetEmpresaId,
       createdAt: new Date().toISOString(),
     };
 
     if (isSupabaseConfigured()) {
-      const { error } = await supabase.from('users').insert({
+      const supaPayload: any = {
         id: newUser.id,
         full_name: newUser.fullName,
         cedula: newUser.cedula,
@@ -522,7 +548,15 @@ export async function registerUser(
         role: 'client',
         avatar: newUser.avatar || null,
         created_at: newUser.createdAt,
-      });
+        empresa_id: targetEmpresaId,
+      };
+
+      let { error } = await supabase.from('users').insert(supaPayload);
+      if (error && error.message?.toLowerCase().includes('empresa_id')) {
+        delete supaPayload.empresa_id;
+        const retry = await supabase.from('users').insert(supaPayload);
+        error = retry.error;
+      }
       if (error) {
         return { success: false, message: error.message };
       }
@@ -2344,7 +2378,7 @@ export async function getStoreAnalytics(empresaId?: string): Promise<StoreAnalyt
   const [orders, products, users] = await Promise.all([
     getOrders(undefined, empresaId),
     getProducts(empresaId),
-    getUsers(),
+    getUsers(empresaId),
   ]);
   return calculateAdminAnalytics(orders, products, users);
 }

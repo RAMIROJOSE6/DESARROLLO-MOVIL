@@ -84,7 +84,7 @@ export function useAdmin() {
   const [activeTrackingOrder, setActiveTrackingOrder] = useState<Order | null>(null);
 
   // Cargar sesión y datos del panel
-  const refreshAll = useCallback(async (overrideEmpresaId?: string) => {
+  const refreshAll = useCallback(async (overrideEmpresaId?: string, isOwnerReadOnlyMode?: boolean) => {
     setIsRefreshing(true);
     try {
       const activeSession = await getAdminSession();
@@ -98,6 +98,10 @@ export function useAdmin() {
         ? effectiveStoreFilter
         : (effectiveStoreFilter || activeSession?.empresaId || 'einuushi');
 
+      // Clientes de la tienda: Se cargan para el administrador de la tienda, pero permanecen estrictamente confidenciales y ocultos para el Propietario (isOwnerReadOnlyMode o sesión de Propietario)
+      const isOwnerView = Boolean(isOwnerReadOnlyMode || (activeSession && activeSession.email?.toLowerCase() === 'propietario@todaapp.com'));
+      const shouldLoadStoreUsers = !isOwnerView;
+
       const [ord, prod, cat, qts, msgs, anl, usrs, logs, admins, drvs, pms, emp, allEmps] = await Promise.all([
         getOrders(undefined, targetEmpresaId),
         getProducts(targetEmpresaId),
@@ -105,7 +109,7 @@ export function useAdmin() {
         getCustomQuotes(),
         getChatMessages(),
         getStoreAnalytics(targetEmpresaId),
-        isSuper ? getUsers() : Promise.resolve([]),
+        shouldLoadStoreUsers ? getUsers(targetEmpresaId) : Promise.resolve([]),
         getAdminActivityLogs(100),
         getAdminUsers(activeSession),
         getDrivers(),
@@ -122,7 +126,7 @@ export function useAdmin() {
       if (allEmps && allEmps.length > 0) setEmpresasList(allEmps);
       setMessages(msgs);
       setAnalytics(anl);
-      setUsersList(isSuper ? usrs : []);
+      setUsersList(shouldLoadStoreUsers ? usrs : []);
       setDrivers(drvs || []);
       // Si es administrador regular, no tiene acceso a visualizar movimientos ni datos del Superadministrador
       setActivityLogs(
