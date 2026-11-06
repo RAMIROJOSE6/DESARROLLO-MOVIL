@@ -7302,24 +7302,29 @@ export default function AdminScreen() {
                         <Text style={{ fontSize: 11, color: '#64748B' }}>
                           🏍️ Repartidor: <Text style={{ fontWeight: '600', color: '#1E293B' }}>{order.driverName || 'Sin asignar'}</Text>
                         </Text>
-                        <TouchableOpacity
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            paddingHorizontal: 8,
-                            paddingVertical: 4,
-                            borderRadius: 6,
-                            backgroundColor: '#EFF6FF',
-                          }}
-                          onPress={() => {
-                            setIsTotalOrdersModalVisible(false);
-                            setActiveTabState('orders');
-                          }}
-                        >
-                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#2563EB' }}>
-                            Gestionar en Pedidos ➔
-                          </Text>
-                        </TouchableOpacity>
+                        {!isDelivered && (
+                          <TouchableOpacity
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                              backgroundColor: '#EFF6FF',
+                              cursor: Platform.OS === 'web' ? 'pointer' : undefined,
+                            } as any}
+                            onPress={() => {
+                              setIsTotalOrdersModalVisible(false);
+                              setOrderStatusFilter(order.statusCode === 'PENDING' ? 'PENDING' : 'DISPATCHED');
+                              setActiveTabState('orders');
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#2563EB' }}>
+                              Gestionar en Pedidos ➔
+                            </Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   );
