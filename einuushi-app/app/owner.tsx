@@ -19,9 +19,9 @@ import {
 } from "react-native";
 import {
   authenticateAdmin,
-  clearAdminSession,
+  clearOwnerSession,
   Empresa,
-  getAdminSession,
+  getOwnerSession,
   getEmpresas,
   getPlatformGlobalMetrics,
   getUsers,
@@ -232,7 +232,7 @@ export default function OwnerScreen() {
 
     async function initSession() {
       try {
-        const session = await getAdminSession();
+        const session = await getOwnerSession();
         if (!isMounted) return;
         if (session && isSuperAdmin(session)) {
           setCurrentUser(session);
@@ -371,7 +371,7 @@ export default function OwnerScreen() {
   };
 
   const handleLogout = async () => {
-    await clearAdminSession();
+    await clearOwnerSession();
     setCurrentUser(null);
   };
 

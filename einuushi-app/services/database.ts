@@ -292,6 +292,7 @@ export interface StoreAnalytics {
 // Claves de sesión ligera (sólo tokens / usuario activo, NUNCA binarios pesados para evitar SQLITE_FULL)
 const SESSION_STORAGE_KEY = "@einuushi_active_session_v2";
 const ADMIN_SESSION_STORAGE_KEY = "@einuushi_admin_session_v2";
+const OWNER_SESSION_STORAGE_KEY = "@toda_owner_session_v2";
 
 export const DEFAULT_EMAIL_CONFIG: EmailConfig = {
   serviceId: "service_vmuqrwm",
@@ -764,6 +765,7 @@ export async function saveAdminSession(adminUser: User): Promise<void> {
       fullName: adminUser.fullName,
       email: adminUser.email,
       role: isSuper ? 'superadmin' : (adminUser.role || 'admin'),
+      empresaId: adminUser.empresaId || (adminUser as any).empresa_id,
     };
     await AsyncStorage.setItem(ADMIN_SESSION_STORAGE_KEY, JSON.stringify(safeAdmin));
   } catch (_) {}
@@ -774,6 +776,11 @@ export async function getAdminSession(): Promise<User | null> {
     const raw = await AsyncStorage.getItem(ADMIN_SESSION_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
+    // Aislar: Si en esta clave quedó guardada la sesión del propietario, ignorarla y limpiarla
+    if (parsed.id === 'USR-OWNER-TODA' || parsed.email === 'propietario@todaapp.com' || parsed.email === 'admin@todaapp.com') {
+      await clearAdminSession();
+      return null;
+    }
     const isSuper = isSuperAdmin(parsed);
     const isValid = parsed?.role === 'admin' || parsed?.role === 'superadmin' || isSuper;
     if (isValid && isSuper && parsed.role !== 'superadmin') {
@@ -788,6 +795,32 @@ export async function getAdminSession(): Promise<User | null> {
 export async function clearAdminSession(): Promise<void> {
   try {
     await AsyncStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
+  } catch (_) {}
+}
+
+// =========================================================================
+// SESIÓN EXCLUSIVA DEL PROPIETARIO DE TODÁ APP (AISLAMIENTO TOTAL)
+// =========================================================================
+export async function saveOwnerSession(ownerUser: User): Promise<void> {
+  try {
+    await AsyncStorage.setItem(OWNER_SESSION_STORAGE_KEY, JSON.stringify(ownerUser));
+  } catch (_) {}
+}
+
+export async function getOwnerSession(): Promise<User | null> {
+  try {
+    const raw = await AsyncStorage.getItem(OWNER_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return isSuperAdmin(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearOwnerSession(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(OWNER_SESSION_STORAGE_KEY);
   } catch (_) {}
 }
 
@@ -811,7 +844,8 @@ export async function authenticateAdmin(
       role: 'superadmin',
       createdAt: new Date().toISOString(),
     };
-    await saveAdminSession(ownerUser);
+    // Guardar SOLO en la sesión del propietario, sin tocar la sesión de tiendas
+    await saveOwnerSession(ownerUser);
     return { success: true, user: ownerUser };
   }
 

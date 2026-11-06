@@ -22,7 +22,7 @@ import { WebView } from 'react-native-webview';
 import { LiveDeliveryMap } from '../components/LiveDeliveryMap';
 import * as ImagePicker from 'expo-image-picker';
 import { useAdmin } from '../hooks/useAdmin';
-import { Order, OrderItem, Product, Category, CustomQuote, User, isSuperAdmin, parseOrderDate, PaymentMethod, uploadMediaToSupabase, getEmpresaById, Empresa, RegisterStoreInput } from '../services/database';
+import { Order, OrderItem, Product, Category, CustomQuote, User, isSuperAdmin, parseOrderDate, PaymentMethod, uploadMediaToSupabase, getEmpresaById, Empresa, RegisterStoreInput, getOwnerSession } from '../services/database';
 
 const SUPABASE_FALLBACK_IMAGES: Record<string, string> = {
   mochila1: 'https://ismvmlcemxkawdwextzk.supabase.co/storage/v1/object/public/einuushi-media/crafts/mochila1.jpg',
@@ -149,15 +149,35 @@ export default function AdminScreen() {
   const { store: routeStoreParam, viewMode } = useLocalSearchParams<{ store?: string; viewMode?: string }>();
   const [routeStoreInfo, setRouteStoreInfo] = useState<Empresa | null>(null);
 
-  // Modo Solo Ver exclusivo del Propietario de la plataforma TODÁ APP
-  const isOwnerReadOnly = Boolean(
-    viewMode === 'owner_readonly' ||
-    adminUser?.email === 'propietario@todaapp.com' ||
-    adminUser?.id === 'USR-OWNER-TODA'
+  const [isOwnerVerified, setIsOwnerVerified] = useState(false);
+
+  // Verificar si hay una sesión válida del propietario cuando se solicita viewMode === 'owner_readonly'
+  React.useEffect(() => {
+    let isMounted = true;
+    if (viewMode === 'owner_readonly') {
+      getOwnerSession().then(owner => {
+        if (isMounted) setIsOwnerVerified(Boolean(owner));
+      });
+    } else {
+      setIsOwnerVerified(false);
+    }
+    return () => { isMounted = false; };
+  }, [viewMode]);
+
+  // Modo Solo Ver exclusivo del Propietario de TODÁ APP:
+  // SOLO se activa si la URL pide explícitamente viewMode === 'owner_readonly' Y el propietario está autenticado
+  const isOwnerReadOnly = Boolean(viewMode === 'owner_readonly' && isOwnerVerified);
+
+  // La tienda solo está autenticada si el adminUser logueado pertenece a la tienda de la ruta
+  const isStoreAdminAuthenticated = Boolean(
+    isAuthenticated &&
+    adminUser &&
+    adminUser.email !== 'propietario@todaapp.com' &&
+    (!routeStoreParam || (adminUser.empresaId || (adminUser as any).empresa_id || '').toLowerCase() === (routeStoreParam || '').toLowerCase() || isSuperAdmin(adminUser))
   );
 
   // El panel puede ser visualizado si la tienda está autenticada O si el propietario está en Modo Solo Ver (Vista Previa)
-  const canAccessPanel = Boolean(isAuthenticated || isOwnerReadOnly);
+  const canAccessPanel = Boolean(isStoreAdminAuthenticated || isOwnerReadOnly);
 
   const checkOwnerReadOnlyAction = (): boolean => {
     if (isOwnerReadOnly) {
