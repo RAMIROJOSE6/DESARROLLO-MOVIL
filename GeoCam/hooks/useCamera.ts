@@ -1,30 +1,33 @@
-import type { PermissionState } from "@/types/geo";
-import { CameraView, useCameraPermissions, type CameraType } from "expo-camera";
-import { useCallback, useRef, useState } from "react";
-import { Linking } from "react-native";
+// hooks/useCamera.ts
+// Custom Hook que encapsula expo-camera: permisos, cámara frontal/trasera y captura segura.
+import { useCallback, useRef, useState } from 'react';
+import { Linking } from 'react-native';
+import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
+import type { PermissionState } from '@/types/geo';
 
 export function useCamera() {
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
-  const [facing, setFacing] = useState<CameraType>("back");
+  const [facing, setFacing] = useState<CameraType>('back');
   const [isReady, setIsReady] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
 
   const permissionState: PermissionState = !permission
-    ? "checking"
+    ? 'checking'
     : permission.granted
-      ? "granted"
+      ? 'granted'
       : !permission.canAskAgain
-        ? "blocked"
-        : permission.status === "undetermined"
-          ? "undetermined"
-          : "denied";
+        ? 'blocked'
+        : permission.status === 'undetermined'
+          ? 'undetermined'
+          : 'denied';
 
   const toggleFacing = useCallback(() => {
-    setFacing((f) => (f === "back" ? "front" : "back"));
+    setFacing((f) => (f === 'back' ? 'front' : 'back'));
   }, []);
 
   const takePhoto = useCallback(async () => {
+    // Guardas: cámara montada, lista y sin otra captura en curso (evita doble toque)
     if (!cameraRef.current || !isReady || isCapturing) return null;
     setIsCapturing(true);
     try {
@@ -35,14 +38,17 @@ export function useCamera() {
     }
   }, [isReady, isCapturing]);
 
+  const openSettings = useCallback(() => Linking.openSettings(), []);
+  const onCameraReady = useCallback(() => setIsReady(true), []);
+
   return {
     cameraRef,
     permissionState,
     requestPermission,
-    openSettings: () => Linking.openSettings(),
+    openSettings,
     facing,
     toggleFacing,
-    onCameraReady: () => setIsReady(true),
+    onCameraReady,
     takePhoto,
     isCapturing,
   };

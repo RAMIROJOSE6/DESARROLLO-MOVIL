@@ -1,45 +1,21 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
 node_modules/
-
-# Expo
 .expo/
-.expo
-.expo/*
 dist/
 web-build/
 expo-env.d.ts
-
-# Native
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
+*.log
 .DS_Store
-*.pem
 
-# local env files
+# Variables de entorno (Semana 8)
+.env
 .env*.local
 
-# typescript
-*.tsbuildinfo
-
-example
-
-# generated native folders
+# Proyectos nativos generados (prebuild)
 /ios
 /android
+
+# OJO: la carpeta drizzle/ (migraciones) SÍ se versiona en Git
+
+# Credenciales: NUNCA van a GitHub. Se versiona .env.example, no .env
+.env.*
+!.env.example

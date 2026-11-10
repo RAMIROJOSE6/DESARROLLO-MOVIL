@@ -1,5 +1,7 @@
-import type { PermissionState } from "@/types/geo";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+// components/PermissionPrimer.tsx
+// Pantalla previa de explicación (permission priming) reutilizable para cualquier permiso.
+import { View, Text, Pressable } from 'react-native';
+import type { PermissionState } from '@/types/geo';
 
 interface Props {
   title: string;
@@ -9,68 +11,26 @@ interface Props {
   onOpenSettings: () => void;
 }
 
-export function PermissionPrimer({
-  title,
-  description,
-  state,
-  onRequest,
-  onOpenSettings,
-}: Props) {
-  const isBlocked = state === "blocked";
+export function PermissionPrimer({ title, description, state, onRequest, onOpenSettings }: Props) {
+  const isBlocked = state === 'blocked';
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.description}>
+    <View className="flex-1 items-center justify-center gap-4 bg-neutral-950 px-8">
+      <Text className="text-center text-2xl font-bold text-white">{title}</Text>
+      <Text className="text-center text-base text-neutral-300">
         {isBlocked
-          ? "Desactivaste este permiso. Puedes habilitarlo desde los Ajustes del sistema."
+          ? 'Desactivaste este permiso. Puedes habilitarlo desde los Ajustes del sistema.'
           : description}
       </Text>
       <Pressable
         onPress={isBlocked ? onOpenSettings : onRequest}
-        style={styles.button}
+        className="rounded-full bg-emerald-500 px-6 py-3 active:opacity-80"
         accessibilityRole="button"
       >
-        <Text style={styles.buttonText}>
-          {isBlocked ? "Abrir Ajustes" : "Permitir acceso"}
+        <Text className="font-semibold text-neutral-950">
+          {isBlocked ? 'Abrir Ajustes' : 'Permitir acceso'}
         </Text>
       </Pressable>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0a0a0a",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 32,
-    gap: 16,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#ffffff",
-    textAlign: "center",
-  },
-  description: {
-    fontSize: 15,
-    color: "#d4d4d4",
-    textAlign: "center",
-    lineHeight: 22,
-  },
-  button: {
-    marginTop: 8,
-    backgroundColor: "#10b981",
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 30,
-    elevation: 4,
-  },
-  buttonText: {
-    color: "#0a0a0a",
-    fontWeight: "bold",
-    fontSize: 15,
-  },
-});

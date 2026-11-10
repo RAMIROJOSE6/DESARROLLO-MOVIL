@@ -1,18 +1,57 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "87eba194-9e57-4f89-bd1c-8a519ac8dd09",
-  "prevId": "a37b7848-68cc-4825-b89b-eb9543fd9424",
+  "id": "233a17e8-ea3a-44a4-a79d-2dbf3eb0b42a",
+  "prevId": "844b3c47-4f3e-48aa-bf82-02be3a44a5ce",
   "tables": {
-    "geo_photos": {
-      "name": "geo_photos",
+    "albums": {
+      "name": "albums",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": true,
           "notNull": true,
+          "autoincrement": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "albums_name_unique": {
+          "name": "albums_name_unique",
+          "columns": [
+            "name"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "photos": {
+      "name": "photos",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
         },
         "uri": {
           "name": "uri",
@@ -42,13 +81,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "coordinate_timestamp": {
-          "name": "coordinate_timestamp",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "source": {
           "name": "source",
           "type": "text",
@@ -63,6 +95,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "album_id": {
+          "name": "album_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "note": {
           "name": "note",
           "type": "text",
@@ -74,7 +113,7 @@
           "name": "favorite",
           "type": "integer",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false,
           "default": false
         },
@@ -106,11 +145,57 @@
           "notNull": false,
           "autoincrement": false
         },
-        "owner_id": {
-          "name": "owner_id",
-          "type": "text",
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "photos_client_id_unique": {
+          "name": "photos_client_id_unique",
+          "columns": [
+            "client_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "photos_album_id_albums_id_fk": {
+          "name": "photos_album_id_albums_id_fk",
+          "tableFrom": "photos",
+          "tableTo": "albums",
+          "columnsFrom": [
+            "album_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "sync_meta": {
+      "name": "sync_meta",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         }
       },

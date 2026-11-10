@@ -1,10 +1,10 @@
+// context/AuthContext.tsx
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { Session, User } from '@supabase/supabase-js';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
 interface AuthValue {
   session: Session | null;
-  user: User | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<string | null>;
   signUp: (email: string, password: string) => Promise<string | null>;
@@ -23,26 +23,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(newSession);
       setIsLoading(false);
     });
-
     return () => data.subscription.unsubscribe();
   }, []);
 
   const value: AuthValue = {
     session,
-    user: session?.user ?? null,
     isLoading,
+    // Devuelven el mensaje de error para la UI, o null si todo salió bien
     signIn: async (email, password) => {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       return error?.message ?? null;
     },
     signUp: async (email, password) => {
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-      });
+      const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
       if (error) return error.message;
       return data.session ? null : 'Revisa tu correo para confirmar la cuenta.';
     },
@@ -59,4 +52,3 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth debe usarse dentro de AuthProvider');
   return ctx;
 }
-

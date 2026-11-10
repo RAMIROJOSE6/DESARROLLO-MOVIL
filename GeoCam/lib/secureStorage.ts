@@ -13,9 +13,7 @@ async function readCount(key: string) {
 
 async function removeItem(key: string) {
   const count = await readCount(key);
-  for (let i = 0; i < count; i++) {
-    await SecureStore.deleteItemAsync(chunkKey(key, i));
-  }
+  for (let i = 0; i < count; i++) await SecureStore.deleteItemAsync(chunkKey(key, i));
   await SecureStore.deleteItemAsync(countKey(key));
 }
 
@@ -31,17 +29,15 @@ export const secureStorage = {
     }
     return value;
   },
+
   async setItem(key: string, value: string): Promise<void> {
     await removeItem(key);
     const total = Math.ceil(value.length / CHUNK_SIZE);
     for (let i = 0; i < total; i++) {
-      await SecureStore.setItemAsync(
-        chunkKey(key, i),
-        value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE)
-      );
+      await SecureStore.setItemAsync(chunkKey(key, i), value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE));
     }
     await SecureStore.setItemAsync(countKey(key), String(total));
   },
+
   removeItem,
 };
-

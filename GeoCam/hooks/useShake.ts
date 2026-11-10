@@ -1,66 +1,59 @@
-import { Accelerometer } from "expo-sensors";
-import { useEffect, useRef, useState } from "react";
+// hooks/useShake.ts
+// Detecta cuando el usuario agita el teléfono usando el acelerómetro.
+import { useEffect, useRef, useState } from 'react';
+import { Accelerometer } from 'expo-sensors';
 
-interface ShakeOptions {
+interface Options {
+  /** Magnitud en g a partir de la cual se considera agitado. En reposo vale ≈ 1 g. */
   threshold?: number;
+  /** Tiempo mínimo entre dos disparos, para no ejecutar el callback varias veces por agitado. */
   cooldownMs?: number;
+  /** Permite pausar la detección (por ejemplo, mientras se muestra un Alert). */
+  enabled?: boolean;
 }
 
 export function useShake(
   onShake: () => void,
-  options?: ShakeOptions,
+  { threshold = 1.8, cooldownMs = 1500, enabled = true }: Options = {}
 ): { isAvailable: boolean | null } {
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
 
-  const threshold = options?.threshold ?? 1.78;
-  const cooldownMs = options?.cooldownMs ?? 1000;
-
-  // Guardar callback en ref para no reiniciar la suscripción en cada render
+  // El callback se guarda en una ref: así la suscripción no se reinicia en cada render
   const onShakeRef = useRef(onShake);
   onShakeRef.current = onShake;
-
-  const lastShakeTimeRef = useRef<number>(0);
+  const lastShakeRef = useRef(0);
 
   useEffect(() => {
+    if (!enabled) return;
+
     let cancelled = false;
     let subscription: { remove: () => void } | null = null;
 
-    async function subscribe() {
-      try {
-        const available = await Accelerometer.isAvailableAsync();
+    Accelerometer.isAvailableAsync()
+      .then((available) => {
         if (cancelled) return;
         setIsAvailable(available);
-
         if (!available) return;
 
-        Accelerometer.setUpdateInterval(100);
-
+        Accelerometer.setUpdateInterval(100); // 10 lecturas por segundo bastan
         subscription = Accelerometer.addListener(({ x, y, z }) => {
-          // Magnitud del vector: sqrt(x^2 + y^2 + z^2)
           const magnitude = Math.sqrt(x * x + y * y + z * z);
           const now = Date.now();
-
-          if (magnitude > threshold) {
-            if (now - lastShakeTimeRef.current >= cooldownMs) {
-              lastShakeTimeRef.current = now;
-              onShakeRef.current();
-            }
+          if (magnitude > threshold && now - lastShakeRef.current > cooldownMs) {
+            lastShakeRef.current = now;
+            onShakeRef.current();
           }
         });
-      } catch {
-        if (!cancelled) {
-          setIsAvailable(false);
-        }
-      }
-    }
-
-    subscribe();
+      })
+      .catch(() => {
+        if (!cancelled) setIsAvailable(false);
+      });
 
     return () => {
       cancelled = true;
       subscription?.remove();
     };
-  }, [threshold, cooldownMs]);
+  }, [enabled, threshold, cooldownMs]);
 
   return { isAvailable };
 }

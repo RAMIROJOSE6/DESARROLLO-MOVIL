@@ -2,45 +2,23 @@
   "expo": {
     "name": "GeoCam",
     "slug": "geocam",
-    "version": "1.0.0",
+    "version": "5.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
     "scheme": "geocam",
     "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true,
-      "infoPlist": {
-        "NSCameraUsageDescription": "GeoCam usa la cámara para tomar fotos geolocalizadas.",
-        "NSLocationWhenInUseUsageDescription": "GeoCam usa tu ubicación para registrar dónde tomaste cada foto.",
-        "NSPhotoLibraryUsageDescription": "GeoCam accede a tu galería para importar fotos."
-      }
+      "supportsTablet": false,
+      "bundleIdentifier": "co.edu.uniguajira.geocam"
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#121212",
-        "foregroundImage": "./assets/images/android-icon-foreground.png"
-      },
-      "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
-      ]
+      "package": "co.edu.uniguajira.geocam",
+      "edgeToEdgeEnabled": true
     },
     "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "backgroundColor": "#121212",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
-        }
-      ],
       [
         "expo-camera",
         {
@@ -59,7 +37,10 @@
         {
           "photosPermission": "GeoCam accede a tu galería para importar fotos."
         }
-      ]
+      ],
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true

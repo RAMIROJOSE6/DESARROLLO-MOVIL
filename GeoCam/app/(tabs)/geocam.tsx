@@ -1,64 +1,37 @@
-import { PermissionPrimer } from "@/components/PermissionPrimer";
-import { useGeoPhotos } from "@/context/GeoPhotosContext";
-import { useCamera } from "@/hooks/useCamera";
-import { useGeoLocation } from "@/hooks/useGeoLocation";
-import type { GeoPhoto } from "@/types/geo";
-import { Ionicons } from "@expo/vector-icons";
-import { CameraView } from "expo-camera";
-import * as ImagePicker from "expo-image-picker";
-import { Accelerometer } from "expo-sensors";
-import { useEffect, useState } from "react";
-import {
-    ActivityIndicator,
-    Image,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+// app/(tabs)/geocam.tsx
+// Cámara + GPS en vivo. Semana 7: cada foto se guarda en SQLite a través de usePhotos.
+import { useCallback, useState } from 'react';
+import { View, Text, Pressable, Image, StyleSheet, Alert } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { CameraView } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
+import { useCamera } from '@/hooks/useCamera';
+import { useGeoLocation } from '@/hooks/useGeoLocation';
+import { usePhotos } from '@/hooks/usePhotos';
+import { PermissionPrimer } from '@/components/PermissionPrimer';
+import { SyncBadge } from '@/components/SyncBadge';
+import type { Coords } from '@/types/geo';
 
 export default function GeoCamScreen() {
-  const insets = useSafeAreaInsets();
+  // Si la pestaña no está visible, se apagan cámara y GPS (ahorro de batería)
+  const [isFocused, setIsFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setIsFocused(true);
+      return () => setIsFocused(false);
+    }, [])
+  );
+
   const cam = useCamera();
-  const geo = useGeoLocation({ watch: true });
-  const { photos, addPhoto } = useGeoPhotos();
+  const geo = useGeoLocation({ watch: isFocused });
+  const { addPhoto, lastPhoto } = usePhotos(); // antes: useState<GeoPhoto>
 
-  // Foto seleccionada para ver en detalle al tocar la miniatura
-  const [selectedPhoto, setSelectedPhoto] = useState<GeoPhoto | null>(null);
-
-  // Reto opcional: Nivel con sensor para ayudar a tomar fotos rectas
-  const [tilt, setTilt] = useState<number>(0);
-  const [isLevel, setIsLevel] = useState<boolean>(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    let subscription: { remove: () => void } | null = null;
-
-    Accelerometer.isAvailableAsync().then((available) => {
-      if (!available || cancelled) return;
-      Accelerometer.setUpdateInterval(100);
-      subscription = Accelerometer.addListener(({ x, y }) => {
-        const angle =
-          Math.atan2(x, Math.abs(y) > 0.05 ? y : 0.05) * (180 / Math.PI);
-        const clampedAngle = Math.round(angle);
-        setTilt(clampedAngle);
-        setIsLevel(Math.abs(clampedAngle) <= 3);
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      subscription?.remove();
-    };
-  }, []);
-
-  if (cam.permissionState === "checking") {
-    return <View style={styles.container} />;
+  if (cam.permissionState === 'checking') {
+    return <View className="flex-1 bg-neutral-950" />;
   }
 
-  if (cam.permissionState !== "granted") {
+  if (cam.permissionState !== 'granted') {
     return (
       <PermissionPrimer
         title="GeoCam necesita tu cámara"
@@ -70,514 +43,159 @@ export default function GeoCamScreen() {
     );
   }
 
-  // R1: Captura de foto con cámara
+  // Degradación elegante: sin permiso de ubicación, las coordenadas quedan en null
+  const currentCoords = async (): Promise<Coords | null> =>
+    geo.permission === 'granted' ? geo.coords ?? (await geo.getCurrent()) : null;
+
   const handleCapture = async () => {
-    const photo = await cam.takePhoto();
-    if (!photo) return;
-
-    // Degradación elegante: sin permiso de ubicación, coords queda en null
-    const coords =
-      geo.permission === "granted"
-        ? (geo.coords ?? (await geo.getCurrent()))
-        : null;
-
-    const newPhoto: GeoPhoto = {
-      id: String(Date.now()),
-      uri: photo.uri,
-      coords,
-      source: "camera",
-      createdAt: Date.now(),
-    };
-
-    addPhoto(newPhoto);
+    try {
+      const photo = await cam.takePhoto();
+      if (!photo) return;
+      await addPhoto({ uri: photo.uri, coords: await currentCoords(), source: 'camera' });
+    } catch (e) {
+      Alert.alert('No se pudo guardar la foto', e instanceof Error ? e.message : undefined);
+    }
   };
 
-  // R2 & Reto opcional: Importar desde galería con lectura de EXIF
+  // R2 de la Semana 6: importar desde galería (el selector del sistema no pide permiso)
   const handlePickFromGallery = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.7,
-      exif: true,
-    });
-
-    if (result.canceled || !result.assets || result.assets.length === 0) {
-      return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
+      });
+      if (result.canceled) return;
+      await addPhoto({
+        uri: result.assets[0].uri,
+        coords: await currentCoords(),
+        source: 'gallery',
+      });
+    } catch (e) {
+      Alert.alert('No se pudo importar la foto', e instanceof Error ? e.message : undefined);
     }
-
-    const asset = result.assets[0];
-    let photoCoords = null;
-
-    if (asset.exif) {
-      const exif = asset.exif as Record<string, unknown>;
-      const gpsObj = exif["{GPS}"] as Record<string, unknown> | undefined;
-      const lat = (
-        typeof exif.GPSLatitude === "number"
-          ? exif.GPSLatitude
-          : gpsObj?.Latitude
-      ) as number | undefined;
-      const lon = (
-        typeof exif.GPSLongitude === "number"
-          ? exif.GPSLongitude
-          : gpsObj?.Longitude
-      ) as number | undefined;
-      if (typeof lat === "number" && typeof lon === "number") {
-        const latRef = (exif.GPSLatitudeRef ??
-          gpsObj?.LatitudeRef ??
-          "N") as string;
-        const lonRef = (exif.GPSLongitudeRef ??
-          gpsObj?.LongitudeRef ??
-          "E") as string;
-        photoCoords = {
-          latitude: latRef === "S" ? -Math.abs(lat) : Math.abs(lat),
-          longitude: lonRef === "W" ? -Math.abs(lon) : Math.abs(lon),
-          accuracy: null,
-          timestamp: Date.now(),
-        };
-      }
-    }
-
-    if (!photoCoords && geo.permission === "granted") {
-      photoCoords = geo.coords ?? (await geo.getCurrent());
-    }
-
-    const newPhoto: GeoPhoto = {
-      id: String(Date.now()),
-      uri: asset.uri,
-      coords: photoCoords,
-      source: "gallery",
-      createdAt: Date.now(),
-    };
-
-    addPhoto(newPhoto);
   };
 
-  const lastPhoto = photos.length > 0 ? photos[0] : null;
+  const showLocationBanner = geo.permission !== 'granted' && geo.permission !== 'checking';
+  const lastHasLocation = lastPhoto?.latitude != null && lastPhoto?.longitude != null;
 
   return (
-    <View style={styles.container}>
-      {/* Vista de cámara ocupando toda la pantalla */}
+    <View className="flex-1 bg-black">
+      {/* CameraView sin hijos: los controles van como hermanos con posición absoluta */}
       <CameraView
         ref={cam.cameraRef}
         style={StyleSheet.absoluteFill}
         facing={cam.facing}
+        active={isFocused}
         onCameraReady={cam.onCameraReady}
       />
 
-      {/* Banner de ubicación contextual debajo del notch / status bar de Android */}
-      {geo.permission !== "granted" && geo.permission !== "checking" && (
+      {/* Banner de ubicación: pedir en contexto, sin bloquear la cámara */}
+      {showLocationBanner && (
         <Pressable
-          onPress={
-            geo.permission === "blocked"
-              ? geo.openSettings
-              : geo.requestPermission
-          }
-          style={[styles.locationBanner, { top: insets.top + 10 }]}
+          onPress={geo.permission === 'blocked' ? geo.openSettings : geo.requestPermission}
+          className="absolute left-4 right-4 top-14 rounded-xl bg-amber-400/90 p-3"
+          accessibilityRole="button"
         >
-          <Ionicons name="location-outline" size={18} color="#1c1917" />
-          <Text style={styles.locationBannerText}>
-            {geo.permission === "blocked"
-              ? "Ubicación desactivada. Toca para abrir Ajustes"
-              : "Activa la ubicación para etiquetar tus fotos"}
+          <Text className="text-center font-medium text-neutral-900">
+            {geo.permission === 'blocked'
+              ? 'Ubicación bloqueada: toca para abrir Ajustes'
+              : 'Activa la ubicación para etiquetar tus fotos'}
           </Text>
         </Pressable>
       )}
 
-      {/* Coordenadas en vivo con safe-area */}
+      {/* Coordenadas en vivo */}
       {geo.coords && (
-        <View
-          style={[
-            styles.coordsBadge,
-            {
-              top:
-                insets.top +
-                (geo.permission !== "granted" && geo.permission !== "checking"
-                  ? 65
-                  : 12),
-            },
-          ]}
-        >
-          <Text style={styles.coordsTextPrimary}>
+        <View className="absolute left-4 top-14 rounded-lg bg-black/60 px-3 py-2">
+          <Text className="font-mono text-xs text-emerald-300">
             {geo.coords.latitude.toFixed(5)}, {geo.coords.longitude.toFixed(5)}
           </Text>
-          <Text style={styles.coordsTextSecondary}>
+          <Text className="font-mono text-xs text-neutral-400">
             ±{Math.round(geo.coords.accuracy ?? 0)} m
           </Text>
-          {geo.coords.accuracy !== null && geo.coords.accuracy > 1000 && (
-            <Text style={styles.coordsTextWarning}>
-              ⚠️ Ubicación aprox (&gt;1km)
-            </Text>
-          )}
         </View>
       )}
 
-      {/* Reto opcional: Indicador de nivel para fotos derechas */}
-      <View pointerEvents="none" style={styles.levelContainer}>
-        <View
-          style={[
-            styles.levelBadge,
-            isLevel ? styles.levelBadgeSuccess : styles.levelBadgeNormal,
-            { transform: [{ rotate: `${-tilt}deg` }] },
-          ]}
-        >
-          <View
-            style={isLevel ? styles.levelLineSuccess : styles.levelLineNormal}
-          />
-          <Text style={styles.levelText}>
-            {tilt}° {isLevel ? "✓ NIVELADO" : ""}
-          </Text>
-          <View
-            style={isLevel ? styles.levelLineSuccess : styles.levelLineNormal}
-          />
-        </View>
+      {/* Estado de sincronización (Semana 9) */}
+      <View className="absolute right-4 top-24">
+        <SyncBadge />
       </View>
 
-      {/* Controles inferiores posicionados encima de la barra de pestañas y botones de Android */}
-      <View style={[styles.bottomControls, { bottom: 20 }]}>
-        {/* R1: Miniatura de la última foto tomada o importada */}
-        {lastPhoto ? (
-          <Pressable
-            onPress={() => setSelectedPhoto(lastPhoto)}
-            style={styles.thumbnailWrapper}
-            accessibilityLabel="Ver última foto"
-          >
-            <Image
-              source={{ uri: lastPhoto.uri }}
-              style={styles.thumbnailImage}
-            />
-            <View
-              style={[
-                styles.sourceBadge,
-                lastPhoto.source === "gallery"
-                  ? styles.sourceBadgeGallery
-                  : styles.sourceBadgeCamera,
-              ]}
-            >
-              <Ionicons
-                name={lastPhoto.source === "gallery" ? "images" : "camera"}
-                size={11}
-                color="#ffffff"
-              />
-            </View>
-          </Pressable>
-        ) : (
-          <View style={styles.thumbnailPlaceholder} />
-        )}
+      {geo.error && (
+        <View className="absolute left-4 right-4 top-32 rounded-lg bg-red-500/80 px-3 py-2">
+          <Text className="text-center text-xs text-white">{geo.error}</Text>
+        </View>
+      )}
 
-        {/* Botón de captura principal con guarda isCapturing */}
+      {/* Datos de la última foto guardada en SQLite */}
+      {lastPhoto && (
+        <View className="absolute bottom-36 left-4 right-4 rounded-lg bg-black/60 px-3 py-2">
+          <Text className="text-center text-xs text-neutral-200">
+            {lastPhoto.source === 'gallery' ? 'Última (galería): ' : 'Última (cámara): '}
+            {lastHasLocation
+              ? `${lastPhoto.latitude!.toFixed(5)}, ${lastPhoto.longitude!.toFixed(5)}`
+              : 'sin ubicación'}
+          </Text>
+        </View>
+      )}
+
+      {/* Controles inferiores */}
+      <View className="absolute bottom-10 left-0 right-0 flex-row items-center justify-around">
+        <Pressable
+          className="h-14 w-14"
+          disabled={!lastPhoto}
+          onPress={() =>
+            lastPhoto &&
+            router.push({ pathname: '/foto/[id]', params: { id: String(lastPhoto.id) } })
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Ver última foto"
+        >
+          {lastPhoto && (
+            <>
+              <Image
+                source={{ uri: lastPhoto.uri }}
+                className="h-14 w-14 rounded-lg border-2 border-white"
+                accessibilityLabel="Última foto guardada"
+              />
+              {/* Distinción visual por origen: verde = cámara, violeta = galería */}
+              <View
+                className={`absolute -right-1 -top-1 h-4 w-4 rounded-full border-2 border-black ${
+                  lastPhoto.source === 'gallery' ? 'bg-violet-500' : 'bg-emerald-500'
+                }`}
+              />
+            </>
+          )}
+        </Pressable>
+
+        <Pressable
+          onPress={handlePickFromGallery}
+          className="h-14 w-14 items-center justify-center"
+          accessibilityRole="button"
+          accessibilityLabel="Importar desde galería"
+        >
+          <Ionicons name="images-outline" size={28} color="white" />
+        </Pressable>
+
         <Pressable
           onPress={handleCapture}
           disabled={cam.isCapturing}
-          style={styles.shutterOuter}
+          className="h-20 w-20 items-center justify-center rounded-full border-4 border-white active:opacity-70"
+          accessibilityRole="button"
           accessibilityLabel="Tomar foto"
         >
-          {cam.isCapturing ? (
-            <ActivityIndicator size="small" color="#10b981" />
-          ) : (
-            <View style={styles.shutterInner} />
-          )}
+          <View className={`h-16 w-16 rounded-full ${cam.isCapturing ? 'bg-neutral-400' : 'bg-white'}`} />
         </Pressable>
 
-        {/* Botón selector de galería (R2) */}
-        <Pressable
-          onPress={handlePickFromGallery}
-          style={styles.actionButton}
-          accessibilityLabel="Importar de galería"
-        >
-          <Ionicons name="images-outline" size={24} color="#ffffff" />
-        </Pressable>
-
-        {/* Botón voltear cámara */}
         <Pressable
           onPress={cam.toggleFacing}
-          style={styles.actionButton}
+          className="h-14 w-14 items-center justify-center"
+          accessibilityRole="button"
           accessibilityLabel="Cambiar cámara"
         >
-          <Ionicons name="camera-reverse-outline" size={26} color="#ffffff" />
+          <Ionicons name="camera-reverse-outline" size={28} color="white" />
         </Pressable>
       </View>
-
-      {/* Modal para ver detalle de la foto seleccionada */}
-      {selectedPhoto && (
-        <Modal
-          visible={!!selectedPhoto}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setSelectedPhoto(null)}
-        >
-          <View style={styles.modalOverlay}>
-            <Image
-              source={{ uri: selectedPhoto.uri }}
-              style={styles.modalImage}
-              resizeMode="contain"
-            />
-            <View style={styles.modalCard}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Detalles de la foto</Text>
-                <View
-                  style={[
-                    styles.modalBadge,
-                    selectedPhoto.source === "gallery"
-                      ? styles.sourceBadgeGallery
-                      : styles.sourceBadgeCamera,
-                  ]}
-                >
-                  <Text style={styles.modalBadgeText}>
-                    {selectedPhoto.source === "gallery" ? "Galería" : "Cámara"}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.modalText}>
-                📅 {new Date(selectedPhoto.createdAt).toLocaleString()}
-              </Text>
-
-              <Text style={styles.modalText}>
-                📍{" "}
-                {selectedPhoto.coords
-                  ? `${selectedPhoto.coords.latitude.toFixed(5)}, ${selectedPhoto.coords.longitude.toFixed(5)}`
-                  : "Sin ubicación (degradación elegante)"}
-              </Text>
-            </View>
-
-            <Pressable
-              onPress={() => setSelectedPhoto(null)}
-              style={styles.modalCloseButton}
-            >
-              <Text style={styles.modalCloseText}>Cerrar</Text>
-            </Pressable>
-          </View>
-        </Modal>
-      )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000000",
-    width: "100%",
-    height: "100%",
-    position: "relative",
-  },
-  locationBanner: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(251, 191, 36, 0.95)",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    zIndex: 40,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  locationBannerText: {
-    marginLeft: 8,
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1c1917",
-    textAlign: "center",
-  },
-  coordsBadge: {
-    position: "absolute",
-    left: 16,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.15)",
-    zIndex: 35,
-    elevation: 6,
-  },
-  coordsTextPrimary: {
-    fontFamily: "monospace",
-    fontSize: 12,
-    color: "#6ee7b7",
-    fontWeight: "bold",
-  },
-  coordsTextSecondary: {
-    fontFamily: "monospace",
-    fontSize: 11,
-    color: "#a3a3a3",
-  },
-  coordsTextWarning: {
-    fontFamily: "monospace",
-    fontSize: 10,
-    color: "#fcd34d",
-    marginTop: 2,
-  },
-  levelContainer: {
-    position: "absolute",
-    top: "46%",
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    zIndex: 20,
-  },
-  levelBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-  levelBadgeNormal: {
-    backgroundColor: "rgba(0, 0, 0, 0.55)",
-  },
-  levelBadgeSuccess: {
-    backgroundColor: "rgba(16, 185, 129, 0.85)",
-  },
-  levelLineNormal: {
-    width: 30,
-    height: 2,
-    backgroundColor: "rgba(255, 255, 255, 0.6)",
-  },
-  levelLineSuccess: {
-    width: 30,
-    height: 2,
-    backgroundColor: "#ffffff",
-  },
-  levelText: {
-    marginHorizontal: 8,
-    fontSize: 12,
-    fontWeight: "bold",
-    fontFamily: "monospace",
-    color: "#ffffff",
-  },
-  bottomControls: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    paddingHorizontal: 16,
-    zIndex: 40,
-    elevation: 10,
-  },
-  thumbnailWrapper: {
-    position: "relative",
-    width: 56,
-    height: 56,
-  },
-  thumbnailImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: "#ffffff",
-  },
-  thumbnailPlaceholder: {
-    width: 56,
-    height: 56,
-  },
-  sourceBadge: {
-    position: "absolute",
-    bottom: -2,
-    right: -2,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#ffffff",
-  },
-  sourceBadgeCamera: {
-    backgroundColor: "#059669",
-  },
-  sourceBadgeGallery: {
-    backgroundColor: "#2563eb",
-  },
-  shutterOuter: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 4,
-    borderColor: "#ffffff",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.25)",
-  },
-  shutterInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#ffffff",
-  },
-  actionButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.25)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.92)",
-    padding: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalImage: {
-    width: "100%",
-    height: "55%",
-    borderRadius: 16,
-  },
-  modalCard: {
-    width: "100%",
-    backgroundColor: "#171717",
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: "#262626",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#ffffff",
-  },
-  modalBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  modalBadgeText: {
-    fontSize: 11,
-    fontWeight: "bold",
-    color: "#ffffff",
-  },
-  modalText: {
-    fontSize: 13,
-    color: "#d4d4d4",
-    marginTop: 4,
-  },
-  modalCloseButton: {
-    marginTop: 16,
-    backgroundColor: "#262626",
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  modalCloseText: {
-    color: "#ffffff",
-    fontWeight: "bold",
-    fontSize: 14,
-  },
-});

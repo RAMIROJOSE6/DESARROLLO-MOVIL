@@ -1,76 +1,83 @@
-import { GeoPhotosProvider, useGeoPhotos } from "@/context/GeoPhotosContext";
-import { useShake } from "@/hooks/useShake";
-import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
-import { Alert } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+// app/(tabs)/_layout.tsx
+// Pestañas GeoCam y Mapa. El sensor de agitado vive aquí para funcionar en ambas pestañas.
+import { useCallback, useState } from 'react';
+import { Alert } from 'react-native';
+import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useShake } from '@/hooks/useShake';
+import { usePhotos } from '@/hooks/usePhotos';
+import { useSync } from '@/hooks/useSync';
 
-function TabsLayoutContent() {
-  const { photos, clearAll } = useGeoPhotos();
-  const insets = useSafeAreaInsets();
+export default function TabsLayout() {
+  const { photos, clearAll } = usePhotos();
+  useSync(); // Semana 9: mantiene activa la sincronización automática en todas las pestañas
+  const [alertOpen, setAlertOpen] = useState(false);
 
-  // R4: Al agitar el teléfono, un Alert pregunta si se borran todas las fotos
-  useShake(() => {
+  const handleShake = useCallback(() => {
     if (photos.length === 0) return;
-    Alert.alert(
-      "Borrar fotos",
-      `¿Deseas borrar todas las ${photos.length} fotos capturadas?`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Borrar todas",
-          style: "destructive",
-          onPress: () => clearAll(),
+    setAlertOpen(true);
+    Alert.alert('Borrar todas las fotos', `¿Eliminar las ${photos.length} fotos guardadas?`, [
+      { text: 'Cancelar', style: 'cancel', onPress: () => setAlertOpen(false) },
+      {
+        text: 'Borrar',
+        style: 'destructive',
+        onPress: async () => {
+          await clearAll();
+          setAlertOpen(false);
         },
-      ],
-    );
-  });
+      },
+    ], { cancelable: true, onDismiss: () => setAlertOpen(false) });
+  }, [photos.length, clearAll]);
+
+  // Mientras el Alert está abierto se pausa el sensor, para no apilar diálogos
+  useShake(handleShake, { enabled: !alertOpen });
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: "#0a0a0a",
-          borderTopColor: "#262626",
-          height: 60 + insets.bottom,
-          paddingBottom: Math.max(insets.bottom, 8),
-          paddingTop: 8,
-        },
-        tabBarActiveTintColor: "#10b981",
-        tabBarInactiveTintColor: "#737373",
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "600",
-        },
+        tabBarActiveTintColor: '#10b981',
+        tabBarInactiveTintColor: '#a3a3a3',
+        tabBarStyle: { backgroundColor: '#0a0a0a', borderTopColor: '#262626' },
       }}
     >
       <Tabs.Screen
         name="geocam"
         options={{
-          title: "GeoCam",
+          title: 'GeoCam',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="camera" size={size} color={color} />
+            <Ionicons name="camera" color={color ? String(color) : '#a3a3a3'} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="fotos"
+        options={{
+          title: 'Fotos',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="images" color={color ? String(color) : '#a3a3a3'} size={size} />
           ),
         }}
       />
       <Tabs.Screen
         name="mapa"
         options={{
-          title: "Mapa",
+          title: 'Mapa',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="map" size={size} color={color} />
+            <Ionicons name="map" color={color ? String(color) : '#a3a3a3'} size={size} />
+          ),
+          tabBarBadge: photos.length > 0 ? photos.length : undefined,
+        }}
+      />
+      <Tabs.Screen
+        name="nube"
+        options={{
+          title: 'Nube',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="cloud" color={color ? String(color) : '#a3a3a3'} size={size} />
           ),
         }}
       />
     </Tabs>
-  );
-}
-
-export default function TabsLayout() {
-  return (
-    <GeoPhotosProvider>
-      <TabsLayoutContent />
-    </GeoPhotosProvider>
   );
 }
