@@ -114,6 +114,14 @@ Porque un `DELETE` directo destruye la fila sin dejar ningún rastro en la base 
 
 ## 📸 Evidencias y Capturas de Pantalla (`screenshots/`)
 
+### ✅ Sincronización Exitosa y Funcionamiento en Dispositivo Real (Semana 9)
+
+| Diálogo Estado Sincro (C4) | Foto Sincronizada en Supabase | GeoCam "Al día" en Línea |
+| :---: | :---: | :---: |
+| ![Estado Sincro](screenshots/10_dialogo_estado_sincronizacion_exito.jpg) | ![Foto Sincronizada](screenshots/11_detalle_foto_sincronizada_nube.jpg) | ![GeoCam Al Día](screenshots/12_geocam_al_dia_captura_funcional.jpg) |
+
+### 🔍 Permisos y Diagnóstico Previo
+
 | Permiso de Cámara (Sistema) | Permiso GeoCam | Manejo Permiso Denegado |
 | :---: | :---: | :---: |
 | ![Permiso Sistema](screenshots/01_permiso_camara_sistema.jpg) | ![Permiso GeoCam](screenshots/02_permiso_camara_geocam.jpg) | ![Permiso Denegado](screenshots/03_permiso_camara_denegado_ajustes.jpg) |
