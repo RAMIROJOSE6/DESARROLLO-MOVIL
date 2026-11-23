@@ -1,33 +1,40 @@
-# GeoCam sincronizada 📍📷🔄
-**Semana 9: TanStack Query y Sincronización Offline-First**  
+# GeoCam sincronizada con IA Multimodal 📍📷🔄✨
+**Semana 10: IA Generativa Multimodal y Edge AI (Versión `v2.0.0`)**  
 **Desarrollado por:** Ramiro José Gómez Agámez y Álvaro Javier Pinto Sierra  
 Programación Móvil Avanzada · Universidad de La Guajira
 
-La aplicación trabaja de forma local y offline mediante SQLite (Drizzle ORM). Cuando el dispositivo recupera la conexión a internet, TanStack Query y el motor de sincronización suben automáticamente las fotos y notas pendientes a Supabase, y descargan las fotos creadas o modificadas en otros dispositivos con la misma cuenta.
+GeoCam integra almacenamiento local en SQLite (Drizzle ORM), sincronización bidireccional offline-first con Supabase (PostgreSQL + Storage) y capacidades de **visión artificial multimodal con Google Gemini** a través de una Supabase Edge Function protegida. Las fotos pueden describirse automáticamente con IA, asociar etiquetas y sincronizar toda la metadata a la nube.
 
 ---
 
-## 🏗️ Arquitectura Offline-First
+## 🏗️ Arquitectura del Sistema (Semana 10)
 
 ```text
-┌────────────────────────────────────────────────────────┐
-│                        UI                              │
-│       GeoCamScreen · FotosScreen · MapaScreen          │
-└───────────────────────────┬────────────────────────────┘
-                            │ reactiva (useLiveQuery)
-┌───────────────────────────▼────────────────────────────┐
-│              SQLite Local (Drizzle ORM)                │
-│                 Fuente de Verdad                       │
-│    photos (clientId, updatedAt, syncedAt, note...)     │
-│             sync_meta (lastPulledAt:userId)            │
-└───────────────────────────┬────────────────────────────┘
-                            │
-               services/sync.ts (syncAll)
-             Disparado por TanStack Query v5
-               (onlineManager + focusManager)
-                            │
-┌───────────────────────────▼────────────────────────────┐
-│               Supabase Cloud (PostgreSQL)              │
+┌────────────────────────────────────────────────────────────────────────┐
+│                               UI Móvil                                 │
+│  GeoCamScreen · FotosScreen · MapaScreen · NubeScreen · FotoDetail     │
+│                 [ ✨ Describir con IA · Sugerencia editable ]          │
+└──────────────────┬─────────────────────────────────┬───────────────────┘
+                   │ reactiva (useLiveQuery)         │ invoke() + JWT
+┌──────────────────▼──────────────────────┐    ┌─────▼──────────────────────────────┐
+│       SQLite Local (Drizzle ORM)        │    │    Supabase Edge Function          │
+│            Fuente de Verdad             │    │        (describir-foto)            │
+│  photos (aiDescription, aiTags, note..) │    │  1. Valida JWT del usuario (401)   │
+│  ai_history (historial de consultas)    │    │  2. Valida cuota en uso_ia (429)   │
+│  sync_meta (lastPulledAt:userId)        │    │  3. Llama a Gemini con API key     │
+└──────────────────┬──────────────────────┘    └─────┬──────────────────────────────┘
+                   │                                 │
+      services/sync.ts (syncAll)                     │ Base64 optimizada (<300 KB)
+    Disparado por TanStack Query v5                  ▼
+      (onlineManager + focusManager)     ┌──────────────────────────────────────────┐
+                   │                     │        Google Gemini API (Vision)        │
+┌──────────────────▼──────────────────┐  │  Modelo: gemini-2.5-flash                │
+│      Supabase Cloud (PostgreSQL)    │  │  Genera: descripción + tags estructurados│
+│  photos (ai_description, ai_tags...)│  └──────────────────────────────────────────┘
+│  uso_ia (conteo de peticiones RLS)  │
+│  storage.buckets ('geocam' privado) │
+└─────────────────────────────────────┘
+```
 │       photos (client_id, updated_at, server_updated_at)│
 │       storage.buckets ('geocam' privado por usuario)   │
 └────────────────────────────────────────────────────────┘
@@ -109,6 +116,28 @@ Porque un `DELETE` directo destruye la fila sin dejar ningún rastro en la base 
 ### 5. ¿Qué parte del trabajo hace TanStack Query y qué parte es diseño propio?
 - **TanStack Query:** Gestiona la ejecución asíncrona, reintentos exponenciales, detección de foco y reconexión de red (`onlineManager` / `focusManager`), deduplicación de consultas y estado de UI (`isFetching`, `error`).
 - **Diseño Propio:** El algoritmo de sincronización en dos sentidos (`pull` y `push`), la regla de resolución de conflictos (`remoteWins`), la persistencia en SQLite con Drizzle y la descarga/almacenamiento de archivos binarios.
+
+---
+
+## 🤖 Preguntas para Sustentar – Semana 10 (IA Multimodal y Edge AI)
+
+### 1. ¿Dónde está tu key de Gemini y cómo lo demuestras?
+La API key de Gemini vive **única y exclusivamente como secreto de servidor** en la Edge Function de Supabase (`GEMINI_API_KEY`), configurada mediante `npx supabase secrets set`. Jamás está en el código de la app, ni en `.env`, ni en el bundle compilado de JavaScript. Esto se demuestra ejecutando una búsqueda en el repositorio (`git grep AIza`), donde no existe ninguna coincidencia en código cliente.
+
+### 2. ¿Qué pasa si alguien envía un perfil falso o un tema inventado?
+La Edge Function valida los datos del cuerpo de la petición mediante validación de esquema y valores por defecto tolerantes (fallback). Si se envía un modo o instrucción no reconocida, se utiliza el tono seguro predeterminado (`'natural'`) y se aplica un `systemPrompt` estricto que restringe a Gemini a responder exclusivamente un JSON válido con la estructura pactada.
+
+### 3. ¿Por qué el límite se cuenta con el cliente del usuario y no con la secret key?
+Porque al usar el cliente del usuario autenticado (`userClient`), PostgreSQL aplica **Row Level Security (RLS)** automáticamente. Esto garantiza que un usuario solo pueda consultar e insertar en sus propios registros de `uso_ia`, impidiendo que un atacante altere los contadores de otros usuarios o suplante consumos ajenos.
+
+### 4. ¿Qué se guarda en tu teléfono y qué se envía a Google?
+- **En el teléfono:** Se almacena la foto original a resolución completa, la miniatura, las coordenadas GPS, la descripción editable (`ai_description`), las etiquetas (`ai_tags`) y el historial en SQLite.
+- **A Google:** Solo se envía una versión optimizada y comprimida de la imagen (máximo 1024 px de ancho, calidad 0.7, < 300 KB) junto con la instrucción de análisis visual. Las coordenadas GPS y el identificador del usuario nunca se transmiten a Google.
+
+---
+
+## 🧪 Pruebas y Validación
+Para consultar la matriz completa de pruebas de los retos C1 a C6 (modo avión, límite de cuota 429, error 401 y auditoría de claves), consulta el documento [`PRUEBAS.md`](PRUEBAS.md).
 
 ---
 

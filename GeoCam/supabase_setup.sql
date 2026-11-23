@@ -123,3 +123,33 @@ create policy "borrar de mi carpeta" on storage.objects
     bucket_id = 'geocam' 
     and (storage.foldername(name))[1] = (select auth.uid()::text)
   );
+
+-- ====================================================================
+-- 10. SEMANA 10: IA GENERATIVA MULTIMODAL (COLUMNAS Y LÍMITE DE USO)
+-- ====================================================================
+alter table public.photos
+  add column if not exists ai_description text;
+
+alter table public.photos
+  add column if not exists ai_tags text;
+
+create table if not exists public.uso_ia (
+  id bigint generated always as identity primary key,
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+alter table public.uso_ia enable row level security;
+
+drop policy if exists "ver mi propio uso de ia" on public.uso_ia;
+create policy "ver mi propio uso de ia" on public.uso_ia
+  for select to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "registrar mi propio uso de ia" on public.uso_ia;
+create policy "registrar mi propio uso de ia" on public.uso_ia
+  for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+
+create index if not exists uso_ia_user_created_idx
+  on public.uso_ia (user_id, created_at);

@@ -19,6 +19,8 @@ interface RemotePhoto {
   updated_at: string; // reloj del teléfono: decide conflictos
   server_updated_at?: string; // reloj del servidor: cursor de bajada
   deleted_at?: string | null; // C1: borrado lógico
+  ai_description?: string | null; // Semana 10 (T3): Descripción generada con IA
+  ai_tags?: string | null; // Semana 10 (C3): Etiquetas generadas con IA
 }
 
 export interface SyncResult {
@@ -96,6 +98,8 @@ async function pull(userId: string): Promise<number> {
         note: remote.note,
         favorite: remote.favorite,
         source: remote.source,
+        aiDescription: remote.ai_description,
+        aiTags: remote.ai_tags,
         createdAt: new Date(remote.taken_at),
         updatedAt: remoteUpdatedAt,
         remotePath: remote.storage_path,
@@ -107,6 +111,8 @@ async function pull(userId: string): Promise<number> {
       await photosRepo.applyRemote(local.id, {
         note: remote.note,
         favorite: remote.favorite,
+        aiDescription: remote.ai_description,
+        aiTags: remote.ai_tags,
         updatedAt: remoteUpdatedAt,
         syncedAt: remoteUpdatedAt,
       });
@@ -177,6 +183,8 @@ async function push(userId: string): Promise<number> {
           note: photo.note,
           favorite: photo.favorite,
           source: photo.source,
+          ai_description: photo.aiDescription,
+          ai_tags: photo.aiTags,
           taken_at: photo.createdAt.toISOString(),
           updated_at: updatedAt.toISOString(),
         },

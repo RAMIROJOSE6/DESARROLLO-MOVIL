@@ -6,7 +6,7 @@ import { db } from '@/db/client';
 import { photos, type NewPhoto } from '@/db/schema';
 
 type PhotoInput = Omit<NewPhoto, 'id' | 'createdAt'>;
-export type PhotoChanges = Partial<Pick<NewPhoto, 'note' | 'favorite' | 'albumId'>>;
+export type PhotoChanges = Partial<Pick<NewPhoto, 'note' | 'favorite' | 'albumId' | 'aiDescription' | 'aiTags'>>;
 
 /** Filtro de álbum: null = todos, 'none' = sin álbum, número = ese álbum. */
 export type AlbumFilter = number | 'none' | null;
@@ -104,9 +104,25 @@ export const photosRepo = {
   /** Aplica en local una versión más nueva de la nube. Nunca usa la hora actual. */
   async applyRemote(
     id: number,
-    changes: { note: string | null; favorite: boolean; updatedAt: Date; syncedAt: Date; deletedAt?: Date | null }
+    changes: {
+      note: string | null;
+      favorite: boolean;
+      updatedAt: Date;
+      syncedAt: Date;
+      deletedAt?: Date | null;
+      aiDescription?: string | null;
+      aiTags?: string | null;
+    }
   ) {
     await db.update(photos).set(changes).where(eq(photos.id, id));
+  },
+
+  /** Semana 10 (T5): Guarda la descripción de IA y actualiza updatedAt para que suba a Supabase */
+  async setAiDescription(id: number, aiDescription: string, aiTags?: string) {
+    await db
+      .update(photos)
+      .set({ aiDescription, aiTags, updatedAt: new Date() })
+      .where(eq(photos.id, id));
   },
 
   /** Marca la foto como subida. syncedAt es la versión (updatedAt) que se subió, no "ahora". */
