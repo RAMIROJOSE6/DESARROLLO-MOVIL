@@ -10,7 +10,8 @@ const corsHeaders = {
 };
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash';
+const PRIMARY_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.6-flash';
+const FALLBACK_MODELS = [PRIMARY_MODEL, 'gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3-flash-preview', 'gemini-pro-latest'];
 const LIMITE_DIARIO = parseInt(Deno.env.get('LIMITE_DIARIO') ?? '10', 10);
 
 Deno.serve(async (req) => {
@@ -106,56 +107,68 @@ IMPORTANTE: Responde ÚNICAMENTE un objeto JSON válido con la siguiente estruct
     // Limpiar prefijo data:image/jpeg;base64, si viene incluido
     const base64Data = imagen.replace(/^data:image\/\w+;base64,/, '');
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    // Probar modelos candidatos con fallback automático en caso de alta demanda o modelo deprecado
+    const uniqueModels = [...new Set(FALLBACK_MODELS)];
+    let candidateText: string | null = null;
+    let lastErrorStatus = 500;
 
-    const geminiResponse = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: systemPrompt },
+    for (const modelName of uniqueModels) {
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
+        const geminiResponse = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
               {
-                inlineData: {
-                  mimeType: 'image/jpeg',
-                  data: base64Data,
-                },
+                role: 'user',
+                parts: [
+                  { text: systemPrompt },
+                  {
+                    inlineData: {
+                      mimeType: 'image/jpeg',
+                      data: base64Data,
+                    },
+                  },
+                ],
               },
             ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 600,
-          responseMimeType: 'application/json',
-        },
-      }),
-    });
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: 600,
+              responseMimeType: 'application/json',
+            },
+          }),
+        });
 
-    if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
-      console.error('[Gemini API Error]', geminiResponse.status, errorText);
+        if (geminiResponse.ok) {
+          const geminiData = await geminiResponse.json();
+          candidateText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+          if (candidateText) {
+            console.log(`[Gemini Success] Analizado exitosamente con modelo ${modelName}`);
+            break;
+          }
+        } else {
+          lastErrorStatus = geminiResponse.status;
+          const errText = await geminiResponse.text();
+          console.warn(`[Gemini Model ${modelName} returned ${geminiResponse.status}]`, errText.slice(0, 150));
+        }
+      } catch (e) {
+        console.warn(`[Gemini Model ${modelName} fetch error]`, e);
+      }
+    }
 
-      if (geminiResponse.status === 429) {
+    if (!candidateText) {
+      if (lastErrorStatus === 429) {
         return new Response(
-          JSON.stringify({ error: 'Se agotó la cuota gratuita de Gemini. Espera un minuto.' }),
+          JSON.stringify({ error: 'Se agotó temporalmente la cuota de Gemini. Por favor espera un minuto.' }),
           { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-
       return new Response(
-        JSON.stringify({ error: `Error del modelo Gemini (${geminiResponse.status}). Intenta de nuevo.` }),
+        JSON.stringify({ error: 'El servicio de IA no pudo responder en este momento. Intenta nuevamente en unos segundos.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    }
-
-    const geminiData = await geminiResponse.json();
-    const candidateText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!candidateText) {
-      throw new Error('Gemini no generó ninguna respuesta para esta foto.');
     }
 
     let parsedResult;

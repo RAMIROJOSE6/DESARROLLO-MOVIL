@@ -69,17 +69,20 @@ export async function describirFotoConIA(
       }
     }
 
-    if (/401|unauthorized/i.test(serverMessage)) {
+    if (/401|unauthorized/i.test(serverMessage) || (context && context.status === 401)) {
       throw new Error('Sesión vencida o no autorizada. Por favor, vuelve a iniciar sesión.');
     }
-    if (/429|cuota|límite/i.test(serverMessage)) {
+    if (/429|cuota|límite/i.test(serverMessage) || (context && context.status === 429)) {
       throw new Error(
         serverMessage.includes('diario')
           ? serverMessage
           : 'Se agotó la cuota de peticiones de IA. Espera un momento o intenta más tarde.'
       );
     }
-    if (/404|not found/i.test(serverMessage)) {
+    if (
+      (error.name === 'FunctionsRelayError' || (context && context.status === 404)) &&
+      !/gemini|modelo/i.test(serverMessage)
+    ) {
       throw new Error(
         'La función "describir-foto" aún no está desplegada en tu proyecto de Supabase. Despliégala con "npx supabase functions deploy describir-foto".'
       );
