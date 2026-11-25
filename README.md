@@ -15,6 +15,7 @@ DESARROLLO-MOVIL/
 ├── einuushi-app/     # 🧵 Einuushi: Tienda Móvil de Artesanías Wayuu + Panel Admin + Diseñador IA (Nano Banana)
 ├── GeoCam/           # 📷 Taller Integrador: Persistencia local SQLite + Respaldo privado en Supabase
 ├── muro-de-clase/    # 🧱 Ejemplo de Clase: Muro colaborativo en tiempo real con Supabase
+├── ParkVision/       # 🚗 ParkVision: Control de Estacionamiento, Visión Artificial e Inspección Vehicular
 ├── README.md         # 📄 Documentación general del repositorio
 └── .gitignore        # 🛡️ Protección de credenciales y dependencias
 ```
@@ -63,6 +64,19 @@ Muro colaborativo en tiempo real donde los estudiantes se registran, publican me
 - **Realtime:** Suscripción reactiva mediante `usePosts` y canales WebSocket de Supabase.
 
 👉 **[Ver instrucciones de ejecución de Muro de Clase](./muro-de-clase/README.md)**
+
+---
+
+## 4. 🚗 [ParkVision – Control de Estacionamiento e Inspección Vehicular](./ParkVision)
+
+Sistema integral de gestión de parqueaderos y centros automotrices con visión computacional e inteligencia artificial multimodal.
+
+- **Frontend:** React Native con Expo SDK 52, Expo Router v4 y TypeScript.
+- **Visión por Computadora & IA:** Microservicio FastAPI con YOLOv8 y Gemini Flash para detección perimetral de placas colombianas, clasificación de marca y color, y análisis diferencial de daños entre ingreso y salida.
+- **Backend & Realtime:** Supabase PostgreSQL (`tickets_parqueadero`, `espacios_parqueo`) con actualización en vivo de 20 bahías operativas.
+- **Procesos Operativos:** Recepción vehicular con emisión de actas WhatsApp, mapa dinámico de ocupación y auditoría pericial de salida.
+
+👉 **[Ver documentación completa y arquitectura de ParkVision](./ParkVision/README.md)**
 
 ---
 

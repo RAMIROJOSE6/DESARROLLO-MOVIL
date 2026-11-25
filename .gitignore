@@ -30,3 +30,18 @@ yarn-error.*
 */ios
 */android
 
+# Python & AI Server
+__pycache__/
+*/__pycache__/
+*/*/__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.yolo/
+.easyocr/
+evidencias_videos/
+*/evidencias_videos/
+
+
