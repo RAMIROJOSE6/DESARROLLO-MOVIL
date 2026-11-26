@@ -554,7 +554,7 @@ Analiza las imágenes en conjunto con máxima rigurosidad y responde ÚNICAMENTE
             }
         }
 
-        modelos = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-3-flash-preview"]
+        modelos = ["gemini-3-flash-preview", "gemini-flash-latest"]
         modelos_unicos = list(dict.fromkeys([m for m in modelos if m]))
 
         for modelo in modelos_unicos:
@@ -641,7 +641,7 @@ Responde ÚNICAMENTE en JSON con este formato:
             }
         }
 
-        modelos_salida = ["gemini-3-flash-preview", "gemini-2.5-flash", GEMINI_MODEL, "gemini-flash-latest"]
+        modelos_salida = ["gemini-3-flash-preview", "gemini-flash-latest"]
         modelos_unicos = list(dict.fromkeys([m for m in modelos_salida if m]))
 
         for mod in modelos_unicos:
