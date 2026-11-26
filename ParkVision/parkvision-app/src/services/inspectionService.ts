@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -216,7 +217,14 @@ class InspectionService {
   public async getVisionServerUrl(): Promise<string> {
     try {
       const custom = await AsyncStorage.getItem(STORAGE_KEY_SERVER_URL);
-      return custom || DEFAULT_VISION_SERVER;
+      if (custom && custom.trim().length > 0) return custom.trim();
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+        const host = window.location.hostname;
+        if (host === 'localhost' || host === '127.0.0.1') {
+          return `http://${host}:8000`;
+        }
+      }
+      return DEFAULT_VISION_SERVER;
     } catch {
       return DEFAULT_VISION_SERVER;
     }
@@ -253,8 +261,27 @@ class InspectionService {
   public async obtenerBase64DeMedio(uri: string, esVideo: boolean = false): Promise<string | null> {
     try {
       if (!uri) return null;
-      if (uri.startsWith('data:image')) {
+      if (uri.startsWith('data:image') || uri.startsWith('data:video')) {
         return uri.split(',')[1] || uri;
+      }
+      if (Platform.OS === 'web') {
+        try {
+          const resp = await fetch(uri);
+          const blob = await resp.blob();
+          return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const res = reader.result as string;
+              const b64 = res ? res.split(',')[1] || res : '';
+              resolve(b64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          console.warn('Error leyendo base64 en web:', e);
+          return null;
+        }
       }
       let imageUri = uri;
       if (esVideo) {
@@ -299,6 +326,96 @@ class InspectionService {
     const espacioLibre = this.getPrimerEspacioDisponible();
 
     let frameCapturadoUri = uri;
+
+    // ESTRATEGIA 0 (WEB): En navegador web, convertimos la URI (blob: / data:) a Blob real para multipart
+    if (Platform.OS === 'web') {
+      try {
+        console.log(`[INSPECCION WEB] Preparando envío de medio a: ${serverUrl}/api/analizar-archivo`);
+        let blob: Blob | null = null;
+        try {
+          const resMedia = await fetch(uri);
+          blob = await resMedia.blob();
+        } catch (fetchErr) {
+          console.warn('[INSPECCION WEB] Error obteniendo Blob de la URI:', fetchErr);
+        }
+
+        if (blob) {
+          const formData = new FormData();
+          const fileName = esVideo ? 'video_inspeccion.mp4' : 'foto_inspeccion.jpg';
+          formData.append('archivo', blob, fileName);
+          formData.append('tipo_servicio', tipoServicio);
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 180000);
+
+          const res = await fetch(`${serverUrl}/api/analizar-archivo`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Accept': 'application/json',
+            },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            const data = await res.json();
+
+            if (data.es_vehiculo === false || data.exito === false) {
+              return {
+                servidorConectado: true,
+                esVehiculo: false,
+                mensajeError:
+                  data.mensaje ||
+                  'No se detectó ningún vehículo en la captura. Por favor enfoca claramente un automóvil.',
+                placa: '',
+                marca: '',
+                color: '',
+                horaIngreso,
+                espacioAsignado: espacioLibre,
+                danosEntrada: [],
+                suciedadFiltrada: 0,
+                diagnosticoTexto: 'No se detectó ningún vehículo en la captura.',
+                confianzaIA: 0,
+                frameCapturadoUrl: data.frame_base64_url || uri,
+                videoUrlServidor: data.video_url || uri,
+              };
+            }
+
+            const danosFormateados: DanoVehiculo[] = (data.danos_previos || []).map((d: any) => ({
+              id: d.id,
+              tipo: d.tipo,
+              zona: d.zona || 'puerta_delantera_izq',
+              zonaTexto: d.zonaTexto || 'Carrocería',
+              descripcion: d.descripcion,
+              severidad: d.severidad || 'leve',
+              confianzaIA: 95,
+              coordenadas: d.coordenadas,
+            }));
+
+            return {
+              servidorConectado: true,
+              placa: data.placa && data.placa !== 'EN-REVISION' ? data.placa : '',
+              marca: data.marca && data.marca !== 'Vehículo' ? data.marca : 'Automóvil',
+              color: data.color || 'Gris / Plata',
+              horaIngreso,
+              espacioAsignado: espacioLibre,
+              danosEntrada: danosFormateados,
+              suciedadFiltrada: data.suciedad_descartada || 0,
+              diagnosticoTexto: data.diagnostico_texto,
+              confianzaIA: data.confianza_color || 95.0,
+              cajaVehiculo: data.caja_vehiculo,
+              frameCapturadoUrl: data.frame_base64_url || uri,
+              videoUrlServidor: data.video_url || uri,
+            };
+          } else {
+            console.warn(`[INSPECCION WEB] Servidor respondió con status ${res.status}`);
+          }
+        }
+      } catch (errWeb) {
+        console.warn('[INSPECCION WEB] Error procesando video/foto:', errWeb);
+      }
+    }
 
     // ESTRATEGIA 1 (NATIVA): Subida de archivo por FileSystem.uploadAsync de Expo
     // Evita cargar el archivo en la memoria JavaScript de React Native y transmite directo
@@ -713,6 +830,68 @@ class InspectionService {
           ticket.fotoInspeccionEntradaUrl || ticket.videoEntradaUrl,
           false
         )) || '';
+    }
+
+    // ESTRATEGIA 0 (WEB): Subida en navegador web convirtiendo URI a Blob
+    if (Platform.OS === 'web') {
+      try {
+        console.log(`[SALIDA WEB] Transmitiendo video/foto de salida a: ${serverUrl}/api/analizar-archivo-salida`);
+        let blobSalida: Blob | null = null;
+        try {
+          const resMedia = await fetch(uriSalida);
+          blobSalida = await resMedia.blob();
+        } catch (fetchErr) {
+          console.warn('[SALIDA WEB] Error convirtiendo medio a Blob:', fetchErr);
+        }
+
+        if (blobSalida) {
+          const formData = new FormData();
+          const fileName = esVideo ? 'salida_video.mp4' : 'salida_foto.jpg';
+          formData.append('archivo_salida', blobSalida, fileName);
+          if (base64Entrada) {
+            formData.append('imagen_entrada_base64', base64Entrada);
+          }
+          formData.append('ticket_id', ticketId);
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 180000);
+
+          const res = await fetch(`${serverUrl}/api/analizar-archivo-salida`, {
+            method: 'POST',
+            body: formData,
+            headers: { 'Accept': 'application/json' },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            const data = await res.json();
+            const nuevos: DanoVehiculo[] = (data.nuevos_danos || []).map((d: any) => ({
+              id: d.id,
+              tipo: d.tipo,
+              zona: d.zona || 'Carrocería Lateral',
+              zonaTexto: d.zonaTexto || `${d.zona || 'Carrocería'} (${(d.tipo || 'Daño').toUpperCase()})`,
+              descripcion: d.descripcion || 'Alteración detectada por visión artificial',
+              severidad: d.severidad || 'leve',
+              confianzaIA: 95,
+              coordenadas: d.coordenadas,
+            }));
+
+            return {
+              huboCambios: data.hubo_cambios,
+              nuevosDanos: nuevos,
+              fotoSalidaUrl: data.foto_salida_url,
+              videoSalidaUrl: data.video_salida_url || uriSalida,
+              diagnostico: data.diagnostico_salida,
+              servidorConectado: true,
+            };
+          } else {
+            console.warn(`[SALIDA WEB] Servidor respondió con status ${res.status}`);
+          }
+        }
+      } catch (errSalidaWeb) {
+        console.warn('[SALIDA WEB] Error en análisis:', errSalidaWeb);
+      }
     }
 
     // ESTRATEGIA 1 (NATIVA): Subida de archivo directa con FileSystem.uploadAsync de Expo

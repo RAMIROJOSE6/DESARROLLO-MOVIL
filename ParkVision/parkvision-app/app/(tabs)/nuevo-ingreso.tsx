@@ -210,8 +210,12 @@ export default function NuevoIngresoScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      const uri = result.assets[0].uri;
-      const isVid = result.assets[0].type === 'video';
+      const asset = result.assets[0];
+      const uri = asset.uri;
+      const isVid =
+        asset.type === 'video' ||
+        (asset.mimeType ? asset.mimeType.startsWith('video/') : false) ||
+        /\.(mp4|mov|webm|avi|mkv|3gp)$/i.test(asset.fileName || uri);
       setVideoEntradaUri(uri);
       if (!isVid) setFotoEvidenciaUri(uri);
       ejecutarDiagnostico(uri, isVid);
