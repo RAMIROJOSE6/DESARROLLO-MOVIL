@@ -433,7 +433,11 @@ export default function NuevoIngresoScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 100 }}
+      showsVerticalScrollIndicator={true}
+    >
       <StatusBar barStyle="light-content" />
 
       {/* ESTADO DEL SERVIDOR DE VISIÓN ARTIFICIAL LOCAL */}

@@ -55,7 +55,11 @@ export default function DetalleVehiculoScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-slate-950 px-4 pt-3" showsVerticalScrollIndicator={false}>
+    <ScrollView
+      className="flex-1 bg-slate-950 px-4 pt-3"
+      contentContainerStyle={{ paddingBottom: 100 }}
+      showsVerticalScrollIndicator={true}
+    >
       {/* TARJETA PRINCIPAL DEL AUTO */}
       <View className="bg-slate-900 border border-slate-800 rounded-2xl p-4 mb-4">
         <View className="flex-row items-center justify-between mb-3">

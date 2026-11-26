@@ -271,7 +271,11 @@ export default function AuditoriaScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 100 }}
+      showsVerticalScrollIndicator={true}
+    >
       <StatusBar barStyle="light-content" />
 
       {/* 1. SELECCIÓN DEL AUTO EN SALIDA */}

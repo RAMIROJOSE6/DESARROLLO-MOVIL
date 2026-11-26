@@ -83,7 +83,11 @@ export default function DashboardScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 100 }}
+      showsVerticalScrollIndicator={true}
+    >
       <StatusBar barStyle="light-content" />
 
       {/* 1. HERO HEADER */}
@@ -223,7 +227,7 @@ export default function DashboardScreen() {
 
       {/* VISTA 1: MAPA DINÁMICO DE BAHÍAS */}
       {vistaActual === 'mapa' ? (
-        <ScrollView style={styles.mapScrollView} showsVerticalScrollIndicator={false}>
+        <View style={styles.mapScrollView}>
           <Text style={styles.instructionBanner}>
             Selecciona una bahía disponible para dar ingreso o una ocupada para auditar su salida:
           </Text>
@@ -264,10 +268,10 @@ export default function DashboardScreen() {
               );
             })}
           </View>
-        </ScrollView>
+        </View>
       ) : (
         /* VISTA 2: LISTA DE VEHÍCULOS ACTIVOS */
-        <>
+        <View>
           <View style={styles.searchBar}>
             <Ionicons name="search" size={18} color="#64748B" />
             <TextInput
@@ -279,16 +283,16 @@ export default function DashboardScreen() {
             />
           </View>
 
-          <FlatList
-            data={vehiculosFiltrados}
-            keyExtractor={(item) => item.id}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" />
-            }
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 24 }}
-            renderItem={({ item }) => (
-              <View style={styles.vehicleCard}>
+          {vehiculosFiltrados.length === 0 ? (
+            <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+              <Ionicons name="car-outline" size={44} color="#475569" />
+              <Text style={{ color: '#94A3B8', fontSize: 13, marginTop: 8 }}>
+                No se encontraron vehículos activos.
+              </Text>
+            </View>
+          ) : (
+            vehiculosFiltrados.map((item) => (
+              <View key={item.id} style={styles.vehicleCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.plateRow}>
                     <View style={styles.plateContainer}>
@@ -369,9 +373,9 @@ export default function DashboardScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-            )}
-          />
-        </>
+            ))
+          )}
+        </View>
       )}
 
       {/* ========================================================== */}
@@ -472,7 +476,7 @@ export default function DashboardScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScrollView>
   );
 }
 

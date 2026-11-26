@@ -80,7 +80,8 @@ export default function HistorialScreen() {
         data={filtrados}
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3b82f6" />}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        showsVerticalScrollIndicator={true}
+        contentContainerStyle={{ paddingBottom: 100 }}
         ListEmptyComponent={
           <View className="items-center justify-center py-16">
             <Ionicons name="document-text-outline" size={48} color="#334155" />

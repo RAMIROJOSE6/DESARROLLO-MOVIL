@@ -5,3 +5,40 @@
 :root {
   --css-interop-darkMode: class dark;
 }
+
+/* ===================================================
+   BARRAS DE SCROLL VISIBLES Y PERSONALIZADAS EN LA WEB
+   =================================================== */
+html, body, #root {
+  height: 100%;
+  overflow-y: auto !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #3b82f6 #0f172a !important;
+}
+
+/* Forzar que todos los contenedores con scroll muestren barra de desplazamiento visible en navegadores web */
+* {
+  scrollbar-width: thin !important;
+  scrollbar-color: #3b82f6 #0f172a !important;
+}
+
+::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+  display: block !important;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a !important;
+  border-radius: 8px !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2563eb !important;
+  border-radius: 8px !important;
+  border: 2px solid #0f172a !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #38bdf8 !important;
+}
