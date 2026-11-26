@@ -105,11 +105,15 @@ npm install
 cp .env.example .env
 # Configura EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY y EXPO_PUBLIC_VISION_SERVER_URL
 npx expo start
+# O para ejecutar directamente en la WEB (navegador):
+npx expo start --web
+# O ejecuta iniciar_app_web.bat en Windows
 ```
 
 ---
 
 ## 🛡️ Seguridad y Credenciales
 Los archivos `.env` reales que contienen claves de Supabase y tokens de Gemini se encuentran excluidos mediante `.gitignore` para proteger la seguridad de la infraestructura. Consulte los archivos `.env.example` en cada subcarpeta para configurar las variables requeridas.
+
 
 
