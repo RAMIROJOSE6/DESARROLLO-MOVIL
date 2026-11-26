@@ -465,7 +465,7 @@ export default function NuevoIngresoScreen() {
       contentContainerStyle={{ paddingBottom: 100 }}
       showsVerticalScrollIndicator={true}
     >
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
 
       {/* ESTADO DEL SERVIDOR DE VISIÓN ARTIFICIAL LOCAL */}
       <TouchableOpacity
@@ -486,7 +486,7 @@ export default function NuevoIngresoScreen() {
             ? `🟢 Motor IA Online (${serverUrlInput})`
             : `🟡 Servidor IA: ${serverUrlInput} (Toca para cambiar IP)`}
         </Text>
-        <Ionicons name="settings-sharp" size={14} color="#94A3B8" />
+        <Ionicons name="settings-sharp" size={14} color="#64748B" />
       </TouchableOpacity>
 
       {/* MODAL CONFIGURACIÓN IP SERVIDOR */}
@@ -540,14 +540,14 @@ export default function NuevoIngresoScreen() {
         </Text>
 
         <View style={styles.captureBtnsContainer}>
-          {/* BOTÓN 1: GRABAR VIDEO (ACCIÓN PRINCIPAL DE INGRESO) */}
+          {/* BOTÓN 1: GRABAR VIDEO (ROJO CÁMARA / GRABACIÓN) */}
           <TouchableOpacity
             onPress={grabarVideoDeIngreso}
             disabled={analizandoVideo}
             style={[styles.recordBtn, { flex: 1, marginRight: 6 }]}
           >
             <LinearGradient
-              colors={['#1D4ED8', '#1E40AF']}
+              colors={['#DC2626', '#B91C1C']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.recordGradient}
@@ -556,67 +556,45 @@ export default function NuevoIngresoScreen() {
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <View style={styles.btnRow}>
-                  <Ionicons name="videocam-outline" size={20} color="#FFFFFF" />
+                  <Ionicons name="videocam" size={20} color="#FFFFFF" />
                   <Text style={styles.recordBtnText}>GRABAR VIDEO</Text>
                 </View>
               )}
             </LinearGradient>
           </TouchableOpacity>
 
-          {/* BOTÓN 2: TOMAR FOTO (ACCIÓN SECUNDARIA) */}
+          {/* BOTÓN 2: TOMAR FOTO (AZUL PRIMARIO) */}
           <TouchableOpacity
             onPress={tomarFotoDeIngreso}
             disabled={analizandoVideo}
-            style={[
-              styles.recordBtn,
-              {
-                flex: 1,
-                marginLeft: 6,
-                backgroundColor: '#1E293B',
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: '#334155',
-                overflow: 'hidden',
-              },
-            ]}
+            style={[styles.recordBtn, { flex: 1, marginLeft: 6 }]}
           >
-            <View
-              style={[
-                styles.recordGradient,
-                { backgroundColor: '#1E293B' },
-              ]}
+            <LinearGradient
+              colors={['#2563EB', '#1D4ED8']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.recordGradient}
             >
               {analizandoVideo ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <View style={styles.btnRow}>
-                  <Ionicons name="camera-outline" size={20} color="#93C5FD" />
-                  <Text style={[styles.recordBtnText, { color: '#F1F5F9' }]}>TOMAR FOTO</Text>
+                  <Ionicons name="camera" size={20} color="#FFFFFF" />
+                  <Text style={styles.recordBtnText}>TOMAR FOTO</Text>
                 </View>
               )}
-            </View>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        {/* BOTÓN 3: ELEGIR DE GALERÍA (VIDEO O FOTO) */}
+        {/* BOTÓN 3: ELEGIR DE GALERÍA (SECUNDARIO / NEUTRO ELEGANTE) */}
         <TouchableOpacity
           onPress={seleccionarDeGaleria}
           disabled={analizandoVideo}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#1E293B',
-            paddingVertical: 10,
-            borderRadius: 10,
-            borderWidth: 1,
-            borderColor: '#334155',
-            marginTop: 8,
-            gap: 8,
-          }}
+          style={styles.gallerySelectBtn}
         >
-          <Ionicons name="images-outline" size={18} color="#94A3B8" />
-          <Text style={{ color: '#E2E8F0', fontSize: 13, fontWeight: '600' }}>
+          <Ionicons name="images-outline" size={18} color="#475569" />
+          <Text style={{ color: '#334155', fontSize: 13, fontWeight: '700' }}>
             O seleccionar video/foto guardado en Galería
           </Text>
         </TouchableOpacity>
@@ -703,7 +681,7 @@ export default function NuevoIngresoScreen() {
 
             {/* CHIPS RÁPIDOS DE MARCAS PRINCIPALES */}
             <View style={{ marginBottom: 10 }}>
-              <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '700', marginBottom: 5 }}>
+              <Text style={{ color: '#475569', fontSize: 10, fontWeight: '700', marginBottom: 5 }}>
                 SELECCIÓN RÁPIDA DE MARCA:
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
@@ -715,13 +693,13 @@ export default function NuevoIngresoScreen() {
                       paddingHorizontal: 10,
                       paddingVertical: 5,
                       borderRadius: 12,
-                      backgroundColor: marca.toLowerCase().includes(b.toLowerCase()) ? '#2563EB' : '#1E293B',
-                      borderWidth: 1,
-                      borderColor: marca.toLowerCase().includes(b.toLowerCase()) ? '#60A5FA' : '#334155',
+                      backgroundColor: marca.toLowerCase().includes(b.toLowerCase()) ? '#EFF6FF' : '#F1F5F9',
+                      borderWidth: 1.5,
+                      borderColor: marca.toLowerCase().includes(b.toLowerCase()) ? '#2563EB' : '#E2E8F0',
                     }}
                   >
                     <Text style={{
-                      color: marca.toLowerCase().includes(b.toLowerCase()) ? '#FFFFFF' : '#CBD5E1',
+                      color: marca.toLowerCase().includes(b.toLowerCase()) ? '#1D4ED8' : '#475569',
                       fontSize: 11,
                       fontWeight: '700'
                     }}>
@@ -734,7 +712,7 @@ export default function NuevoIngresoScreen() {
 
             {/* CHIPS RÁPIDOS DE COLOR */}
             <View style={{ marginBottom: 12 }}>
-              <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '700', marginBottom: 5 }}>
+              <Text style={{ color: '#475569', fontSize: 10, fontWeight: '700', marginBottom: 5 }}>
                 SELECCIÓN RÁPIDA DE COLOR:
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
@@ -746,13 +724,13 @@ export default function NuevoIngresoScreen() {
                       paddingHorizontal: 10,
                       paddingVertical: 5,
                       borderRadius: 12,
-                      backgroundColor: color.toLowerCase() === c.toLowerCase() ? '#059669' : '#1E293B',
-                      borderWidth: 1,
-                      borderColor: color.toLowerCase() === c.toLowerCase() ? '#34D399' : '#334155',
+                      backgroundColor: color.toLowerCase() === c.toLowerCase() ? '#ECFDF5' : '#F1F5F9',
+                      borderWidth: 1.5,
+                      borderColor: color.toLowerCase() === c.toLowerCase() ? '#10B981' : '#E2E8F0',
                     }}
                   >
                     <Text style={{
-                      color: color.toLowerCase() === c.toLowerCase() ? '#FFFFFF' : '#CBD5E1',
+                      color: color.toLowerCase() === c.toLowerCase() ? '#047857' : '#475569',
                       fontSize: 11,
                       fontWeight: '700'
                     }}>
@@ -970,17 +948,22 @@ export default function NuevoIngresoScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 16,
     paddingTop: 10,
   },
   card: {
-    backgroundColor: '#1E293B',
-    borderColor: '#334155',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
     borderRadius: 20,
     padding: 16,
     marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   stepTitleRow: {
     flexDirection: 'row',
@@ -988,33 +971,33 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   stepBadge: {
-    backgroundColor: '#1E40AF',
+    backgroundColor: '#EFF6FF',
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 2,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#3B82F6',
+    borderColor: '#BFDBFE',
   },
   stepBadgeText: {
-    color: '#FFFFFF',
+    color: '#2563EB',
     fontWeight: '900',
     fontSize: 10,
   },
   stepTitle: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 15,
     fontWeight: '800',
     flex: 1,
   },
   stepDesc: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 11,
     lineHeight: 16,
     marginBottom: 12,
   },
   boldWhite: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontWeight: '700',
   },
   recordBtn: {
@@ -1038,9 +1021,21 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.5,
   },
+  gallerySelectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginTop: 8,
+    gap: 8,
+  },
   diagCard: {
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-    borderColor: '#059669',
+    backgroundColor: '#F0FDF4',
+    borderColor: '#86EFAC',
     borderWidth: 1,
     borderRadius: 14,
     padding: 12,
@@ -1053,13 +1048,15 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   diagHeaderTitle: {
-    color: '#10B981',
+    color: '#059669',
     fontWeight: '800',
     fontSize: 12,
   },
   diagDataRow: {
     flexDirection: 'row',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+    borderWidth: 1,
     borderRadius: 10,
     padding: 10,
     marginBottom: 8,
@@ -1073,34 +1070,36 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   diagPlate: {
-    color: '#FBBF24',
+    color: '#D97706',
     fontSize: 14,
     fontWeight: '900',
   },
   diagValue: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 11,
     fontWeight: '800',
   },
   diagReportBox: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+    borderWidth: 1,
     borderRadius: 10,
     padding: 10,
     marginBottom: 6,
   },
   diagReportTitle: {
-    color: '#CBD5E1',
+    color: '#0F172A',
     fontSize: 10,
     fontWeight: '800',
     marginBottom: 2,
   },
   diagReportText: {
-    color: '#94A3B8',
+    color: '#475569',
     fontSize: 10,
     lineHeight: 14,
   },
   danoItem: {
-    color: '#F59E0B',
+    color: '#D97706',
     fontSize: 10,
     fontWeight: '700',
     marginTop: 3,
@@ -1111,12 +1110,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   dirtFilterNoticeText: {
-    color: '#38BDF8',
+    color: '#0284C7',
     fontSize: 9,
     fontWeight: '600',
   },
   fieldLabel: {
-    color: '#CBD5E1',
+    color: '#334155',
     fontSize: 11,
     fontWeight: '700',
     marginBottom: 6,
@@ -1126,8 +1125,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   bayChip: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
     borderWidth: 1.5,
     borderRadius: 10,
     paddingVertical: 8,
@@ -1137,10 +1136,10 @@ const styles = StyleSheet.create({
   },
   bayChipActive: {
     backgroundColor: '#2563EB',
-    borderColor: '#3B82F6',
+    borderColor: '#1D4ED8',
   },
   bayChipText: {
-    color: '#CBD5E1',
+    color: '#334155',
     fontSize: 13,
     fontWeight: '900',
   },
@@ -1148,7 +1147,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   bayChipSub: {
-    color: '#10B981',
+    color: '#059669',
     fontSize: 8,
     fontWeight: '800',
     marginTop: 1,
@@ -1159,8 +1158,8 @@ const styles = StyleSheet.create({
   },
   serviceOption: {
     flex: 1,
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
     borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 10,
@@ -1168,29 +1167,29 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   serviceOptionActive: {
-    backgroundColor: 'rgba(37, 99, 235, 0.25)',
+    backgroundColor: '#EFF6FF',
     borderColor: '#2563EB',
   },
   serviceOptionText: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 9,
     fontWeight: '800',
     textAlign: 'center',
   },
   serviceOptionTextActive: {
-    color: '#FFFFFF',
+    color: '#2563EB',
   },
   inputGroup: {
     marginBottom: 10,
   },
   textInput: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 12,
   },
   submitBtn: {
@@ -1198,7 +1197,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#059669',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
   },
@@ -1217,7 +1216,8 @@ const styles = StyleSheet.create({
   serverStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
     borderRadius: 20,
     paddingVertical: 6,
@@ -1225,6 +1225,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     alignSelf: 'flex-start',
     gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   statusDot: {
     width: 8,
@@ -1232,44 +1237,49 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   serverStatusText: {
-    color: '#CBD5E1',
+    color: '#475569',
     fontSize: 10,
     fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
     width: '100%',
     maxWidth: 380,
-    borderColor: '#334155',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   modalTitle: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 16,
     fontWeight: '800',
     marginBottom: 6,
   },
   modalSubtitle: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 12,
     marginBottom: 14,
     lineHeight: 18,
   },
   modalInput: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#3B82F6',
+    borderColor: '#CBD5E1',
     borderRadius: 10,
-    color: '#FFFFFF',
+    color: '#0F172A',
     padding: 12,
     fontSize: 13,
     marginBottom: 16,
@@ -1283,10 +1293,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 10,
-    backgroundColor: '#334155',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
   },
   modalCancelBtnText: {
-    color: '#CBD5E1',
+    color: '#475569',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1342,13 +1354,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   diagTextInput: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 12,
     fontWeight: '700',
     marginTop: 4,
@@ -1359,9 +1371,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 14,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E8F0',
   },
   previewImage: {
     width: '100%',

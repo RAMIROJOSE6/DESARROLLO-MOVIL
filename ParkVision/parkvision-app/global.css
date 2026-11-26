@@ -12,33 +12,34 @@
 html, body, #root {
   height: 100%;
   overflow-y: auto !important;
+  background-color: #f8fafc;
   scrollbar-width: thin !important;
-  scrollbar-color: #3b82f6 #0f172a !important;
+  scrollbar-color: #3b82f6 #e2e8f0 !important;
 }
 
 /* Forzar que todos los contenedores con scroll muestren barra de desplazamiento visible en navegadores web */
 * {
   scrollbar-width: thin !important;
-  scrollbar-color: #3b82f6 #0f172a !important;
+  scrollbar-color: #3b82f6 #e2e8f0 !important;
 }
 
 ::-webkit-scrollbar {
-  width: 10px !important;
-  height: 10px !important;
+  width: 9px !important;
+  height: 9px !important;
   display: block !important;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a !important;
+  background: #f1f5f9 !important;
   border-radius: 8px !important;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2563eb !important;
+  background: #3b82f6 !important;
   border-radius: 8px !important;
-  border: 2px solid #0f172a !important;
+  border: 2px solid #f1f5f9 !important;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #38bdf8 !important;
+  background: #2563eb !important;
 }

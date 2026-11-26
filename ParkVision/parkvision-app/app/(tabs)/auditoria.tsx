@@ -305,7 +305,7 @@ export default function AuditoriaScreen() {
       contentContainerStyle={{ paddingBottom: 100 }}
       showsVerticalScrollIndicator={true}
     >
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
 
       {/* 1. SELECCIÓN DEL AUTO EN SALIDA */}
       <View style={styles.card}>
@@ -314,15 +314,15 @@ export default function AuditoriaScreen() {
           {vehiculoSeleccionado && (
             <View
               style={{
-                backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                backgroundColor: '#EFF6FF',
                 borderWidth: 1,
-                borderColor: '#38BDF8',
+                borderColor: '#BFDBFE',
                 paddingHorizontal: 10,
                 paddingVertical: 4,
                 borderRadius: 8,
               }}
             >
-              <Text style={{ color: '#38BDF8', fontSize: 12, fontWeight: '800' }}>
+              <Text style={{ color: '#2563EB', fontSize: 12, fontWeight: '800' }}>
                 📍 Bahía: {vehiculoSeleccionado.espacioAsignado}
               </Text>
             </View>
@@ -332,7 +332,7 @@ export default function AuditoriaScreen() {
         {!vehiculoSeleccionado ? (
           <View style={{ alignItems: 'center', paddingVertical: 20 }}>
             <Ionicons name="car-outline" size={40} color="#64748B" />
-            <Text style={{ color: '#94A3B8', fontSize: 13, marginTop: 8, textAlign: 'center' }}>
+            <Text style={{ color: '#64748B', fontSize: 13, marginTop: 8, textAlign: 'center' }}>
               No hay vehículos activos en el parqueadero actualmente.
             </Text>
             <TouchableOpacity
@@ -359,7 +359,7 @@ export default function AuditoriaScreen() {
             {/* TARJETA PRINCIPAL DEL VEHÍCULO SELECCIONADO */}
             <View
               style={{
-                backgroundColor: '#0F172A',
+                backgroundColor: '#F8FAFC',
                 borderColor: '#2563EB',
                 borderWidth: 1.5,
                 borderRadius: 14,
@@ -396,8 +396,8 @@ export default function AuditoriaScreen() {
                   </Text>
                   <View
                     style={{
-                      backgroundColor: '#1E293B',
-                      borderColor: '#38BDF8',
+                      backgroundColor: '#FFFFFF',
+                      borderColor: '#0284C7',
                       borderWidth: 1.5,
                       borderRadius: 8,
                       paddingHorizontal: 12,
@@ -405,7 +405,7 @@ export default function AuditoriaScreen() {
                       marginTop: 4,
                     }}
                   >
-                    <Text style={{ color: '#38BDF8', fontWeight: '900', fontSize: 15 }}>
+                    <Text style={{ color: '#0284C7', fontWeight: '900', fontSize: 15 }}>
                       📍 {vehiculoSeleccionado.espacioAsignado}
                     </Text>
                   </View>
@@ -415,30 +415,30 @@ export default function AuditoriaScreen() {
               <View
                 style={{
                   height: 1,
-                  backgroundColor: '#1E293B',
+                  backgroundColor: '#E2E8F0',
                   marginVertical: 10,
                 }}
               />
 
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <View>
-                  <Text style={{ color: '#94A3B8', fontSize: 12 }}>
-                    <Text style={{ fontWeight: '700', color: '#E2E8F0' }}>Marca/Modelo: </Text>
+                  <Text style={{ color: '#475569', fontSize: 12 }}>
+                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>Marca/Modelo: </Text>
                     {vehiculoSeleccionado.marca}
                   </Text>
-                  <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 4 }}>
-                    <Text style={{ fontWeight: '700', color: '#E2E8F0' }}>Color: </Text>
+                  <Text style={{ color: '#475569', fontSize: 12, marginTop: 4 }}>
+                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>Color: </Text>
                     {vehiculoSeleccionado.color}
                   </Text>
                 </View>
 
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ color: '#94A3B8', fontSize: 12 }}>
-                    <Text style={{ fontWeight: '700', color: '#E2E8F0' }}>Hora Ingreso: </Text>
+                  <Text style={{ color: '#475569', fontSize: 12 }}>
+                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>Hora Ingreso: </Text>
                     {vehiculoSeleccionado.horaIngreso}
                   </Text>
-                  <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 4 }}>
-                    <Text style={{ fontWeight: '700', color: '#E2E8F0' }}>Servicio: </Text>
+                  <Text style={{ color: '#475569', fontSize: 12, marginTop: 4 }}>
+                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>Servicio: </Text>
                     {vehiculoSeleccionado.tipoServicio === 'solo_lavar' || vehiculoSeleccionado.tipoServicio === 'lavadero'
                       ? 'Solo Lavado'
                       : vehiculoSeleccionado.tipoServicio === 'lavar_y_parquear' || vehiculoSeleccionado.tipoServicio === 'ambos'
@@ -501,12 +501,12 @@ export default function AuditoriaScreen() {
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
             <TouchableOpacity onPress={grabarVideoSalida} style={[styles.recordExitBtn, { flex: 1 }]}>
               <LinearGradient
-                colors={['#1E293B', '#0F172A']}
+                colors={['#DC2626', '#B91C1C']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.recordExitGradient}
               >
-                <Ionicons name="videocam-outline" size={24} color="#F87171" />
+                <Ionicons name="videocam" size={24} color="#FFFFFF" />
                 <Text style={styles.recordExitTitle}>Grabar Video</Text>
                 <Text style={styles.recordExitSub}>
                   {videoSalidaUri ? '✓ Video listo' : 'Inspección Video'}
@@ -516,12 +516,12 @@ export default function AuditoriaScreen() {
 
             <TouchableOpacity onPress={tomarFotoSalida} style={[styles.recordExitBtn, { flex: 1 }]}>
               <LinearGradient
-                colors={['#1E293B', '#0F172A']}
+                colors={['#2563EB', '#1D4ED8']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.recordExitGradient}
               >
-                <Ionicons name="camera-outline" size={24} color="#94A3B8" />
+                <Ionicons name="camera" size={24} color="#FFFFFF" />
                 <Text style={styles.recordExitTitle}>Tomar Foto</Text>
                 <Text style={styles.recordExitSub}>
                   {fotoSalidaUri && !videoSalidaUri ? '✓ Foto lista' : 'Inspección Foto'}
@@ -536,17 +536,17 @@ export default function AuditoriaScreen() {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: '#1E293B',
-              paddingVertical: 9,
-              borderRadius: 8,
+              backgroundColor: '#F1F5F9',
+              paddingVertical: 10,
+              borderRadius: 10,
               borderWidth: 1,
-              borderColor: '#334155',
+              borderColor: '#CBD5E1',
               marginBottom: 10,
               gap: 8,
             }}
           >
-            <Ionicons name="images-outline" size={16} color="#94A3B8" />
-            <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '600' }}>
+            <Ionicons name="images-outline" size={16} color="#475569" />
+            <Text style={{ color: '#334155', fontSize: 12, fontWeight: '700' }}>
               O elegir video/foto de salida desde Galería
             </Text>
           </TouchableOpacity>
@@ -555,12 +555,12 @@ export default function AuditoriaScreen() {
           {(videoSalidaUri || fotoSalidaUri) && (
             <View
               style={{
-                backgroundColor: '#1E293B',
+                backgroundColor: '#FEF2F2',
                 borderRadius: 10,
                 padding: 12,
                 marginBottom: 12,
                 borderWidth: 1,
-                borderColor: '#EF4444',
+                borderColor: '#FCA5A5',
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -571,13 +571,13 @@ export default function AuditoriaScreen() {
                   <Ionicons
                     name={videoSalidaUri ? 'videocam' : 'camera'}
                     size={16}
-                    color="#10B981"
+                    color="#059669"
                   />
-                  <Text style={{ color: '#F8FAFC', fontSize: 13, fontWeight: '700' }}>
+                  <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: '700' }}>
                     {videoSalidaUri ? 'Video de Salida Grabado' : 'Foto de Salida Capturada'}
                   </Text>
                 </View>
-                <Text style={{ color: '#94A3B8', fontSize: 11, marginTop: 2 }}>
+                <Text style={{ color: '#64748B', fontSize: 11, marginTop: 2 }}>
                   ¿Deseas repetir la toma antes de auditar?
                 </Text>
               </View>
@@ -613,7 +613,7 @@ export default function AuditoriaScreen() {
                   );
                 }}
                 style={{
-                  backgroundColor: '#7F1D1D',
+                  backgroundColor: '#DC2626',
                   paddingHorizontal: 12,
                   paddingVertical: 8,
                   borderRadius: 8,
@@ -622,8 +622,8 @@ export default function AuditoriaScreen() {
                   gap: 6,
                 }}
               >
-                <Ionicons name="trash-outline" size={15} color="#FCA5A5" />
-                <Text style={{ color: '#FEE2E2', fontSize: 12, fontWeight: '700' }}>
+                <Ionicons name="trash-outline" size={15} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
                   Descartar
                 </Text>
               </TouchableOpacity>
@@ -637,7 +637,7 @@ export default function AuditoriaScreen() {
             style={styles.generateExitBtn}
           >
             <LinearGradient
-              colors={['#991B1B', '#7F1D1D']}
+              colors={['#DC2626', '#B91C1C']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.generateExitGradient}
@@ -686,12 +686,12 @@ export default function AuditoriaScreen() {
 
           {/* ESTADO SALIDA Y LIBERACIÓN DE BAHÍA */}
           <LinearGradient
-            colors={['#064E3B', '#022C22']}
+            colors={['#ECFDF5', '#D1FAE5']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.releasedBanner}
           >
-            <Ionicons name="checkmark-done-circle" size={26} color="#10B981" />
+            <Ionicons name="checkmark-done-circle" size={26} color="#059669" />
             <View style={styles.releasedTextContainer}>
               <Text style={styles.releasedTitle}>TRAZABILIDAD SUPABASE: ESTADO 'SALIDA'</Text>
               <Text style={styles.releasedDesc}>
@@ -812,25 +812,30 @@ export default function AuditoriaScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 16,
     paddingTop: 10,
   },
   card: {
-    backgroundColor: '#1E293B',
-    borderColor: '#334155',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
     borderRadius: 20,
     padding: 16,
     marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardTitle: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 15,
     fontWeight: '800',
   },
   cardSubtitle: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 11,
     marginTop: 2,
     lineHeight: 16,
@@ -840,8 +845,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   carSelectBox: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
     borderWidth: 1.5,
     borderRadius: 14,
     padding: 12,
@@ -849,8 +854,8 @@ const styles = StyleSheet.create({
     minWidth: 120,
   },
   carSelectBoxActive: {
-    backgroundColor: 'rgba(37, 99, 235, 0.2)',
-    borderColor: '#3B82F6',
+    backgroundColor: '#EFF6FF',
+    borderColor: '#2563EB',
   },
   badgePlate: {
     backgroundColor: '#FBBF24',
@@ -867,20 +872,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   carSelectName: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 12,
     fontWeight: '700',
   },
   carSelectBay: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 10,
     marginTop: 2,
   },
   recordExitBtn: {
     borderRadius: 14,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#334155',
     marginBottom: 12,
   },
   recordExitGradient: {
@@ -895,20 +898,21 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   recordExitSub: {
-    color: '#94A3B8',
+    color: '#FFFFFF',
+    opacity: 0.9,
     fontSize: 10,
     marginTop: 2,
   },
   simCard: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
     borderRadius: 12,
     padding: 12,
     marginBottom: 14,
   },
   simLabel: {
-    color: '#CBD5E1',
+    color: '#334155',
     fontSize: 11,
     fontWeight: '700',
     marginBottom: 8,
@@ -922,50 +926,50 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#1E293B',
-    borderColor: '#334155',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#CBD5E1',
     borderWidth: 1,
     alignItems: 'center',
   },
   simTypeBtnActive: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: '#FEF2F2',
     borderColor: '#EF4444',
   },
   simTypeText: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 9,
     fontWeight: '800',
     textAlign: 'center',
   },
   simCleanBtn: {
-    backgroundColor: '#1E293B',
-    borderColor: '#334155',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#CBD5E1',
     borderWidth: 1,
     paddingVertical: 8,
     borderRadius: 8,
     alignItems: 'center',
   },
   simCleanBtnActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: '#ECFDF5',
     borderColor: '#10B981',
   },
   simCleanText: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 10,
     fontWeight: '700',
   },
   textRed: {
-    color: '#F87171',
+    color: '#DC2626',
   },
   textGreen: {
-    color: '#34D399',
+    color: '#059669',
   },
   generateExitBtn: {
     borderRadius: 14,
     overflow: 'hidden',
     shadowColor: '#DC2626',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
   },
@@ -988,7 +992,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   resultTitle: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 15,
     fontWeight: '800',
   },
@@ -999,11 +1003,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   badgeDanger: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: '#FEF2F2',
     borderColor: '#EF4444',
   },
   badgeSuccess: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: '#ECFDF5',
     borderColor: '#10B981',
   },
   resultBadgeText: {
@@ -1016,7 +1020,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#059669',
+    borderColor: '#86EFAC',
     marginBottom: 12,
   },
   releasedTextContainer: {
@@ -1024,39 +1028,39 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   releasedTitle: {
-    color: '#34D399',
+    color: '#065F46',
     fontSize: 11,
     fontWeight: '900',
   },
   releasedDesc: {
-    color: '#E2E8F0',
+    color: '#1E293B',
     fontSize: 11,
     lineHeight: 16,
     marginTop: 2,
   },
   boldYellow: {
-    color: '#FBBF24',
+    color: '#D97706',
     fontWeight: '900',
   },
   boldGreen: {
-    color: '#34D399',
+    color: '#059669',
     fontWeight: '900',
   },
   compareImagesSection: {
     marginBottom: 12,
   },
   imageLabel: {
-    color: '#CBD5E1',
+    color: '#334155',
     fontSize: 11,
     fontWeight: '700',
     marginBottom: 6,
   },
   imageFrame: {
-    backgroundColor: '#000000',
+    backgroundColor: '#F8FAFC',
     borderRadius: 14,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#CBD5E1',
     marginBottom: 12,
     position: 'relative',
   },
@@ -1107,26 +1111,26 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   damageDetailCard: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
     borderWidth: 1,
     borderRadius: 12,
     padding: 12,
     marginBottom: 14,
   },
   damageDetailTitle: {
-    color: '#F87171',
+    color: '#B91C1C',
     fontSize: 11,
     fontWeight: '800',
     marginBottom: 4,
   },
   damageItem: {
-    color: '#F1F5F9',
+    color: '#7F1D1D',
     fontSize: 11,
     lineHeight: 16,
   },
   whatsappBtn: {
-    backgroundColor: '#059669',
+    backgroundColor: '#16A34A',
     borderRadius: 14,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -1140,13 +1144,15 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   resetBtn: {
-    backgroundColor: '#334155',
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+    borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: 'center',
   },
   resetBtnText: {
-    color: '#CBD5E1',
+    color: '#475569',
     fontSize: 11,
     fontWeight: '700',
   },

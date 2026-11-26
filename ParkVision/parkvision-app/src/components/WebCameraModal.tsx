@@ -229,7 +229,7 @@ export const WebCameraModal: React.FC<WebCameraModalProps> = ({
               <Ionicons
                 name={modo === 'video' ? 'videocam' : 'camera'}
                 size={22}
-                color={modo === 'video' ? '#EF4444' : '#38BDF8'}
+                color={modo === 'video' ? '#DC2626' : '#2563EB'}
               />
               <Text style={styles.headerTitle}>
                 {modo === 'video' ? 'Cámara Web: Grabar Video' : 'Cámara Web: Tomar Foto'}
@@ -243,7 +243,7 @@ export const WebCameraModal: React.FC<WebCameraModalProps> = ({
               }}
               style={styles.closeBtn}
             >
-              <Ionicons name="close" size={20} color="#94A3B8" />
+              <Ionicons name="close" size={20} color="#64748B" />
             </TouchableOpacity>
           </View>
 
@@ -372,23 +372,24 @@ export const WebCameraModal: React.FC<WebCameraModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.85)',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
   },
   modalCard: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
-    borderWidth: 1.5,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+    borderWidth: 1,
     borderRadius: 20,
     width: '100%',
     maxWidth: 680,
     padding: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.15,
     shadowRadius: 20,
+    elevation: 8,
   },
   header: {
     flexDirection: 'row',
@@ -397,12 +398,12 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 16,
     fontWeight: '800',
   },
   closeBtn: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#F1F5F9',
     padding: 6,
     borderRadius: 8,
   },

@@ -88,18 +88,13 @@ export default function DashboardScreen() {
       contentContainerStyle={{ paddingBottom: 100 }}
       showsVerticalScrollIndicator={true}
     >
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
 
       {/* 1. HERO HEADER */}
-      <LinearGradient
-        colors={['#1E293B', '#0F172A']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.heroCard}
-      >
+      <View style={styles.heroCard}>
         <View style={styles.heroTopRow}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Ionicons name="car-sport" size={26} color="#38BDF8" />
+            <Ionicons name="car-sport" size={26} color="#2563EB" />
             <View>
               <Text style={styles.heroTitle}>ParkVision</Text>
               <Text style={styles.heroSubtitle}>Control de Estacionamiento y Servicios</Text>
@@ -138,7 +133,7 @@ export default function DashboardScreen() {
               }}
               style={styles.cleanBtn}
             >
-              <Ionicons name="trash-outline" size={15} color="#EF4444" />
+              <Ionicons name="trash-outline" size={15} color="#DC2626" />
             </TouchableOpacity>
 
             <View style={styles.liveIndicator}>
@@ -160,7 +155,7 @@ export default function DashboardScreen() {
 
           <View style={styles.metricItem}>
             <Text style={styles.metricLabel}>EN LAVADERO</Text>
-            <Text style={[styles.metricValue, { color: '#38BDF8' }]}>{enLavadero}</Text>
+            <Text style={[styles.metricValue, { color: '#0284C7' }]}>{enLavadero}</Text>
             <Text style={styles.metricSub}>Bahía activa</Text>
           </View>
 
@@ -168,11 +163,11 @@ export default function DashboardScreen() {
 
           <View style={styles.metricItem}>
             <Text style={styles.metricLabel}>CAPACIDAD</Text>
-            <Text style={[styles.metricValue, { color: '#94A3B8' }]}>{espacios.length}</Text>
+            <Text style={[styles.metricValue, { color: '#64748B' }]}>{espacios.length}</Text>
             <Text style={styles.metricSub}>Total cupos</Text>
           </View>
         </View>
-      </LinearGradient>
+      </View>
 
       {/* BOTÓN PRINCIPAL: NUEVO INGRESO DE VEHÍCULO */}
       <TouchableOpacity
@@ -483,16 +478,22 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 12,
   },
   heroCard: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
-    marginBottom: 10,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   heroTopRow: {
     flexDirection: 'row',
@@ -501,34 +502,35 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   heroTitle: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 20,
     fontWeight: '900',
   },
   heroSubtitle: {
-    color: '#94A3B8',
-    fontSize: 10,
+    color: '#64748B',
+    fontSize: 11,
     marginTop: 2,
+    fontWeight: '600',
   },
   cleanBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FCA5A5',
     borderWidth: 1,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 5,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   liveIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    borderColor: '#10B981',
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   liveDot: {
     width: 6,
@@ -538,7 +540,7 @@ const styles = StyleSheet.create({
     marginRight: 5,
   },
   liveText: {
-    color: '#10B981',
+    color: '#059669',
     fontSize: 9,
     fontWeight: '800',
   },
@@ -546,45 +548,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(11, 15, 25, 0.6)',
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
   metricItem: {
     alignItems: 'center',
     flex: 1,
   },
   metricLabel: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 9,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   metricValue: {
-    color: '#FFFFFF',
-    fontSize: 20,
+    color: '#0F172A',
+    fontSize: 22,
     fontWeight: '900',
     marginTop: 1,
   },
   metricSub: {
     color: '#64748B',
-    fontSize: 8,
+    fontSize: 9,
   },
   metricDivider: {
     width: 1,
-    height: 24,
-    backgroundColor: '#334155',
+    height: 26,
+    backgroundColor: '#CBD5E1',
   },
   btnNuevoIngreso: {
     borderRadius: 14,
     overflow: 'hidden',
-    marginBottom: 10,
+    marginBottom: 12,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   btnNuevoIngresoGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 13,
+    paddingVertical: 14,
   },
   btnNuevoIngresoText: {
     color: '#FFFFFF',
@@ -594,46 +601,55 @@ const styles = StyleSheet.create({
   },
   viewToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: '#1E293B',
+    backgroundColor: '#E2E8F0',
     borderRadius: 12,
     padding: 3,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   toggleBtn: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingVertical: 9,
+    borderRadius: 9,
     gap: 6,
   },
   toggleBtnActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   toggleText: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 11,
     fontWeight: '700',
   },
   toggleTextActive: {
-    color: '#FFFFFF',
+    color: '#2563EB',
+    fontWeight: '800',
   },
   mapScrollView: {
     flex: 1,
   },
   instructionBanner: {
-    color: '#94A3B8',
+    color: '#334155',
     fontSize: 11,
     lineHeight: 16,
-    marginBottom: 10,
-    backgroundColor: '#1E293B',
-    padding: 8,
-    borderRadius: 8,
+    marginBottom: 12,
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+    borderWidth: 1,
+    padding: 10,
+    borderRadius: 10,
+    fontWeight: '500',
   },
   bold: {
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#0F172A',
   },
   gridContainer: {
     flexDirection: 'row',
@@ -651,12 +667,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   spaceCardFree: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderColor: '#059669',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1,
   },
   spaceCardOccupied: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-    borderColor: '#DC2626',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#EF4444',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1,
   },
   spaceCode: {
     fontSize: 14,
@@ -670,45 +696,58 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   spacePillGreen: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+    borderWidth: 1,
   },
   spacePillRed: {
-    backgroundColor: 'rgba(239, 68, 68, 0.25)',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+    borderWidth: 1,
   },
   spacePillText: {
     fontSize: 9,
     fontWeight: '800',
   },
   textEmerald: {
-    color: '#10B981',
+    color: '#059669',
   },
   textRed: {
-    color: '#F87171',
+    color: '#DC2626',
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E293B',
-    borderColor: '#334155',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#CBD5E1',
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 10,
+    paddingVertical: 10,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
   },
   searchInput: {
     flex: 1,
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 13,
     marginLeft: 8,
   },
   vehicleCard: {
-    backgroundColor: '#1E293B',
-    borderColor: '#334155',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 14,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -743,13 +782,14 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   carModel: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 14,
     fontWeight: '800',
   },
   carColor: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 11,
+    fontWeight: '500',
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -758,12 +798,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusBadgePark: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    borderColor: '#059669',
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
   },
   statusBadgeWash: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-    borderColor: '#0284C7',
+    backgroundColor: '#EFF6FF',
+    borderColor: '#3B82F6',
   },
   statusText: {
     fontSize: 9,
@@ -771,26 +811,28 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     flexDirection: 'row',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
     padding: 10,
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   carThumb: {
     width: 85,
     height: 65,
     borderRadius: 10,
-    backgroundColor: '#0F172A',
-    borderWidth: 1.5,
-    borderColor: '#334155',
+    backgroundColor: '#E2E8F0',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
   },
   carThumbPlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1E293B',
+    backgroundColor: '#F1F5F9',
   },
   carThumbPlaceholderText: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 8,
     fontWeight: '800',
     marginTop: 2,
@@ -802,31 +844,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   detailLocation: {
-    color: '#E2E8F0',
+    color: '#334155',
     fontSize: 11,
     fontWeight: '600',
   },
   boldYellow: {
-    color: '#FBBF24',
+    color: '#B45309',
     fontWeight: '900',
   },
   detailTime: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 10,
     marginTop: 2,
   },
   boldSlate: {
-    color: '#CBD5E1',
+    color: '#0F172A',
     fontWeight: '700',
   },
   damageWarning: {
-    color: '#FBBF24',
+    color: '#D97706',
     fontSize: 10,
     fontWeight: '700',
     marginTop: 2,
   },
   damageClean: {
-    color: '#10B981',
+    color: '#059669',
     fontSize: 10,
     fontWeight: '700',
     marginTop: 2,
@@ -839,12 +881,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#334155',
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+    borderWidth: 1,
     paddingVertical: 9,
     borderRadius: 10,
   },
   btnSecondaryText: {
-    color: '#CBD5E1',
+    color: '#334155',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -856,6 +900,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#DC2626',
     paddingVertical: 9,
     borderRadius: 10,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   btnPrimaryText: {
     color: '#FFFFFF',
@@ -866,19 +915,24 @@ const styles = StyleSheet.create({
   /* MODAL */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalBox: {
-    backgroundColor: '#1E293B',
-    borderColor: '#334155',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
     borderRadius: 20,
     padding: 20,
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 380,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 5,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -889,12 +943,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalTitle: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 18,
     fontWeight: '900',
   },
@@ -907,7 +961,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   modalDesc: {
-    color: '#94A3B8',
+    color: '#475569',
     fontSize: 12,
     lineHeight: 18,
     marginBottom: 14,
@@ -934,14 +988,16 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   modalBtnSecondary: {
-    backgroundColor: '#334155',
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+    borderWidth: 1,
     paddingVertical: 10,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 6,
   },
   modalBtnSecondaryText: {
-    color: '#CBD5E1',
+    color: '#334155',
     fontSize: 11,
     fontWeight: '700',
   },

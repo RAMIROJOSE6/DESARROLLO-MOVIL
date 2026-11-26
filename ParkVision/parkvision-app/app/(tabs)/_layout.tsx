@@ -6,22 +6,27 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: '#0B132B' },
-        headerTintColor: '#F8FAFC',
-        headerTitleStyle: { fontWeight: '700', fontSize: 17 },
+        headerStyle: { backgroundColor: '#FFFFFF', borderBottomColor: '#E2E8F0', borderBottomWidth: 1 },
+        headerTintColor: '#0F172A',
+        headerTitleStyle: { fontWeight: '800', fontSize: 18 },
         tabBarStyle: {
-          backgroundColor: '#0B132B',
-          borderTopColor: '#1E293B',
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#E2E8F0',
           borderTopWidth: 1,
           height: Platform.OS === 'ios' ? 88 : 65,
           paddingBottom: Platform.OS === 'ios' ? 28 : 10,
           paddingTop: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 6,
+          elevation: 5,
         },
-        tabBarActiveTintColor: '#38BDF8',
+        tabBarActiveTintColor: '#2563EB',
         tabBarInactiveTintColor: '#64748B',
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: '600',
+          fontWeight: '700',
         },
       }}
     >
@@ -31,7 +36,7 @@ export default function TabsLayout() {
           title: 'Bahías',
           headerTitle: 'Control de Bahías y Ocupación',
           tabBarIcon: ({ color, size }: any) => (
-            <Ionicons name="grid-outline" size={size} color={color ?? '#38BDF8'} />
+            <Ionicons name="grid-outline" size={size} color={color ?? '#2563EB'} />
           ),
         }}
       />
@@ -41,7 +46,7 @@ export default function TabsLayout() {
           title: 'Entrada',
           headerTitle: 'Recepción e Ingreso Vehicular',
           tabBarIcon: ({ color, size }: any) => (
-            <Ionicons name="log-in-outline" size={size} color={color ?? '#38BDF8'} />
+            <Ionicons name="log-in-outline" size={size} color={color ?? '#2563EB'} />
           ),
         }}
       />
@@ -51,7 +56,7 @@ export default function TabsLayout() {
           title: 'Salida',
           headerTitle: 'Inspección y Entrega Vehicular',
           tabBarIcon: ({ color, size }: any) => (
-            <Ionicons name="log-out-outline" size={size} color={color ?? '#38BDF8'} />
+            <Ionicons name="log-out-outline" size={size} color={color ?? '#2563EB'} />
           ),
         }}
       />
