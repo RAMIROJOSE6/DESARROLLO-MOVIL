@@ -274,6 +274,28 @@ export default function NuevoIngresoScreen() {
 
   // Descartar video o foto actual y permitir grabar otro
   const descartarCaptura = () => {
+    const ejecutarDescarte = () => {
+      setVideoEntradaUri(null);
+      setFotoEvidenciaUri(null);
+      setVideoProcesado(false);
+      setPlaca('');
+      setMarca('');
+      setColor('');
+      setDanosEntrada([]);
+      setDiagnosticoTexto('');
+      setSuciedadFiltrada(0);
+    };
+
+    if (Platform.OS === 'web') {
+      const ok = typeof window !== 'undefined'
+        ? window.confirm('¿Descartar captura actual? Se borrará la vista previa y los datos leídos para que puedas seleccionar o grabar otro video.')
+        : true;
+      if (ok) {
+        ejecutarDescarte();
+      }
+      return;
+    }
+
     Alert.alert(
       '¿Descartar captura actual?',
       'Se borrará la vista previa y los datos leídos para que puedas grabar o seleccionar un nuevo video.',
@@ -282,17 +304,7 @@ export default function NuevoIngresoScreen() {
         {
           text: 'Sí, descartar',
           style: 'destructive',
-          onPress: () => {
-            setVideoEntradaUri(null);
-            setFotoEvidenciaUri(null);
-            setVideoProcesado(false);
-            setPlaca('');
-            setMarca('');
-            setColor('');
-            setDanosEntrada([]);
-            setDiagnosticoTexto('');
-            setSuciedadFiltrada(0);
-          },
+          onPress: ejecutarDescarte,
         },
       ]
     );

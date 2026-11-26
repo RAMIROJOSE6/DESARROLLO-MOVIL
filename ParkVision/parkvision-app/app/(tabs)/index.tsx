@@ -12,6 +12,7 @@ import {
   StatusBar,
   Modal,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -103,6 +104,21 @@ export default function DashboardScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <TouchableOpacity
               onPress={() => {
+                const ejecutarLimpieza = async () => {
+                  await inspectionService.limpiarTodosLosDatos();
+                  cargarDatos();
+                };
+
+                if (Platform.OS === 'web') {
+                  const ok = typeof window !== 'undefined'
+                    ? window.confirm('¿Deseas vaciar todos los vehículos y dejar las 20 bahías libres (0 autos) para empezar desde cero?')
+                    : true;
+                  if (ok) {
+                    ejecutarLimpieza();
+                  }
+                  return;
+                }
+
                 Alert.alert(
                   'Reiniciar y Limpiar',
                   '¿Deseas vaciar todos los vehículos y dejar las 20 bahías libres (0 autos) para empezar desde cero?',
@@ -111,10 +127,7 @@ export default function DashboardScreen() {
                     {
                       text: 'Vaciar a Cero',
                       style: 'destructive',
-                      onPress: async () => {
-                        await inspectionService.limpiarTodosLosDatos();
-                        cargarDatos();
-                      },
+                      onPress: ejecutarLimpieza,
                     },
                   ]
                 );

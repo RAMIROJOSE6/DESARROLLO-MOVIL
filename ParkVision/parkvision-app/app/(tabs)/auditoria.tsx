@@ -551,6 +551,21 @@ export default function AuditoriaScreen() {
 
               <TouchableOpacity
                 onPress={() => {
+                  const ejecutarDescarteSalida = () => {
+                    setVideoSalidaUri(null);
+                    setFotoSalidaUri(null);
+                  };
+
+                  if (Platform.OS === 'web') {
+                    const ok = typeof window !== 'undefined'
+                      ? window.confirm('¿Descartar captura de salida? Se eliminará este video para que puedas grabar uno nuevo.')
+                      : true;
+                    if (ok) {
+                      ejecutarDescarteSalida();
+                    }
+                    return;
+                  }
+
                   Alert.alert(
                     '¿Descartar captura de salida?',
                     'Se eliminará este video para que puedas grabar uno nuevo.',
@@ -559,10 +574,7 @@ export default function AuditoriaScreen() {
                       {
                         text: 'Sí, descartar',
                         style: 'destructive',
-                        onPress: () => {
-                          setVideoSalidaUri(null);
-                          setFotoSalidaUri(null);
-                        },
+                        onPress: ejecutarDescarteSalida,
                       },
                     ]
                   );
