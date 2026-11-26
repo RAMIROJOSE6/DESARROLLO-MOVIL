@@ -50,7 +50,6 @@ export default function AuditoriaScreen() {
   const [procesandoSalidaFinal, setProcesandoSalidaFinal] = useState(false);
 
   const [resultadoAuditoria, setResultadoAuditoria] = useState<VehiculoTicket | null>(null);
-  const [modoAuditoria, setModoAuditoria] = useState<'ia_real' | 'simular_distinto' | 'simular_danos' | 'simular_intacto'>('ia_real');
 
   useEffect(() => {
     cargarVehiculos();
@@ -122,7 +121,6 @@ export default function AuditoriaScreen() {
     setDatosInspeccion(null);
     setConformidadCliente('conforme');
     setObservacionesEntrega('Vehículo entregado a satisfacción del cliente sin novedades.');
-    setModoAuditoria('ia_real');
     cargarVehiculos(null);
   };
 
@@ -217,7 +215,7 @@ export default function AuditoriaScreen() {
     }
   };
 
-  // FASE 1: Análisis e Inspección Previa de Salida
+  // FASE 1: Análisis e Inspección Previa de Salida (100% Real con IA)
   const ejecutarAnalisisSalida = async () => {
     if (!vehiculoSeleccionado) {
       Alert.alert('Selecciona un vehículo', 'Elige el auto que va a salir.');
@@ -225,7 +223,7 @@ export default function AuditoriaScreen() {
     }
 
     const uriSalida = videoSalidaUri || fotoSalidaUri;
-    if (!uriSalida && modoAuditoria === 'ia_real') {
+    if (!uriSalida) {
       Alert.alert(
         'Captura Requerida',
         'Por favor graba el video o toma la foto de inspección de salida antes de continuar.'
@@ -236,13 +234,31 @@ export default function AuditoriaScreen() {
     setAnalizando(true);
 
     try {
-      // 1. Simulación de vehículo no coincidente (para pruebas rápidas de seguridad)
-      if (modoAuditoria === 'simular_distinto') {
-        const msgError = `⚠️ ALERTA DE SEGURIDAD:\nEl vehículo en la grabación NO coincide con el auto registrado en la Bahía ${vehiculoSeleccionado.espacioAsignado} (${vehiculoSeleccionado.placa} - ${vehiculoSeleccionado.marca}).\n\nPor protocolo de seguridad no se permite procesar la salida. Por favor graba o adjunta nuevamente el video del vehículo correcto.`;
+      let nuevosDanosDetectados: DanoVehiculo[] = [];
+      let diagnosticoSalida = '✓ Auditoría Conforme: Vehículo entregado en perfecto estado. Sin nuevos daños.';
+      let fotoSalidaFinal = fotoSalidaUri || uriSalida || vehiculoSeleccionado.fotoInspeccionEntradaUrl;
+      let videoSalidaFinal = videoSalidaUri || undefined;
+      let huboCambios = false;
+
+      // Ejecución con Visión Artificial Real
+      const compReal = await inspectionService.compararVideosSalidaReal(
+        vehiculoSeleccionado.id,
+        uriSalida,
+        !!videoSalidaUri
+      );
+
+      // VALIDACIÓN ESTRICTA EN TIEMPO REAL: ¿Es el mismo vehículo?
+      if (compReal.esMismoVehiculo === false) {
+        const alertaMsg = compReal.alertaVehiculoDistinto || 
+          `El vehículo capturado en la salida no coincide con el vehículo registrado al ingreso (${vehiculoSeleccionado.placa} - ${vehiculoSeleccionado.marca} ${vehiculoSeleccionado.color}).`;
+        
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          window.alert(msgError);
+          window.alert(`🚨 ALERTA DE SEGURIDAD VEHICULAR:\n\n${alertaMsg}\n\nPor seguridad la salida ha sido BLOQUEADA. Por favor graba o adjunta nuevamente el video del vehículo correcto.`);
         } else {
-          Alert.alert('⚠️ ALERTA DE SEGURIDAD: VEHÍCULO DISTINTO', msgError);
+          Alert.alert(
+            '🚨 ALERTA: VEHÍCULO NO COINCIDE',
+            `${alertaMsg}\n\nPor seguridad la salida ha sido BLOQUEADA. Por favor graba o adjunta nuevamente el video del vehículo correcto.`
+          );
         }
         setVideoSalidaUri(null);
         setFotoSalidaUri(null);
@@ -250,72 +266,19 @@ export default function AuditoriaScreen() {
         return;
       }
 
-      let nuevosDanosDetectados: DanoVehiculo[] = [];
-      let diagnosticoSalida = '✓ Auditoría Conforme: Vehículo entregado en perfecto estado. Sin nuevos daños.';
-      let fotoSalidaFinal = fotoSalidaUri || uriSalida || vehiculoSeleccionado.fotoInspeccionEntradaUrl;
-      let videoSalidaFinal = videoSalidaUri || undefined;
-      let huboCambios = false;
-
-      if (modoAuditoria === 'simular_danos') {
-        nuevosDanosDetectados = [
-          {
-            id: 'SAL-DNO-1',
-            tipo: 'rayon',
-            zona: 'puerta_delantera_izq',
-            zonaTexto: 'Puerta Lateral Delantera Izquierda',
-            descripcion: 'Rayón lineal de 18 cm con remoción de pintura no existente en el registro de ingreso.',
-            severidad: 'moderada',
-            confianzaIA: 98,
-            coordenadas: { x: 36, y: 40, width: 28, height: 20 },
-          },
-        ];
-        diagnosticoSalida = 'ALERTA: Se detectaron cambios físicos (rayón en puerta lateral) no presentes en el ingreso del vehículo.';
-        huboCambios = true;
-      } else if (modoAuditoria === 'simular_intacto') {
-        nuevosDanosDetectados = [];
-        diagnosticoSalida = '✓ Auditoría Conforme: Vehículo entregado en perfecto estado. Sin nuevos daños ni alteraciones.';
-        huboCambios = false;
-      } else if (uriSalida) {
-        // Ejecución con Visión Artificial Real
-        const compReal = await inspectionService.compararVideosSalidaReal(
-          vehiculoSeleccionado.id,
-          uriSalida,
-          !!videoSalidaUri
-        );
-
-        // VALIDACIÓN ESTRICTA: ¿Es el mismo vehículo?
-        if (compReal.esMismoVehiculo === false) {
-          const alertaMsg = compReal.alertaVehiculoDistinto || 
-            `El vehículo capturado en la salida no coincide con el vehículo registrado al ingreso (${vehiculoSeleccionado.placa} - ${vehiculoSeleccionado.marca} ${vehiculoSeleccionado.color}).`;
-          
-          if (Platform.OS === 'web' && typeof window !== 'undefined') {
-            window.alert(`🚨 ALERTA DE SEGURIDAD VEHICULAR:\n\n${alertaMsg}\n\nPor seguridad la salida ha sido BLOQUEADA. Por favor graba o adjunta nuevamente el video del vehículo correcto.`);
-          } else {
-            Alert.alert(
-              '🚨 ALERTA: VEHÍCULO NO COINCIDE',
-              `${alertaMsg}\n\nPor seguridad la salida ha sido BLOQUEADA. Por favor graba o adjunta nuevamente el video del vehículo correcto.`
-            );
-          }
-          setVideoSalidaUri(null);
-          setFotoSalidaUri(null);
-          setAnalizando(false);
-          return;
-        }
-
-        if (compReal.nuevosDanos && compReal.nuevosDanos.length > 0) {
-          nuevosDanosDetectados = compReal.nuevosDanos;
-        }
-        if (compReal.diagnostico) {
-          diagnosticoSalida = compReal.diagnostico;
-        }
-        if (compReal.fotoSalidaUrl) {
-          fotoSalidaFinal = compReal.fotoSalidaUrl;
-        }
-        if (compReal.videoSalidaUrl) {
-          videoSalidaFinal = compReal.videoSalidaUrl;
-        }
-        huboCambios = !!compReal.huboCambios;
+      if (compReal.nuevosDanos && compReal.nuevosDanos.length > 0) {
+        nuevosDanosDetectados = compReal.nuevosDanos;
       }
+      if (compReal.diagnostico) {
+        diagnosticoSalida = compReal.diagnostico;
+      }
+      if (compReal.fotoSalidaUrl) {
+        fotoSalidaFinal = compReal.fotoSalidaUrl;
+      }
+      if (compReal.videoSalidaUrl) {
+        videoSalidaFinal = compReal.videoSalidaUrl;
+      }
+      huboCambios = !!compReal.huboCambios;
 
       setDatosInspeccion({
         nuevosDanos: nuevosDanosDetectados,
@@ -744,60 +707,12 @@ export default function AuditoriaScreen() {
             </View>
           )}
 
-          {/* MODO DE VERIFICACIÓN / SIMULACIÓN DE AUDITORÍA */}
-          <View style={styles.simCard}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <Text style={styles.simLabel}>Modo de Verificación de Salida:</Text>
-              <Text style={{ color: modoAuditoria === 'simular_distinto' ? '#DC2626' : modoAuditoria === 'simular_danos' ? '#DC2626' : modoAuditoria === 'simular_intacto' ? '#059669' : '#2563EB', fontSize: 10, fontWeight: '800' }}>
-                {modoAuditoria === 'ia_real' ? '🔴 Visión Artificial Real' : modoAuditoria === 'simular_distinto' ? '🚨 Probar Auto Distinto' : modoAuditoria === 'simular_danos' ? '⚠️ Simular Rayón' : '✓ Simular Intacto'}
-              </Text>
-            </View>
-
-            <View style={styles.simOptionsRow}>
-              <TouchableOpacity
-                onPress={() => setModoAuditoria('ia_real')}
-                style={[styles.simTypeBtn, modoAuditoria === 'ia_real' && { backgroundColor: '#EFF6FF', borderColor: '#2563EB' }]}
-              >
-                <Text style={[styles.simTypeText, modoAuditoria === 'ia_real' && { color: '#2563EB', fontWeight: '900' }]}>
-                  🤖 IA Real (Video)
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setModoAuditoria('simular_distinto')}
-                style={[styles.simTypeBtn, modoAuditoria === 'simular_distinto' && { backgroundColor: '#FEF2F2', borderColor: '#DC2626' }]}
-              >
-                <Text style={[styles.simTypeText, modoAuditoria === 'simular_distinto' && { color: '#DC2626', fontWeight: '900' }]}>
-                  🚨 Auto Distinto
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setModoAuditoria('simular_danos')}
-                style={[styles.simTypeBtn, modoAuditoria === 'simular_danos' && styles.simTypeBtnActive]}
-              >
-                <Text style={[styles.simTypeText, modoAuditoria === 'simular_danos' && { color: '#DC2626', fontWeight: '900' }]}>
-                  ⚠️ Simular Rayón
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setModoAuditoria('simular_intacto')}
-                style={[styles.simCleanBtn, modoAuditoria === 'simular_intacto' && styles.simCleanBtnActive]}
-              >
-                <Text style={[styles.simCleanText, modoAuditoria === 'simular_intacto' && { color: '#059669', fontWeight: '900' }]}>
-                  ✓ Intacto
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* FASE 1: BOTÓN DE ANÁLISIS E INSPECCIÓN */}
+          {/* FASE 1: BOTÓN DE ANÁLISIS E INSPECCIÓN (100% REAL) */}
           {!analisisRealizado && (
             <TouchableOpacity
               onPress={ejecutarAnalisisSalida}
               disabled={analizando}
-              style={styles.generateExitBtn}
+              style={[styles.generateExitBtn, { marginTop: (videoSalidaUri || fotoSalidaUri) ? 0 : 8 }]}
             >
               <LinearGradient
                 colors={['#2563EB', '#1D4ED8']}
