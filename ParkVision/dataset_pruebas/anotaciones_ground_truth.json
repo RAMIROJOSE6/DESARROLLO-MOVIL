@@ -1,0 +1,48 @@
+{
+  "dataset": "ParkVision Real-World Parking Riohacha",
+  "version": "1.0.0",
+  "autor": "Ramiro Gómez - Universidad de La Guajira",
+  "formato_placas": "Colombia (3 letras, 3 numeros)",
+  "muestras": [
+    {
+      "id": "muestra-01",
+      "archivo_ingreso": "vehiculo_prueba_01_ingreso.jpg",
+      "archivo_salida": "vehiculo_prueba_01_salida.jpg",
+      "ground_truth": {
+        "placa": "MHZ-458",
+        "marca": "Chevrolet",
+        "modelo": "Onix Turbo",
+        "color": "Blanco",
+        "danos_ingreso": [],
+        "danos_salida": [
+          {
+            "tipo": "rayon",
+            "zona": "puerta_delantera_derecha",
+            "severidad": "leve",
+            "bbox_normalizado": [0.42, 0.55, 0.12, 0.08]
+          }
+        ]
+      }
+    },
+    {
+      "id": "muestra-02",
+      "archivo_ingreso": "vehiculo_prueba_02_ingreso.jpg",
+      "archivo_salida": null,
+      "ground_truth": {
+        "placa": "UAR-812",
+        "marca": "Renault",
+        "modelo": "Duster 4x4",
+        "color": "Gris / Plata",
+        "danos_ingreso": [
+          {
+            "tipo": "abolladura",
+            "zona": "guardabarros_trasero",
+            "severidad": "media",
+            "bbox_normalizado": [0.78, 0.61, 0.15, 0.14]
+          }
+        ],
+        "danos_salida": []
+      }
+    }
+  ]
+}

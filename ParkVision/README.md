@@ -1,6 +1,21 @@
 # ParkVision – Sistema Inteligente de Control de Estacionamiento e Inspección Vehicular 🚗🅿️
 
-**ParkVision** es una solución integral móvil y de visión computacional para la gestión operativa de parqueaderos comerciales, centros de lavado automotriz y custodia de vehículos. Combina una aplicación móvil en **React Native / Expo** con un servidor backend en **FastAPI** potenciado por **YOLOv8** y modelos multimodales **Google Gemini Flash** para automatizar el registro, la lectura de matrículas, la asignación de bahías y la auditoría perimetral de daños entre el ingreso y la salida.
+**Universidad de La Guajira – Facultad de Ingeniería**  
+**Asignatura:** Visión Artificial (Corte 3 – Proyecto Final)  
+**Docente:** Ing. Eduardo Sierra Fragozo  
+**Cliente:** AutoParqueadero & Centro de Servicios "El Rodadero" (Riohacha, La Guajira)  
+
+---
+
+## 📑 Entregables Académicos de la Guía Docente
+
+| Documento / Recurso | Descripción | Enlace Directo |
+| :--- | :--- | :---: |
+| **📄 Informe Final Completo** | Informe técnico de 12 páginas con ficha de cliente, problema, metodología, resultados, análisis A-E y costos. | [INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.md](./INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.md) |
+| **🧮 Script de Validación Técnica** | Demostración matemática ejecutable: parche 3x3 a mano vs OpenCV, normalización, umbrales YOLO y comparación. | [evaluacion_tecnica_uniguajira.py](./evaluacion_tecnica_uniguajira.py) |
+| **🎬 Guion del Video Demo (5 min)** | Estructura minuto a minuto para la sustentación audiovisual en vivo requerida por el docente. | [GUION_VIDEO_DEMO_5_MINUTOS.md](./GUION_VIDEO_DEMO_5_MINUTOS.md) |
+| **📊 Dataset de Pruebas** | Muestras de prueba reales y anotaciones ground truth (vehículo, placa, daños). | [dataset_pruebas/](./dataset_pruebas/) |
+| **🗄️ Modelo Relacional SQL** | Script DDL de tablas `tickets_parqueadero` y `espacios_parqueo` para PostgreSQL. | [supabase_schema.sql](./supabase_schema.sql) |
 
 ---
 
@@ -8,6 +23,14 @@
 
 ```
 ParkVision/
+├── INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.md  # 📄 Informe completo según rúbrica
+├── evaluacion_tecnica_uniguajira.py             # 🧮 Código de validación teórica A a E
+├── GUION_VIDEO_DEMO_5_MINUTOS.md                # 🎬 Guion de grabación
+├── supabase_schema.sql                          # 🗄️ DDL de base de datos relacional
+├── dataset_pruebas/                             # 📊 Conjunto de datos propio
+│   ├── anotaciones_ground_truth.json
+│   └── README.md
+│
 ├── parkvision-app/           # Aplicación Móvil (React Native + Expo SDK 52 + NativeWind)
 │   ├── app/                  # Rutas Expo Router (Tabs: Bahías, Entrada, Salida, Historial)
 │   │   ├── (tabs)/
@@ -27,8 +50,6 @@ ParkVision/
 │   ├── yolov8n.pt            # Modelo de detección local ultrarrápido YOLOv8
 │   ├── iniciar_servidor_vision.bat # Script de inicio rápido en Windows
 │   └── requirements.txt      # Dependencias Python
-│
-├── supabase_schema.sql       # Script DDL de PostgreSQL para tablas, índices y RLS
 └── README.md
 ```
 
