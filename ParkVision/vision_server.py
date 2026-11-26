@@ -559,7 +559,7 @@ Analiza las imágenes en conjunto con máxima rigurosidad y responde ÚNICAMENTE
             }
         }
 
-        modelos = [GEMINI_MODEL, "gemini-3.5-flash", "gemini-flash-latest", "gemini-3-flash-preview"]
+        modelos = ["gemini-3-flash-preview", "gemini-2.5-flash", GEMINI_MODEL, "gemini-flash-latest", "gemini-3.5-flash"]
         modelos_unicos = list(dict.fromkeys([m for m in modelos if m]))
 
         for modelo in modelos_unicos:
@@ -646,19 +646,26 @@ Responde ÚNICAMENTE en JSON con este formato:
             }
         }
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            cand = data.get("candidates", [])
-            if cand:
-                res_txt = cand[0]["content"]["parts"][0]["text"].strip()
-                if res_txt.startswith("```"):
-                    res_txt = re.sub(r"^```(?:json)?\s*", "", res_txt)
-                    res_txt = re.sub(r"\s*```$", "", res_txt)
-                parsed = json.loads(res_txt)
-                print(f"[GEMINI AUDITORÍA SALIDA] ✓ Comparación exitosa: Hubo cambios = {parsed.get('hubo_cambios')}")
-                return parsed
+        modelos_salida = ["gemini-3-flash-preview", "gemini-2.5-flash", GEMINI_MODEL, "gemini-flash-latest"]
+        modelos_unicos = list(dict.fromkeys([m for m in modelos_salida if m]))
+
+        for mod in modelos_unicos:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent?key={GEMINI_API_KEY}"
+            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    cand = data.get("candidates", [])
+                    if cand:
+                        res_txt = cand[0]["content"]["parts"][0]["text"].strip()
+                        if res_txt.startswith("```"):
+                            res_txt = re.sub(r"^```(?:json)?\s*", "", res_txt)
+                            res_txt = re.sub(r"\s*```$", "", res_txt)
+                        parsed = json.loads(res_txt)
+                        print(f"[GEMINI AUDITORÍA SALIDA ({mod})] ✓ Comparación exitosa: Hubo cambios = {parsed.get('hubo_cambios')}")
+                        return parsed
+            except Exception as e_mod:
+                print(f"[GEMINI AUDITORÍA SALIDA ({mod})] Reintentando con otro modelo: {e_mod}")
 
     except Exception as e:
         print(f"[GEMINI AUDITORÍA SALIDA] Error comparando: {e}")
@@ -1061,26 +1068,29 @@ async def analizar_archivo_endpoint(
                     color_final = res_gemini.get("color") or "Gris / Plata"
 
                     placa_gem = (res_gemini.get("placa") or "").strip().upper()
-                    placa_match = re.search(r"[A-Z]{3}-?\d{2}[A-Z0-9]?", placa_gem)
-                    if placa_match:
-                        p_val = placa_match.group(0)
-                        if len(p_val) == 6 and "-" not in p_val:
-                            p_val = f"{p_val[:3]}-{p_val[3:]}"
-                        placa_final = p_val
+                    placa_norm = normalizar_placa(placa_gem)
+                    if placa_norm:
+                        placa_final = placa_norm
                         conf_placa = res_gemini.get("confianza_placa", 95)
-                    elif placa_gem and len(placa_gem) >= 5:
+                    elif placa_gem and len(placa_gem) >= 5 and placa_gem != "EN-REVISION":
                         placa_final = placa_gem
                         conf_placa = 80
                     else:
-                        # Si Gemini no distinguió la placa, OCR local rápido solo sobre el mejor frame
-                        res_ocr = detectar_placa_y_color(mejor_frame, None)
-                        placa_ocr = res_ocr.get("placa", "")
-                        if placa_ocr and placa_ocr != "EN-REVISION":
-                            placa_final = placa_ocr
-                            conf_placa = res_ocr.get("confianza_placa", 75)
-                        else:
-                            placa_final = ""
-                            conf_placa = 0
+                        # Si Gemini no distinguió la placa, aplicar EasyOCR local sobre los fotogramas clave del recorrido
+                        placa_final = ""
+                        conf_placa = 0
+                        cands_a_escanear = keyframes_recorrido + [c["frame"] for c in candidatos_autos[:5] if c["frame"] not in keyframes_recorrido]
+                        for kf in cands_a_escanear:
+                            try:
+                                res_ocr = extraer_placa_y_marcas(kf)
+                                placa_ocr = res_ocr.get("placa", "")
+                                if placa_ocr and placa_ocr != "EN-REVISION":
+                                    placa_final = placa_ocr
+                                    conf_placa = res_ocr.get("confianza_placa", 80)
+                                    print(f"[OCR LOCAL] ✓ Placa detectada en fotograma del video: {placa_final} ({conf_placa}%)")
+                                    break
+                            except Exception as e_ocr:
+                                print(f"[OCR LOCAL] Error analizando fotograma: {e_ocr}")
 
                     danos_acumulados = []
                     for d in res_gemini.get("danos_previos", []):

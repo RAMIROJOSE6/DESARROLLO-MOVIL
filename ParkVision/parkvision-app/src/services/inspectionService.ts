@@ -409,12 +409,28 @@ class InspectionService {
               videoUrlServidor: data.video_url || uri,
             };
           } else {
-            console.warn(`[INSPECCION WEB] Servidor respondió con status ${res.status}`);
+            const errTxt = await res.text().catch(() => '');
+            console.warn(`[INSPECCION WEB] Servidor respondió con status ${res.status}:`, errTxt);
           }
         }
       } catch (errWeb) {
         console.warn('[INSPECCION WEB] Error procesando video/foto:', errWeb);
       }
+
+      // En Web no ejecutar estrategias móviles nativas (FileSystem.uploadAsync o FormData mock)
+      return {
+        servidorConectado: false,
+        placa: '',
+        marca: 'Automóvil',
+        color: '',
+        horaIngreso,
+        espacioAsignado: espacioLibre,
+        danosEntrada: [],
+        suciedadFiltrada: 0,
+        diagnosticoTexto: `El servidor de visión artificial reportó un error al procesar el archivo.`,
+        confianzaIA: 0,
+        frameCapturadoUrl: uri,
+      };
     }
 
     // ESTRATEGIA 1 (NATIVA): Subida de archivo por FileSystem.uploadAsync de Expo
@@ -886,12 +902,21 @@ class InspectionService {
               servidorConectado: true,
             };
           } else {
-            console.warn(`[SALIDA WEB] Servidor respondió con status ${res.status}`);
+            const errTxt = await res.text().catch(() => '');
+            console.warn(`[SALIDA WEB] Servidor respondió con status ${res.status}:`, errTxt);
           }
         }
       } catch (errSalidaWeb) {
         console.warn('[SALIDA WEB] Error en análisis:', errSalidaWeb);
       }
+
+      // En Web no ejecutar estrategias móviles nativas
+      return {
+        huboCambios: false,
+        nuevosDanos: [],
+        diagnostico: 'Auditoría de salida completada.',
+        servidorConectado: false,
+      };
     }
 
     // ESTRATEGIA 1 (NATIVA): Subida de archivo directa con FileSystem.uploadAsync de Expo
