@@ -2,6 +2,8 @@
 ## PROYECTO FINAL: PARKVISION – ASIGNATURA IOT (ENFOQUE EN VISIÓN ARTIFICIAL)
 **Universidad de La Guajira – Facultad de Ingeniería**  
 **Docente:** Ing. Eduardo Sierra Fragozo  
+**Integrantes:** Ramiro José Gómez Agámez y Pedro Bruges  
+**Cliente:** AutoParqueadero & Centro de Servicios "La Península" (Calle 4 N 4-28, Riohacha)  
 **Plataforma de Entrega:** Enlace de YouTube (No listado) o Google Drive  
 **Duración Total:** 4:45 a 5:00 minutos  
 
@@ -10,11 +12,11 @@
 ### ESTRUCTURA DE TIEMPO Y PARTICIPACIÓN
 
 ```
-[00:00 - 00:45] Bloque 1: Presentación, Cliente y Problema de Negocio (Integrante 1)
-[00:45 - 02:00] Bloque 2: Demostración en Vivo: Proceso de Ingreso y Mapa de Bahías (Integrante 1)
-[02:00 - 03:00] Bloque 3: Demostración en Vivo: Auditoría Pericial de Salida y WhatsApp (Integrante 2)
-[03:00 - 04:15] Bloque 4: Explicación Técnica y Operaciones del Semestre (Integrante 3 / Integrante 1)
-[04:15 - 05:00] Bloque 5: Métricas, Casos de Falla y Cierre (Todos los Integrantes)
+[00:00 - 00:45] Bloque 1: Presentación, Cliente y Problema Bilateral de Negocio (Ramiro Gómez y Pedro Bruges)
+[00:45 - 02:00] Bloque 2: Demostración en Vivo: Proceso de Ingreso y Mapa de Bahías (Ramiro Gómez)
+[02:00 - 03:00] Bloque 3: Demostración en Vivo: Auditoría Pericial de Salida y WhatsApp (Pedro Bruges)
+[03:00 - 04:15] Bloque 4: Explicación Técnica y Operaciones de Visión en IoT (Ramiro Gómez)
+[04:15 - 05:00] Bloque 5: Métricas, Casos de Falla y Cierre (Pedro Bruges y Ramiro Gómez)
 ```
 
 ---
@@ -22,11 +24,11 @@
 ### MINUTO A MINUTO DETALLADO
 
 #### ⏱️ MINUTO 0:00 - 0:45 | BLOQUE 1: INTRODUCCIÓN Y CLIENTE
-* **Qué se muestra en pantalla:** Cámara con los integrantes presentándose y diapositiva / pantalla inicial de ParkVision con el logo de la Universidad de La Guajira.
+* **Qué se muestra en pantalla:** Cámara con Ramiro Gómez y Pedro Bruges presentándose y pantalla inicial de ParkVision con el logo de la Universidad de La Guajira.
 * **Qué decir:**
-  > "Buenas tardes, profesor Eduardo Sierra y compañeros. Presentamos el proyecto final de la asignatura Internet de las Cosas (IoT), con enfoque en Visión Artificial: **ParkVision**, desarrollado para el **AutoParqueadero y Centro de Servicios El Rodadero** en la ciudad de Riohacha.
+  > "Buenas tardes, profesor Eduardo Sierra y compañeros. Presentamos el proyecto final de la asignatura Internet de las Cosas (IoT), con enfoque especializado en Visión Artificial: **ParkVision**, desarrollado para el **AutoParqueadero y Centro de Servicios La Península**, ubicado en la Calle 4 N 4-28 en Riohacha.
   > 
-  > El problema crítico que resuelve el sistema son los constantes reclamos económicos por rayones y abolladuras que los clientes aseguran haber sufrido dentro del parqueadero, costándole al negocio más de un millón de pesos mensuales en latonería, además de la lentitud del registro manual. Hoy demostraremos cómo automatizamos la custodia vehicular de punta a punta mediante visión artificial y una app móvil conectada a una base de datos en tiempo real."
+  > El problema crítico que resuelve el sistema es la falta de certeza y transparencia al momento del ingreso y salida de los autos. Esta aplicación asegura la fidelidad de la información para ambas partes: **al dueño del parqueadero** lo blinda ante reclamos falsos de latonería que antes le costaban más de un millón y medio de pesos al mes; y **al dueño del auto** le da total tranquilidad, pues recibe en su WhatsApp un acta digital con fotos que certifican exactamente en qué estado entregó su patrimonio, garantizándole que cualquier alteración real durante el servicio será detectada objetivamente."
 
 ---
 

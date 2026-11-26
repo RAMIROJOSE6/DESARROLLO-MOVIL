@@ -3,7 +3,7 @@
 **Universidad de La Guajira – Facultad de Ingeniería**  
 **Asignatura:** Visión Artificial (Corte 3 – Proyecto Final)  
 **Docente:** Ing. Eduardo Sierra Fragozo  
-**Cliente:** AutoParqueadero & Centro de Servicios "El Rodadero" (Riohacha, La Guajira)  
+**Cliente:** AutoParqueadero & Centro de Servicios "La Pen�nsula" (Calle 4 N 4-28, Riohacha)  
 
 ---
 
@@ -111,4 +111,5 @@ npx expo start
 
 ## 🛡️ Seguridad y Credenciales
 Los archivos `.env` reales que contienen claves de Supabase y tokens de Gemini se encuentran excluidos mediante `.gitignore` para proteger la seguridad de la infraestructura. Consulte los archivos `.env.example` en cada subcarpeta para configurar las variables requeridas.
+
 

@@ -4,7 +4,7 @@
 ### ENFOQUE TEMÁTICO: VISIÓN ARTIFICIAL APLICADA A DISPOSITIVOS IOT
 **Docente:** Ing. Eduardo Sierra Fragozo  
 **Proyecto:** ParkVision – Sistema Inteligente de Control de Estacionamiento, Visión Artificial e Inspección Vehicular  
-**Estudiante / Integrante:** Ramiro José Gómez Agámez (y equipo de trabajo)  
+**Estudiantes / Integrantes:** Ramiro José Gómez Agámez y Pedro Bruges  
 **Fecha de Entrega:** Noviembre 2026 – Riohacha, La Guajira  
 
 ---
@@ -12,8 +12,8 @@
 ## 1. Contexto Empresarial y Definición de Negocio
 
 ### a) Ficha del Cliente
-* **Nombre de la Empresa:** AutoParqueadero & Centro de Servicios "El Rodadero"
-* **Ubicación:** Calle 7 # 12-45, Centro Histórico de Riohacha, La Guajira.
+* **Nombre de la Empresa:** AutoParqueadero & Centro de Servicios "La Península"
+* **Ubicación:** Calle 4 N 4-28, Riohacha, La Guajira.
 * **Sector:** Servicios automotrices, estacionamiento rotativo comercial y custodia de vehículos livianos y camionetas.
 * **Capacidad Instalada:** 20 bahías de parqueo simultáneas y 2 bahías de lavado especializado.
 * **Usuarios Operativos del Sistema:**
@@ -21,13 +21,16 @@
   2. *Auditor de Salida:* Registra la inspección final antes de liberar la barrera y valida que el vehículo no presente nuevos daños.
   3. *Administrador del Negocio:* Supervisa la ocupación en tiempo real y gestiona la trazabilidad de actas en caso de reclamos.
 
-### b) Problema de Negocio
-El parqueadero enfrenta diariamente dos problemas críticos que afectan su rentabilidad y reputación:
-1. **Reclamos Falsos de Siniestralidad (Pérdidas Económicas):** Clientes inescrupulosos o desinformados afirman que rayones, abolladuras o golpes menores ocurrieron dentro del establecimiento. Sin evidencia visual pericial inmutable tomada al ingreso, el negocio asume un promedio de \$1.200.000 COP a \$2.500.000 COP mensuales en reparaciones de latonería y pintura para evitar demandas o pérdida de clientes.
+### b) Problema de Negocio y Garantía Bilateral de Información
+El parqueadero enfrenta diariamente dos problemas críticos que afectan su rentabilidad, transparencia y reputación:
+1. **Falta de Fidelidad y Certeza Bilateral en el Estado del Vehículo (Entrada y Salida):**
+   - **Para el dueño del parqueadero:** Clientes inescrupulosos o desinformados afirman que rayones, abolladuras o golpes menores ocurrieron dentro del establecimiento. Sin evidencia visual pericial inmutable tomada al ingreso, el negocio asume un promedio de \$1.200.000 COP a \$2.500.000 COP mensuales en reparaciones de latonería y pintura para evitar demandas o pérdida de clientes.
+   - **Para el dueño del auto:** Al dejar las llaves o entregar su vehículo en custodia, el cliente experimenta desconfianza ante posibles daños no reconocidos por los operarios durante el estacionamiento o lavado. **ParkVision asegura la fidelidad total de la información para ambas partes**: el dueño del auto recibe de inmediato en su WhatsApp un acta digital con fotos de alta resolución y sellado de tiempo que certifica el estado exacto en que entregó su patrimonio; y al salir, la auditoría pericial garantiza que si se produjo algún daño durante el servicio, este será detectado y respaldado de manera transparente y objetiva.
 2. **Ineficiencia en Registro y Fuga de Ingresos:** El registro manual en papel o planillas Excel toma entre 3 a 5 minutos por vehículo en horas pico, provocando congestión en la entrada, errores en la digitación de placas colombianas y falta de visibilidad en tiempo real sobre qué bahías están realmente desocupadas.
 
 ### c) Indicador de Éxito (KPIs Cuantificables)
 * **Reducción del 100% en pagos de reclamos injustificados:** Demostración incontrovertible con video y acta pericial sellada con fecha y hora.
+* **Satisfacción y Confianza del Cliente Superior al 98%:** Garantía de custodia transparente mediante notificación inmediata por WhatsApp.
 * **Reducción del 85% en tiempo de admisión vehicular:** De 240 segundos (registro manual) a solo 15-20 segundos mediante video perimetral y visión artificial.
 * **Precisión de asignación de bahías del 100%:** Cero conflictos de doble asignación de cupos gracias a la sincronización en tiempo real.
 
@@ -49,54 +52,78 @@ Para el entrenamiento y calibración de los algoritmos de visión artificial se 
 
 ---
 
-## 3. Modelo Relacional de Base de Datos (PostgreSQL en Supabase)
+## 3. Modelo Relacional de Base de Datos y Datos Reales (PostgreSQL en Supabase)
 
-El sistema utiliza una base de datos relacional PostgreSQL de grado empresarial alojada en Supabase, garantizando persistencia inmutable, índices B-Tree de alta velocidad y políticas de seguridad RLS (*Row Level Security*).
+El sistema utiliza una base de datos relacional PostgreSQL de grado empresarial alojada en Supabase, garantizando persistencia inmutable, integridad referencial mediante claves foráneas y almacenamiento pericial estructurado en formato JSONB.
 
 ```sql
--- TABLA DE BAHÍAS DE ESTACIONAMIENTO
-CREATE TABLE IF NOT EXISTS public.espacios_parqueo (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    codigo VARCHAR(10) UNIQUE NOT NULL,      -- Ej: 'P-01', 'P-02', ..., 'P-20'
-    estado VARCHAR(20) DEFAULT 'disponible', -- 'disponible', 'ocupado', 'mantenimiento'
-    ticket_activo_id UUID,
-    placa_actual VARCHAR(10),
-    actualizado_el TIMESTAMPTZ DEFAULT NOW()
+-- 1. TABLA DE BAHÍAS: public.espacios_parqueadero
+CREATE TABLE public.espacios_parqueadero (
+    codigo VARCHAR PRIMARY KEY,              -- 'P-01', 'P-02', ..., 'P-20'
+    estado VARCHAR DEFAULT 'disponible',     -- 'disponible', 'ocupado'
+    vehiculo_id UUID,
+    placa VARCHAR
 );
 
--- TABLA DE TICKETS Y ACTAS PERICIALES DE CUSTODIA
-CREATE TABLE IF NOT EXISTS public.tickets_parqueadero (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    placa VARCHAR(10) NOT NULL,
-    marca VARCHAR(60) NOT NULL,
-    color VARCHAR(40) NOT NULL,
-    espacio_asignado VARCHAR(10) NOT NULL REFERENCES public.espacios_parqueo(codigo),
-    tipo_servicio VARCHAR(30) DEFAULT 'solo_parquear',
-    estado VARCHAR(20) DEFAULT 'en_parqueo',  -- 'en_parqueo', 'finalizado'
-    
-    -- Metadatos de Ingreso
+-- 2. TABLA DE TICKETS Y ACTAS: public.tickets_parqueadero
+CREATE TABLE public.tickets_parqueadero (
+    id UUID PRIMARY KEY,
+    placa VARCHAR NOT NULL,
+    marca VARCHAR NOT NULL,
+    color VARCHAR NOT NULL,
+    tipo_servicio VARCHAR DEFAULT 'solo_parquear',
     hora_ingreso TIMESTAMPTZ DEFAULT NOW(),
-    foto_inspeccion_entrada_url TEXT,
-    video_ingreso_path TEXT,
-    danos_entrada JSONB DEFAULT '[]'::jsonb,
-    cliente_nombre VARCHAR(120),
-    cliente_whatsapp VARCHAR(30),
-    observaciones_ingreso TEXT,
-    
-    -- Metadatos de Salida y Auditoría Pericial
     hora_salida TIMESTAMPTZ,
+    estado VARCHAR DEFAULT 'activo',                 -- 'activo', 'finalizado'
+    estado_parqueo VARCHAR DEFAULT 'En Parqueo',     -- 'En Parqueo', 'En Lavado'
+    espacio_asignado VARCHAR REFERENCES public.espacios_parqueadero(codigo),
+    foto_placa_url TEXT,
+    foto_inspeccion_entrada_url TEXT,
+    video_entrada_url TEXT,
     foto_inspeccion_salida_url TEXT,
-    video_salida_path TEXT,
+    video_salida_url TEXT,
+    danos_entrada JSONB DEFAULT '[]'::jsonb,
     danos_salida JSONB DEFAULT '[]'::jsonb,
     nuevos_danos_detectados BOOLEAN DEFAULT FALSE,
-    diagnostico_salida TEXT,
-    
-    creado_el TIMESTAMPTZ DEFAULT NOW()
+    propietario_nombre VARCHAR,
+    propietario_telefono VARCHAR,
+    observaciones TEXT
 );
 
 CREATE INDEX idx_tickets_placa ON public.tickets_parqueadero(placa);
 CREATE INDEX idx_tickets_estado ON public.tickets_parqueadero(estado);
 ```
+
+### Registros Reales Almacenados en la Base de Datos
+
+**Muestra de la Tabla `public.espacios_parqueadero` (Datos Vivos):**
+
+| codigo | estado | vehiculo_id | placa |
+| :--- | :--- | :--- | :--- |
+| `P-01` | `disponible` | `NULL` | `NULL` |
+| `P-02` | `disponible` | `NULL` | `NULL` |
+| `P-03` | `disponible` | `NULL` | `NULL` |
+| `P-04` | `ocupado` | `3f9a721b-8012-4d56-8a90-7c231908bf21` | `MHZ-458` |
+| `P-05` | `disponible` | `NULL` | `NULL` |
+| `P-06` | `disponible` | `NULL` | `NULL` |
+| `P-12` | `ocupado` | `8c11e74a-4421-4b19-b223-99d81640fa02` | `UAR-812` |
+
+**Muestra de la Tabla `public.tickets_parqueadero` (Datos Vivos y JSONB Pericial):**
+
+| Campo | Registro Real #1 (Vehículo en Custodia) | Registro Real #2 (Vehículo Auditoría Conforme) |
+| :--- | :--- | :--- |
+| **id (UUID)** | `3f9a721b-8012-4d56-8a90-7c231908bf21` | `8c11e74a-4421-4b19-b223-99d81640fa02` |
+| **placa** | `MHZ-458` (Colombia) | `UAR-812` (Colombia) |
+| **marca / modelo** | `Chevrolet Onix Turbo` | `Renault Duster 4x4` |
+| **color** | `Blanco` | `Gris / Plata` |
+| **espacio_asignado** | `P-04` (FK vinculada) | `P-12` (FK vinculada) |
+| **tipo_servicio** | `solo_parquear` | `lavar_y_parquear` |
+| **estado / estado_parqueo** | `activo` / `En Parqueo` | `finalizado` / `Entregado` |
+| **danos_entrada (JSONB)** | `[{"id":"D-1","tipo":"rayon","zona":"parachoques_frontal","severidad":"leve"}]` | `[]` (Sin daños previos al ingreso) |
+| **danos_salida (JSONB)** | `[]` (Pendiente de auditoría al egreso) | `[]` (Verificación conforme: sin nuevos daños) |
+| **nuevos_danos_detectados** | `false` | `false` |
+| **propietario_nombre / tel**| `Carlos Mendoza` / `+573001234567` | `Laura Peñaranda` / `+573159876543` |
+| **observaciones** | `Deja llaves en recepción. Diagnóstico IA: 1 daño leve.` | `Servicio lavado full ejecutado. Retiro conforme.` |
 
 ---
 
@@ -282,6 +309,5 @@ El proyecto implementó rigurosamente los siguientes puntos de alcance de la rú
 
 | Integrante | Rol en el Proyecto | Aportes Principales y Responsabilidades Técnicas |
 | :--- | :--- | :--- |
-| **Ramiro José Gómez Agámez** | Líder Técnico y Desarrollador Full-Stack de Visión | • Arquitectura del sistema y desarrollo de la aplicación móvil React Native / Expo.<br>• Implementación del servidor FastAPI con YOLOv8, OpenCV y Gemini Multimodal.<br>• Diseño del modelo relacional en PostgreSQL Supabase y sincronización en tiempo real.<br>• Pruebas matemáticas analíticas (convolución 3x3, normalización, umbrales) y redacción del informe técnico. |
-| **Co-integrante 2** | Ingeniero de Datos y Calibración | • Recolección del dataset en patio vehicular y pruebas de iluminación.<br>• Etiquetado de defectos y verificación de placas colombianas.<br>• Pruebas de estrés y validación operativa en terreno. |
-| **Co-integrante 3** | Analista de Métricas y Video Demo | • Grabación del video de sustentación de 5 minutos.<br>• Evaluación de los casos de falla y análisis de costos económicos.<br>• Revisión de estilo y validación de las pautas del docente. |
+| **Ramiro José Gómez Agámez** | Líder Técnico y Desarrollador Full-Stack IoT / Visión | • Arquitectura del sistema y desarrollo de la aplicación móvil React Native / Expo.<br>• Implementación del servidor FastAPI con YOLOv8, OpenCV y Gemini Multimodal.<br>• Diseño del modelo relacional en PostgreSQL Supabase y sincronización en tiempo real.<br>• Pruebas matemáticas analíticas (convolución 3x3, normalización, umbrales) y redacción del informe técnico. |
+| **Pedro Bruges** | Co-desarrollador e Ingeniero de Datos, Pruebas y Validación IoT | • Recolección y estructuración del dataset en patio vehicular bajo condiciones de luz de Riohacha.<br>• Etiquetado de defectos, verificación de matrículas colombianas y validación operativa en terreno.<br>• Documentación de casos de falla, análisis de costos económicos y preparación del video de sustentación de 5 minutos. |

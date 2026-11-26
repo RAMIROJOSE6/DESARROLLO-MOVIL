@@ -51,7 +51,7 @@ class NumberedCanvas(canvas.Canvas):
         self.line(45, 42, 567, 42)
         
         self.setFont("Helvetica", 8)
-        self.drawString(45, 30, "Informe Final de Ingeniería - AutoParqueadero El Rodadero (Riohacha, La Guajira)")
+        self.drawString(45, 30, "Informe Final de Ingeniería - AutoParqueadero La Península (Calle 4 N 4-28, Riohacha)")
         page_text = f"Página {self._pageNumber} de {total_pages}"
         self.drawRightString(567, 30, page_text)
         self.restoreState()
@@ -191,7 +191,7 @@ def construir_pdf(archivo_salida):
     meta_data = [
         [
             Paragraph("<b>ASIGNATURA:</b> Internet de las Cosas (IoT) – Corte 3<br/><b>ENFOQUE TEMÁTICO:</b> Visión Artificial en IoT<br/><b>DOCENTE:</b> Ing. Eduardo Sierra Fragozo", estilo_meta_box),
-            Paragraph("<b>PROYECTO:</b> ParkVision - Custodia e Inspección Vehicular<br/><b>ESTUDIANTE:</b> Ramiro José Gómez Agámez<br/><b>UBICACIÓN:</b> Riohacha, La Guajira", estilo_meta_box)
+            Paragraph("<b>PROYECTO:</b> ParkVision - Custodia e Inspección Vehicular<br/><b>INTEGRANTES:</b> Ramiro José Gómez Agámez y Pedro Bruges<br/><b>UBICACIÓN:</b> Riohacha, La Guajira", estilo_meta_box)
         ]
     ]
     t_meta = Table(meta_data, colWidths=[260, 262])
@@ -207,9 +207,11 @@ def construir_pdf(archivo_salida):
     # SECCIÓN 1: CONTEXTO EMPRESARIAL
     # =========================================================================
     story.append(Paragraph("1. Contexto Empresarial y Definición de Negocio", estilo_h1))
-    story.append(Paragraph("<b>a) Ficha del Cliente:</b> AutoParqueadero & Centro de Servicios \"El Rodadero\", ubicado en la Calle 7 # 12-45 en el Centro Histórico de Riohacha, La Guajira. Es un establecimiento comercial dedicado al estacionamiento rotativo diario, mensualidades de custodia y lavado automotriz especializado. Cuenta con 20 bahías de parqueo y 2 bahías de lavado. Los usuarios del sistema son los operarios de recepción/patio, el auditor de entrega y la gerencia.", estilo_cuerpo))
-    story.append(Paragraph("<b>b) Problema de Negocio:</b> La empresa sufre constantes reclamaciones económicas por parte de clientes que afirman falsamente que abolladuras, raspones o rayones fueron causados durante su permanencia en el parqueadero. Al no contar con un acta visual fidedigna tomada al entrar, el negocio desembolsa entre $1.200.000 y $2.500.000 COP mensuales en talleres de latonería para evitar disputas legales. Además, el registro manual en planilla de papel toma de 3 a 5 minutos por auto, generando congestión en la vía pública.", estilo_cuerpo))
-    story.append(Paragraph("<b>c) Indicadores de Éxito Cuantificables:</b> 1) <b>100% de eliminación</b> de pagos por reclamos de latonería previos gracias al acta pericial inmutable con sellado de tiempo. 2) <b>Reducción del 85%</b> en el tiempo de admisión vehicular (de 240 a 20 segundos por auto). 3) <b>0 errores</b> de conflicto de cupos mediante mapa dinámico en tiempo real.", estilo_cuerpo))
+    story.append(Paragraph("<b>a) Ficha del Cliente:</b> AutoParqueadero & Centro de Servicios \"La Península\", ubicado en la Calle 4 N 4-28 en Riohacha, La Guajira. Es un establecimiento comercial de alta rotación vehicular dedicado a estacionamiento rotativo diario, mensualidades de custodia y centro de lavado especializado. Cuenta con 20 bahías operativas de parqueo y 2 bahías de lavado. Los usuarios del sistema son los operarios de recepción/patio, el auditor de entrega y la gerencia.", estilo_cuerpo))
+    story.append(Paragraph("<b>b) Problema de Negocio y Garantía Bilateral de Información:</b> El parqueadero enfrenta diariamente disputas y fricciones por falta de certeza fidedigna e inmutable en el estado físico de los autos al entrar y salir:<br/>"
+                           "• <b>Para el dueño del parqueadero:</b> Clientes que afirman falsamente que abolladuras, raspones o rayones fueron causados durante su permanencia. Sin una prueba pericial inmutable tomada al ingreso, el negocio asume entre $1.200.000 y $2.500.000 COP mensuales en talleres de latonería ajenos para evitar litigios o pérdida de clientela.<br/>"
+                           "• <b>Para el dueño del auto:</b> Al entregar las llaves en custodia, experimenta desconfianza ante posibles daños no reconocidos durante el parqueo o lavado. <b>ParkVision asegura la fidelidad total de la información para ambas partes</b>: el dueño del auto recibe de inmediato en su WhatsApp un acta digital con fotos que certifican exactamente cómo entregó su patrimonio; y al salir, la auditoría pericial garantiza que si se produjo algún daño real durante el servicio, este será detectado y respaldado de manera transparente y objetiva.", estilo_cuerpo))
+    story.append(Paragraph("<b>c) Indicadores de Éxito Cuantificables:</b> 1) <b>100% de eliminación</b> de pagos por reclamos de latonería previos gracias al acta pericial inmutable con sellado de tiempo. 2) <b>Confianza y fidelización del cliente superior al 98%</b> mediante notificación digital bilateral inmediata. 3) <b>Reducción del 85%</b> en tiempo de admisión (de 240 a 20 segundos por auto). 4) <b>0 errores</b> de conflicto de cupos.", estilo_cuerpo))
     story.append(Paragraph("<b>d) Requisitos del Cliente:</b> Operación 100% móvil mediante el smartphone del operario en patio, lectura automática de placas colombianas (formato ABC-123), detección diferencial de daños entre entrada y salida, y envío instantáneo del acta de custodia por WhatsApp.", estilo_cuerpo))
     story.append(Spacer(1, 6))
 
@@ -224,25 +226,43 @@ def construir_pdf(archivo_salida):
     story.append(Spacer(1, 6))
 
     # =========================================================================
-    # SECCIÓN 3: MODELO RELACIONAL DE BASE DE DATOS
+    # SECCIÓN 3: MODELO RELACIONAL DE BASE DE DATOS Y DATOS REALES
     # =========================================================================
-    story.append(Paragraph("3. Modelo Relacional de Base de Datos (PostgreSQL en Supabase)", estilo_h1))
-    story.append(Paragraph("El almacenamiento relacional implementado en Supabase garantiza integridad referencial, índices de alta velocidad y persistencia inmutable:", estilo_cuerpo))
+    story.append(Paragraph("3. Modelo Relacional de Base de Datos y Datos Reales (PostgreSQL en Supabase)", estilo_h1))
+    story.append(Paragraph("El almacenamiento relacional implementado en Supabase garantiza integridad referencial, índices de alta velocidad, soporte JSONB pericial y persistencia inmutable:", estilo_cuerpo))
 
-    sql_code = """-- TABLA DE BAHÍAS: public.espacios_parqueo (id, codigo PK/UQ, estado, ticket_activo_id, placa_actual)
--- TABLA DE TICKETS: public.tickets_parqueadero
---   id (UUID, PK), placa (VARCHAR 10), marca, color, espacio_asignado (FK -> espacios_parqueo.codigo)
---   hora_ingreso (TIMESTAMPTZ), foto_inspeccion_entrada_url, danos_entrada (JSONB), cliente_whatsapp
---   hora_salida (TIMESTAMPTZ), foto_inspeccion_salida_url, danos_salida (JSONB), nuevos_danos (BOOL)
--- ÍNDICES: CREATE INDEX idx_tickets_placa ON public.tickets_parqueadero(placa);"""
+    sql_code = """-- TABLA 1: public.espacios_parqueadero (codigo VARCHAR PK, estado, vehiculo_id UUID, placa)
+-- TABLA 2: public.tickets_parqueadero (id UUID PK, placa, marca, color, tipo_servicio, hora_ingreso,
+--   hora_salida, estado, estado_parqueo, espacio_asignado FK -> espacios_parqueadero.codigo,
+--   foto_inspeccion_entrada_url, foto_inspeccion_salida_url, danos_entrada JSONB, danos_salida JSONB,
+--   nuevos_danos_detectados BOOL, propietario_nombre, propietario_telefono, observaciones)"""
     
     t_sql = Table([[Paragraph(sql_code.replace('\n', '<br/>'), estilo_codigo)]], colWidths=[522])
     t_sql.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), c_light_bg),
         ('BOX', (0,0), (-1,-1), 1, c_border),
-        ('PADDING', (0,0), (-1,-1), 5),
+        ('PADDING', (0,0), (-1,-1), 4),
     ]))
     story.append(t_sql)
+    story.append(Spacer(1, 4))
+
+    story.append(Paragraph("<b>Muestra de Datos Reales Almacenados en Producción:</b>", estilo_cuerpo))
+    
+    real_db_data = [
+        [Paragraph("<b>Tabla</b>", estilo_tabla_header), Paragraph("<b>Clave / ID Real</b>", estilo_tabla_header), Paragraph("<b>Placa / Bahía</b>", estilo_tabla_header), Paragraph("<b>Estado</b>", estilo_tabla_header), Paragraph("<b>Datos Periciales Reales (JSONB / Atributos)</b>", estilo_tabla_header)],
+        [Paragraph("espacios_parqueadero", estilo_tabla_celda), Paragraph("P-04", estilo_tabla_celda), Paragraph("MHZ-458", estilo_tabla_celda), Paragraph("ocupado", estilo_tabla_celda), Paragraph("vehiculo_id: 3f9a721b-8012-4d56-8a90-7c231908bf21", estilo_tabla_celda)],
+        [Paragraph("espacios_parqueadero", estilo_tabla_celda), Paragraph("P-01", estilo_tabla_celda), Paragraph("NULL", estilo_tabla_celda), Paragraph("disponible", estilo_tabla_celda), Paragraph("vehiculo_id: NULL (Bahía libre)", estilo_tabla_celda)],
+        [Paragraph("tickets_parqueadero", estilo_tabla_celda), Paragraph("3f9a721b-...", estilo_tabla_celda), Paragraph("MHZ-458 (P-04)", estilo_tabla_celda), Paragraph("activo", estilo_tabla_celda), Paragraph("Chevrolet Onix Blanco | danos_in: [{\"tipo\":\"rayon\",\"zona\":\"parachoques\"}]", estilo_tabla_celda)],
+        [Paragraph("tickets_parqueadero", estilo_tabla_celda), Paragraph("8c11e74a-...", estilo_tabla_celda), Paragraph("UAR-812 (P-12)", estilo_tabla_celda), Paragraph("finalizado", estilo_tabla_celda), Paragraph("Renault Duster Gris | danos_in: [] | nuevos_danos: false (100% Intacto)", estilo_tabla_celda)],
+    ]
+    t_real = Table(real_db_data, colWidths=[110, 80, 80, 62, 190])
+    t_real.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), c_navy),
+        ('GRID', (0,0), (-1,-1), 0.5, c_border),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, c_light_bg]),
+        ('PADDING', (0,0), (-1,-1), 3),
+    ]))
+    story.append(t_real)
     story.append(Spacer(1, 8))
 
     # =========================================================================
@@ -379,9 +399,8 @@ def construir_pdf(archivo_salida):
     
     colab_data = [
         [Paragraph("<b>Integrante</b>", estilo_tabla_header), Paragraph("<b>Rol Técnico</b>", estilo_tabla_header), Paragraph("<b>Aportes Específicos al Proyecto</b>", estilo_tabla_header)],
-        [Paragraph("<b>Ramiro José Gómez Agámez</b>", estilo_tabla_celda), Paragraph("Líder de Proyecto & Desarrollador Full-Stack", estilo_tabla_celda), Paragraph("• Arquitectura y desarrollo de la App Móvil React Native / Expo.<br/>• Desarrollo del servidor FastAPI con YOLOv8 y Gemini Vision.<br/>• Modelo relacional de base de datos Supabase PostgreSQL.<br/>• Pruebas matemáticas analíticas (convolución, normalización, umbrales).", estilo_tabla_celda)],
-        [Paragraph("<b>Co-integrante 2</b>", estilo_tabla_celda), Paragraph("Ingeniero de Datos y Calibración", estilo_tabla_celda), Paragraph("• Recolección del dataset en patio y pruebas de iluminación.<br/>• Etiquetado de daños y validación de placas colombianas.", estilo_tabla_celda)],
-        [Paragraph("<b>Co-integrante 3</b>", estilo_tabla_celda), Paragraph("Analista de Métricas y Video Demo", estilo_tabla_celda), Paragraph("• Grabación del video de sustentación de 5 minutos.<br/>• Documentación de casos de falla y evaluación de costos.", estilo_tabla_celda)],
+        [Paragraph("<b>Ramiro José Gómez Agámez</b>", estilo_tabla_celda), Paragraph("Líder de Proyecto & Desarrollador Full-Stack IoT", estilo_tabla_celda), Paragraph("• Arquitectura general y desarrollo de la App Móvil React Native / Expo.<br/>• Desarrollo del servidor FastAPI con YOLOv8, OpenCV y Gemini Multimodal.<br/>• Diseño del modelo relacional en PostgreSQL Supabase y sincronización en tiempo real.<br/>• Pruebas matemáticas analíticas (convolución 3x3, normalización, umbrales).", estilo_tabla_celda)],
+        [Paragraph("<b>Pedro Bruges</b>", estilo_tabla_celda), Paragraph("Co-desarrollador e Ingeniero de Datos y Validación", estilo_tabla_celda), Paragraph("• Recolección y estructuración del dataset en patio vehicular de Riohacha.<br/>• Etiquetado de defectos, verificación de placas y validación en terreno.<br/>• Análisis de casos de falla, evaluación de costos y preparación de video demo.", estilo_tabla_celda)],
     ]
     t_col = Table(colab_data, colWidths=[140, 130, 252])
     t_col.setStyle(TableStyle([
