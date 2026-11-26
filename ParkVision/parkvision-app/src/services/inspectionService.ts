@@ -1082,6 +1082,9 @@ class InspectionService {
         formData.append('imagen_entrada_base64', base64Entrada);
       }
       formData.append('ticket_id', ticketId);
+      formData.append('placa_esperada', ticket.placa || '');
+      formData.append('marca_esperada', ticket.marca || '');
+      formData.append('color_esperado', ticket.color || '');
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 180000);
@@ -1096,6 +1099,7 @@ class InspectionService {
 
       if (res.ok) {
         const data = await res.json();
+        const esMismoVehiculo = data.es_mismo_vehiculo !== false;
         const nuevos: DanoVehiculo[] = (data.nuevos_danos || []).map((d: any) => ({
           id: d.id,
           tipo: d.tipo,
@@ -1108,7 +1112,7 @@ class InspectionService {
         }));
 
         return {
-          esMismoVehiculo: data.es_mismo_vehiculo !== false,
+          esMismoVehiculo,
           alertaVehiculoDistinto: data.alerta_vehiculo_distinto,
           huboCambios: data.hubo_cambios,
           nuevosDanos: nuevos,
@@ -1121,7 +1125,7 @@ class InspectionService {
       console.warn('Fallo en endpoint multipart de salida, reintentando con base64:', errMultipart);
     }
 
-    // ESTRATEGIA 2: Fallback por Base64 JSON
+    // ESTRATEGIA 3: Fallback por Base64 JSON
     const base64Salida = await this.obtenerBase64DeMedio(uriSalida, esVideo);
     if (base64Salida) {
       try {
@@ -1134,6 +1138,9 @@ class InspectionService {
             imagen_entrada_base64: base64Entrada,
             imagen_salida_base64: base64Salida,
             ticket_id: ticketId,
+            placa_esperada: ticket.placa || '',
+            marca_esperada: ticket.marca || '',
+            color_esperado: ticket.color || '',
           }),
           signal: controller.signal,
         });
@@ -1141,6 +1148,7 @@ class InspectionService {
 
         if (res.ok) {
           const data = await res.json();
+          const esMismoVehiculo = data.es_mismo_vehiculo !== false;
           const nuevos: DanoVehiculo[] = (data.nuevos_danos || []).map((d: any) => ({
             id: d.id,
             tipo: d.tipo,
@@ -1153,7 +1161,7 @@ class InspectionService {
           }));
 
           return {
-            esMismoVehiculo: data.es_mismo_vehiculo !== false,
+            esMismoVehiculo,
             alertaVehiculoDistinto: data.alerta_vehiculo_distinto,
             huboCambios: data.hubo_cambios,
             nuevosDanos: nuevos,
