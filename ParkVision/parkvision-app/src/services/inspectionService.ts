@@ -918,6 +918,8 @@ class InspectionService {
     uriSalida: string,
     esVideo: boolean = true
   ): Promise<{
+    esMismoVehiculo: boolean;
+    alertaVehiculoDistinto?: string;
     huboCambios: boolean;
     nuevosDanos: DanoVehiculo[];
     fotoSalidaUrl?: string;
@@ -959,6 +961,9 @@ class InspectionService {
             formData.append('imagen_entrada_base64', base64Entrada);
           }
           formData.append('ticket_id', ticketId);
+          formData.append('placa_esperada', ticket.placa || '');
+          formData.append('marca_esperada', ticket.marca || '');
+          formData.append('color_esperado', ticket.color || '');
 
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 180000);
@@ -973,6 +978,7 @@ class InspectionService {
 
           if (res.ok) {
             const data = await res.json();
+            const esMismoVehiculo = data.es_mismo_vehiculo !== false;
             const nuevos: DanoVehiculo[] = (data.nuevos_danos || []).map((d: any) => ({
               id: d.id,
               tipo: d.tipo,
@@ -985,6 +991,8 @@ class InspectionService {
             }));
 
             return {
+              esMismoVehiculo,
+              alertaVehiculoDistinto: data.alerta_vehiculo_distinto,
               huboCambios: data.hubo_cambios,
               nuevosDanos: nuevos,
               fotoSalidaUrl: data.foto_salida_url,
@@ -1003,6 +1011,7 @@ class InspectionService {
 
       // En Web no ejecutar estrategias móviles nativas
       return {
+        esMismoVehiculo: true,
         huboCambios: false,
         nuevosDanos: [],
         diagnostico: 'Auditoría de salida completada.',
@@ -1023,12 +1032,16 @@ class InspectionService {
           parameters: {
             ticket_id: ticketId,
             imagen_entrada_base64: base64Entrada,
+            placa_esperada: ticket.placa || '',
+            marca_esperada: ticket.marca || '',
+            color_esperado: ticket.color || '',
           },
         }
       );
 
       if (uploadResult.status >= 200 && uploadResult.status < 300) {
         const data = JSON.parse(uploadResult.body);
+        const esMismoVehiculo = data.es_mismo_vehiculo !== false;
         const nuevos: DanoVehiculo[] = (data.nuevos_danos || []).map((d: any) => ({
           id: d.id,
           tipo: d.tipo,
@@ -1041,6 +1054,8 @@ class InspectionService {
         }));
 
         return {
+          esMismoVehiculo,
+          alertaVehiculoDistinto: data.alerta_vehiculo_distinto,
           huboCambios: data.hubo_cambios,
           nuevosDanos: nuevos,
           fotoSalidaUrl: data.foto_salida_url,
@@ -1093,6 +1108,8 @@ class InspectionService {
         }));
 
         return {
+          esMismoVehiculo: data.es_mismo_vehiculo !== false,
+          alertaVehiculoDistinto: data.alerta_vehiculo_distinto,
           huboCambios: data.hubo_cambios,
           nuevosDanos: nuevos,
           fotoSalidaUrl: data.foto_salida_url,
@@ -1136,6 +1153,8 @@ class InspectionService {
           }));
 
           return {
+            esMismoVehiculo: data.es_mismo_vehiculo !== false,
+            alertaVehiculoDistinto: data.alerta_vehiculo_distinto,
             huboCambios: data.hubo_cambios,
             nuevosDanos: nuevos,
             fotoSalidaUrl: data.foto_salida_url,
@@ -1149,6 +1168,7 @@ class InspectionService {
     }
 
     return {
+      esMismoVehiculo: true,
       huboCambios: false,
       nuevosDanos: [],
       diagnostico: 'Auditoría conforme: No se registraron alteraciones físicas detectables.',
@@ -1166,7 +1186,9 @@ class InspectionService {
     danosDetectadosReales: DanoVehiculo[] = [],
     diagnosticoSalidaReal?: string,
     fotoSalidaUrl?: string,
-    videoSalidaUrl?: string
+    videoSalidaUrl?: string,
+    observacionesSalida?: string,
+    conformidadCliente: 'conforme' | 'no_conforme' = 'conforme'
   ): Promise<VehiculoTicket> {
     const ticketIndex = this.tickets.findIndex((t) => t.id === id);
     if (ticketIndex === -1) throw new Error('Vehículo no encontrado');
@@ -1194,6 +1216,8 @@ class InspectionService {
       nuevosDanosDetectados: huboNuevosDanos,
       diferenciaDetectada: huboNuevosDanos,
       suciedadIgnoradaContador: (ticketActual.suciedadIgnoradaContador || 0) + 1,
+      observacionesSalida,
+      conformidadCliente,
     };
 
     // 1. Liberar el espacio en memoria
@@ -1312,6 +1336,14 @@ class InspectionService {
       ? `🚨 *NOVEDAD DETECTADA EN SALIDA:*\nSe identificó ${ticket.danosSalida?.length} daño(s) que no estaban al entrar:\n${ticket.danosSalida?.map((d) => `  • ${d.zonaTexto}: ${d.descripcion} [Severidad: ${d.severidad.toUpperCase()}]`).join('\n')}`
       : `✅ *ENTREGA CONFORME:*\nVehículo entregado exactamente en el mismo estado de ingreso. Cero daños ocasionados en parqueadero/lavadero.`;
 
+    const conformidadTxt = ticket.conformidadCliente === 'no_conforme'
+      ? `⚠️ *Conformidad del Cliente:* NO CONFORME / PRESENTA RECLAMO`
+      : `✅ *Conformidad del Cliente:* CONFORME / ACEPTADO`;
+
+    const obsTxt = ticket.observacionesSalida
+      ? `📝 *Observaciones de Entrega:* ${ticket.observacionesSalida}\n`
+      : '';
+
     return (
       `🏁 *ACTA DE SALIDA Y ENTREGA VEHICULAR*\n\n` +
       `👤 *Cliente:* ${ticket.propietarioNombre || 'Propietario'}\n` +
@@ -1319,6 +1351,8 @@ class InspectionService {
       `📍 *Bahía Liberada:* ${ticket.espacioAsignado} (Estado: LIBRE)\n` +
       `🕒 *Entrada:* ${ticket.horaIngreso}\n` +
       `🏁 *Salida:* ${ticket.horaSalida || 'En proceso'}\n\n` +
+      `${conformidadTxt}\n` +
+      `${obsTxt}\n` +
       `${estadoDano}\n\n` +
       `📹 *Comparación de videos de entrada vs. salida auditada por Visión Artificial.*`
     );

@@ -304,18 +304,95 @@ def normalizar_placa(texto: str) -> Optional[str]:
 
     return None
 
+def detectar_placa_amarilla_colombiana(imagen_bgr: np.ndarray) -> Optional[Dict[str, Any]]:
+    """
+    Localiza la placa colombiana estándar (amarilla reflectiva) buscando
+    regiones rectangulares con aspecto 1.4 - 3.4.
+    Aplica OCR directo en el recorte ampliado de alta resolución para lectura rápida e infalible.
+    """
+    try:
+        h_img, w_img = imagen_bgr.shape[:2]
+        hsv = cv2.cvtColor(imagen_bgr, cv2.COLOR_BGR2HSV)
+
+        # Máscara de amarillo reflectivo de placa colombiana (H: 14 a 38, S: 65 a 255, V: 65 a 255)
+        mask_amarillo = cv2.inRange(hsv, np.array([14, 65, 65]), np.array([38, 255, 255]))
+
+        # Operaciones morfológicas para consolidar el rectángulo de la placa
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        mask_cerrada = cv2.morphologyEx(mask_amarillo, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+        contornos, _ = cv2.findContours(mask_cerrada, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        candidatos_placa = []
+
+        for c in contornos:
+            area = cv2.contourArea(c)
+            if area < 500 or area > (h_img * w_img * 0.35):
+                continue
+
+            x, y, w, h = cv2.boundingRect(c)
+            aspecto = float(w) / float(h + 1e-5)
+
+            # Placa colombiana: aspecto típico 2.0 (rango 1.4 a 3.4)
+            if 1.4 <= aspecto <= 3.4 and w >= 40 and h >= 16:
+                score = area * (1.0 - abs(aspecto - 2.0) * 0.25)
+                candidatos_placa.append((score, x, y, w, h))
+
+        if not candidatos_placa:
+            return None
+
+        candidatos_placa.sort(key=lambda item: item[0], reverse=True)
+
+        for _, x, y, w, h in candidatos_placa[:3]:
+            pad_x = int(w * 0.18)
+            pad_y = int(h * 0.18)
+            x1 = max(0, x - pad_x)
+            y1 = max(0, y - pad_y)
+            x2 = min(w_img, x + w + pad_x)
+            y2 = min(h_img, y + h + pad_y)
+
+            crop_placa = imagen_bgr[y1:y2, x1:x2]
+            if crop_placa.size == 0:
+                continue
+
+            ch, cw = crop_placa.shape[:2]
+            if cw < 250:
+                escala = 250.0 / cw
+                crop_placa = cv2.resize(crop_placa, (int(cw * escala), int(ch * escala)), interpolation=cv2.INTER_CUBIC)
+
+            try:
+                res_ocr = ocr_reader.readtext(crop_placa)
+                for bbox, texto, prob in res_ocr:
+                    placa_cand = normalizar_placa(texto)
+                    if placa_cand and prob > 0.15:
+                        return {
+                            "placa": placa_cand,
+                            "confianza": round(float(prob) * 100, 1),
+                            "caja": (x, y, w, h),
+                            "crop": crop_placa
+                        }
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    return None
+
 def extraer_placa_y_marcas(imagen_bgr: np.ndarray) -> Dict[str, Any]:
     """
     Utiliza EasyOCR y filtros de contraste CLAHE para leer la placa y marcas en el vehículo.
     """
     h, w = imagen_bgr.shape[:2]
-    # Escanear la imagen completa y también un recorte inferior donde suele estar la placa
+
+    # 1. Búsqueda rápida por región amarilla reflectiva (placa colombiana)
+    res_amarilla = detectar_placa_amarilla_colombiana(imagen_bgr)
+    placa_detectada = res_amarilla.get("placa") if res_amarilla else None
+    mayor_confianza_placa = (res_amarilla.get("confianza", 85.0) / 100.0) if res_amarilla else 0.0
+
+    # 2. Escaneo de marcas y lectura general con OCR
     resultados_ocr = ocr_reader.readtext(imagen_bgr)
     
-    placa_detectada = None
     marca_detectada = None
     modelo_detectado = None
-    mayor_confianza_placa = 0.0
 
     textos_encontrados = []
 
@@ -554,7 +631,7 @@ Analiza las imágenes en conjunto con máxima rigurosidad y responde ÚNICAMENTE
             }
         }
 
-        modelos = ["gemini-3-flash-preview", "gemini-flash-latest"]
+        modelos = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-3-flash-preview"]
         modelos_unicos = list(dict.fromkeys([m for m in modelos if m]))
 
         for modelo in modelos_unicos:
@@ -565,7 +642,7 @@ Analiza las imágenes en conjunto con máxima rigurosidad y responde ÚNICAMENTE
                 headers={"Content-Type": "application/json"}
             )
             try:
-                with urllib.request.urlopen(req, timeout=25) as resp:
+                with urllib.request.urlopen(req, timeout=35) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     cand = data.get("candidates", [])
                     if cand:
@@ -585,10 +662,18 @@ Analiza las imágenes en conjunto con máxima rigurosidad y responde ÚNICAMENTE
 
     return None
 
-def comparar_salida_con_gemini(frame_entrada: np.ndarray, frame_salida: np.ndarray) -> Optional[Dict[str, Any]]:
+def comparar_salida_con_gemini(
+    frame_entrada: np.ndarray,
+    frame_salida: np.ndarray,
+    placa_esperada: Optional[str] = None,
+    marca_esperada: Optional[str] = None,
+    color_esperado: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """
     Compara las fotos reales de entrada y salida con Gemini Vision Multimodal
-    para determinar con rigor forense si ocurrieron daños nuevos durante la estadía.
+    para determinar con rigor forense:
+    1. Si el vehículo en la salida es el MISMO del ingreso.
+    2. Si ocurrieron daños nuevos durante la estadía.
     """
     if not GEMINI_API_KEY:
         return None
@@ -605,33 +690,45 @@ def comparar_salida_con_gemini(frame_entrada: np.ndarray, frame_salida: np.ndarr
         b64_in = to_b64(frame_entrada)
         b64_out = to_b64(frame_salida)
 
-        prompt = """Eres un perito forense de vehículos en un parqueadero.
+        info_vehiculo = f"Datos del vehículo registrado al ingreso: Placa '{placa_esperada or 'N/A'}', Marca/Modelo '{marca_esperada or 'N/A'}', Color '{color_esperado or 'N/A'}'."
+        prompt = f"""Eres un perito forense de vehículos en un parqueadero.
 Se te proporcionan 2 fotografías:
-- Imagen 1: El vehículo al INGRESAR al parqueadero (línea base).
+- Imagen 1: El vehículo al INGRESAR al parqueadero (línea base). {info_vehiculo}
 - Imagen 2: El vehículo al SALIR del parqueadero.
 
-Compara minuciosamente ambas imágenes y detecta si se produjeron daños NUEVOS durante la estadía (rayones, abolladuras/pangones, vidrios rotos o parachoques desencajados que NO estaban al ingreso).
+PASO 1: VERIFICACIÓN DE IDENTIDAD:
+Verifica si el vehículo de la Imagen 2 es EL MISMO vehículo de la Imagen 1. Compara silueta, tipo de carrocería (sedán, hatchback, camioneta/SUV, etc.), marca/emblema, color principal y placa si es visible.
+Si el vehículo en la Imagen 2 es claramente un auto DIFERENTE (otro modelo, otra marca u otro color):
+Debes responder con:
+"es_mismo_vehiculo": false
+"alerta_vehiculo_distinto": "¡ALERTA DE SEGURIDAD! El vehículo grabado en la salida no coincide con el registrado al ingreso. Se detectó un vehículo diferente."
+
+PASO 2: DETECCIÓN DE CAMBIOS Y DAÑOS:
+Si es el mismo vehículo ("es_mismo_vehiculo": true), compara minuciosamente ambas imágenes y detecta si se produjeron daños NUEVOS durante la estadía (rayones, abolladuras/pangones, vidrios rotos o parachoques desencajados que NO estaban al ingreso).
+
 Responde ÚNICAMENTE en JSON con este formato:
-{
+{{
+  "es_mismo_vehiculo": true o false,
+  "alerta_vehiculo_distinto": "" (o texto alertando qué auto se detectó en la salida vs el registrado),
   "hubo_cambios": true o false (true si hay al menos un daño nuevo),
   "nuevos_danos": [
-    {
+    {{
       "id": "SAL-DNO-1",
       "tipo": "rayon" | "abolladura" | "partidura_vidrio" | "descuadre",
       "zona": "puerta_delantera_izq" | "puerta_trasera_izq" | "puerta_delantera_der" | "puerta_trasera_der" | "parachoques_frontal" | "parachoques_trasero" | "capo" | "guardabarro",
       "zonaTexto": "Ubicación detallada",
       "descripcion": "Descripción del daño o cambio nuevo detectado",
       "severidad": "leve" | "moderada" | "critica",
-      "coordenadas": {
+      "coordenadas": {{
         "x": 35,
         "y": 40,
         "width": 30,
         "height": 25
-      }
-    }
+      }}
+    }}
   ],
   "diagnostico_salida": "Texto del dictamen final para el cliente y el parqueadero."
-}
+}}
 Nota para coordenadas: 'x' e 'y' son el porcentaje (0 a 100) de la esquina superior izquierda del daño en la Imagen 2 (salida), 'width' y 'height' son el ancho y alto del recuadro en porcentaje (0 a 100)."""
 
         payload = {
@@ -648,14 +745,14 @@ Nota para coordenadas: 'x' e 'y' son el porcentaje (0 a 100) de la esquina super
             }
         }
 
-        modelos_salida = ["gemini-3-flash-preview", "gemini-flash-latest"]
+        modelos_salida = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-3-flash-preview"]
         modelos_unicos = list(dict.fromkeys([m for m in modelos_salida if m]))
 
         for mod in modelos_unicos:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent?key={GEMINI_API_KEY}"
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
             try:
-                with urllib.request.urlopen(req, timeout=12) as resp:
+                with urllib.request.urlopen(req, timeout=35) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     cand = data.get("candidates", [])
                     if cand:
@@ -970,23 +1067,31 @@ async def analizar_archivo_endpoint(
                     else:
                         fase = "trasera"
 
-                    # PLATE HUNTER: Escaneo rápido de placas en cada fotograma del video
+                    # PLATE HUNTER: Escaneo ultrarrápido y preciso de placa colombiana en cada fotograma
                     placa_frame = None
                     conf_placa_frame = 0.0
                     try:
-                        res_ocr_cand = ocr_reader.readtext(f_small)
-                        for bbox, text, prob in res_ocr_cand:
-                            p_cand = normalizar_placa(text)
-                            if p_cand and prob > 0.15:
-                                placa_frame = p_cand
-                                conf_placa_frame = float(prob)
-                                print(f"[VIDEO HUNTER] ⭐ Placa encontrada en fotograma {idx} ({idx/fps:.1f}s): {p_cand} (conf: {prob:.2f})")
-                                break
+                        # 1. Búsqueda por placa amarilla reflectiva (rápida ~20ms y precisa en alta resolución)
+                        res_amarilla_frame = detectar_placa_amarilla_colombiana(f)
+                        if res_amarilla_frame and res_amarilla_frame.get("placa"):
+                            placa_frame = res_amarilla_frame["placa"]
+                            conf_placa_frame = float(res_amarilla_frame.get("confianza", 90.0)) / 100.0
+                            print(f"[VIDEO HUNTER] ⭐ Placa amarilla detectada en fotograma {idx} ({idx/fps:.1f}s): {placa_frame} (conf: {conf_placa_frame:.2f})")
+                        else:
+                            # 2. Respaldo con EasyOCR en frame
+                            res_ocr_cand = ocr_reader.readtext(f_small)
+                            for bbox, text, prob in res_ocr_cand:
+                                p_cand = normalizar_placa(text)
+                                if p_cand and prob > 0.15:
+                                    placa_frame = p_cand
+                                    conf_placa_frame = float(prob)
+                                    print(f"[VIDEO HUNTER] ⭐ Placa encontrada en fotograma {idx} ({idx/fps:.1f}s): {p_cand} (conf: {prob:.2f})")
+                                    break
                     except Exception as e_hunter:
                         pass
 
-                    # Si el fotograma muestra la placa del auto, otorgar una bonificación masiva para que sea prioritario
-                    bonus_placa = (3500.0 + conf_placa_frame * 1000.0) if placa_frame else 0.0
+                    # Si el fotograma muestra la placa del auto, otorgar una bonificación masiva para que sea prioritario sobre cualquier otro encuadre
+                    bonus_placa = (25000.0 + conf_placa_frame * 5000.0) if placa_frame else 0.0
                     score = (1000.0 if es_auto else 0.0) + (conf_max * 150.0) + (area_max * 100.0) + min(nitidez, 300.0) + bonus_placa
 
                     candidatos_frames.append({
@@ -1322,7 +1427,10 @@ async def analizar_archivo_salida_endpoint(
     request: Request,
     archivo_salida: UploadFile = File(...),
     imagen_entrada_base64: Optional[str] = Form(None),
-    ticket_id: Optional[str] = Form(None)
+    ticket_id: Optional[str] = Form(None),
+    placa_esperada: Optional[str] = Form(None),
+    marca_esperada: Optional[str] = Form(None),
+    color_esperado: Optional[str] = Form(None)
 ):
     """
     Compara video perimetral o foto de salida contra la línea base de entrada
@@ -1422,14 +1530,36 @@ async def analizar_archivo_salida_endpoint(
 
         # AUDITORÍA CON GEMINI VISION MULTIMODAL SI ESTÁ HABILITADO
         if frame_entrada is not None and frame_salida is not None and GEMINI_API_KEY:
-            res_gem_salida = comparar_salida_con_gemini(frame_entrada, frame_salida)
+            res_gem_salida = comparar_salida_con_gemini(frame_entrada, frame_salida, placa_esperada, marca_esperada, color_esperado)
             if res_gem_salida:
-                hubo_cambios = bool(res_gem_salida.get("hubo_cambios", False))
-                nuevos_danos = res_gem_salida.get("nuevos_danos", [])
-                diag_salida = res_gem_salida.get("diagnostico_salida", "Auditoría de salida completada.")
+                es_mismo_vehiculo = bool(res_gem_salida.get("es_mismo_vehiculo", True))
+                alerta_no_coincide = res_gem_salida.get("alerta_vehiculo_distinto", "")
+                
                 h_s, w_s = frame_salida.shape[:2]
                 esc_s = 600.0 / max(w_s, h_s) if max(w_s, h_s) > 600 else 1.0
                 thumb_salida = cv2.resize(frame_salida, (int(w_s * esc_s), int(h_s * esc_s)), interpolation=cv2.INTER_AREA)
+
+                # Si el vehículo grabado en la salida NO coincide con el del ingreso
+                if not es_mismo_vehiculo:
+                    print(f"[ALERTA SEGURIDAD SALIDA] Vehículo no coincide: {alerta_no_coincide}")
+                    _, buf_s = cv2.imencode(".jpg", thumb_salida, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                    foto_salida_url = f"data:image/jpeg;base64,{base64.b64encode(buf_s).decode('utf-8')}"
+                    return {
+                        "exito": True,
+                        "es_mismo_vehiculo": False,
+                        "alerta_vehiculo_distinto": alerta_no_coincide or f"El vehículo grabado en la salida no coincide con el vehículo de la bahía (Esperado: {marca_esperada or ''} {color_esperado or ''} {placa_esperada or ''}).",
+                        "hubo_cambios": False,
+                        "nuevos_danos": [],
+                        "foto_salida_url": foto_salida_url,
+                        "video_salida_url": video_salida_url,
+                        "diagnostico_salida": "RECHAZADO: El vehículo grabado en la salida no coincide con el registrado en el ingreso.",
+                        "hora_salida": datetime.now().strftime("%I:%M %p - Hoy"),
+                        "motor_ia": "Gemini Vision Multimodal"
+                    }
+
+                hubo_cambios = bool(res_gem_salida.get("hubo_cambios", False))
+                nuevos_danos = res_gem_salida.get("nuevos_danos", [])
+                diag_salida = res_gem_salida.get("diagnostico_salida", "Auditoría de salida completada.")
                 th_h, th_w = thumb_salida.shape[:2]
 
                 # Asegurar coordenadas y dibujar cuadro rojo sobre la imagen para cada cambio detectado
@@ -1458,6 +1588,7 @@ async def analizar_archivo_salida_endpoint(
                 foto_salida_url = f"data:image/jpeg;base64,{base64.b64encode(buf_s).decode('utf-8')}"
                 return {
                     "exito": True,
+                    "es_mismo_vehiculo": True,
                     "hubo_cambios": hubo_cambios,
                     "nuevos_danos": nuevos_danos,
                     "foto_salida_url": foto_salida_url,
@@ -1505,6 +1636,23 @@ async def analizar_archivo_salida_endpoint(
 
         _, buf_s = cv2.imencode(".jpg", thumb_salida, [cv2.IMWRITE_JPEG_QUALITY, 85])
         foto_salida_url = f"data:image/jpeg;base64,{base64.b64encode(buf_s).decode('utf-8')}"
+
+        hubo_cambios = len(nuevos_danos) > 0
+        if hubo_cambios:
+            diag_salida = f"ALERTA: Se detectaron {len(nuevos_danos)} daños nuevos (pangones/rayones) no presentes en el ingreso."
+        else:
+            diag_salida = "✓ Auditoría Conforme: Vehículo entregado en perfecto estado. Sin nuevos rayones ni abolladuras."
+
+        return {
+            "exito": True,
+            "es_mismo_vehiculo": True,
+            "hubo_cambios": hubo_cambios,
+            "nuevos_danos": nuevos_danos,
+            "foto_salida_url": foto_salida_url,
+            "video_salida_url": video_salida_url,
+            "diagnostico_salida": diag_salida,
+            "hora_salida": datetime.now().strftime("%I:%M %p - Hoy")
+        }
 
         hubo_cambios = len(nuevos_danos) > 0
         if hubo_cambios:

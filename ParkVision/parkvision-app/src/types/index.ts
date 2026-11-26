@@ -79,4 +79,6 @@ export interface VehiculoTicket {
   propietarioNombre?: string;
   propietarioTelefono?: string;
   observaciones?: string;
+  observacionesSalida?: string;
+  conformidadCliente?: 'conforme' | 'no_conforme';
 }

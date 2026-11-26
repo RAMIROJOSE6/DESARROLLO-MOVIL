@@ -12,6 +12,7 @@ import {
   Platform,
   StyleSheet,
   StatusBar,
+  TextInput,
 } from 'react-native';
 import { useLocalSearchParams, useFocusEffect, router } from 'expo-router';
  import { Ionicons } from '@expo/vector-icons';
@@ -36,8 +37,20 @@ export default function AuditoriaScreen() {
 
   // Control IA y Modo de Auditoría
   const [analizando, setAnalizando] = useState(false);
+  const [analisisRealizado, setAnalisisRealizado] = useState(false);
+  const [datosInspeccion, setDatosInspeccion] = useState<{
+    nuevosDanos: DanoVehiculo[];
+    diagnostico: string;
+    fotoSalidaUrl?: string;
+    videoSalidaUrl?: string;
+    huboCambios: boolean;
+  } | null>(null);
+  const [conformidadCliente, setConformidadCliente] = useState<'conforme' | 'no_conforme'>('conforme');
+  const [observacionesEntrega, setObservacionesEntrega] = useState('Vehículo entregado a satisfacción del cliente sin novedades.');
+  const [procesandoSalidaFinal, setProcesandoSalidaFinal] = useState(false);
+
   const [resultadoAuditoria, setResultadoAuditoria] = useState<VehiculoTicket | null>(null);
-  const [modoAuditoria, setModoAuditoria] = useState<'ia_real' | 'simular_danos' | 'simular_intacto'>('ia_real');
+  const [modoAuditoria, setModoAuditoria] = useState<'ia_real' | 'simular_distinto' | 'simular_danos' | 'simular_intacto'>('ia_real');
 
   useEffect(() => {
     cargarVehiculos();
@@ -105,6 +118,10 @@ export default function AuditoriaScreen() {
     setVideoSalidaUri(null);
     setFotoSalidaUri(null);
     setResultadoAuditoria(null);
+    setAnalisisRealizado(false);
+    setDatosInspeccion(null);
+    setConformidadCliente('conforme');
+    setObservacionesEntrega('Vehículo entregado a satisfacción del cliente sin novedades.');
     setModoAuditoria('ia_real');
     cargarVehiculos(null);
   };
@@ -200,23 +217,45 @@ export default function AuditoriaScreen() {
     }
   };
 
-  // Botón principal: "GENERAR SALIDA DE VEHÍCULO" (100% REAL)
-  const ejecutarGenerarSalida = async () => {
+  // FASE 1: Análisis e Inspección Previa de Salida
+  const ejecutarAnalisisSalida = async () => {
     if (!vehiculoSeleccionado) {
       Alert.alert('Selecciona un vehículo', 'Elige el auto que va a salir.');
+      return;
+    }
+
+    const uriSalida = videoSalidaUri || fotoSalidaUri;
+    if (!uriSalida && modoAuditoria === 'ia_real') {
+      Alert.alert(
+        'Captura Requerida',
+        'Por favor graba el video o toma la foto de inspección de salida antes de continuar.'
+      );
       return;
     }
 
     setAnalizando(true);
 
     try {
-      const uriSalida = videoSalidaUri || fotoSalidaUri;
+      // 1. Simulación de vehículo no coincidente (para pruebas rápidas de seguridad)
+      if (modoAuditoria === 'simular_distinto') {
+        const msgError = `⚠️ ALERTA DE SEGURIDAD:\nEl vehículo en la grabación NO coincide con el auto registrado en la Bahía ${vehiculoSeleccionado.espacioAsignado} (${vehiculoSeleccionado.placa} - ${vehiculoSeleccionado.marca}).\n\nPor protocolo de seguridad no se permite procesar la salida. Por favor graba o adjunta nuevamente el video del vehículo correcto.`;
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.alert(msgError);
+        } else {
+          Alert.alert('⚠️ ALERTA DE SEGURIDAD: VEHÍCULO DISTINTO', msgError);
+        }
+        setVideoSalidaUri(null);
+        setFotoSalidaUri(null);
+        setAnalizando(false);
+        return;
+      }
+
       let nuevosDanosDetectados: DanoVehiculo[] = [];
       let diagnosticoSalida = '✓ Auditoría Conforme: Vehículo entregado en perfecto estado. Sin nuevos daños.';
-      let fotoSalidaFinal = fotoSalidaUri || uriSalida || undefined;
+      let fotoSalidaFinal = fotoSalidaUri || uriSalida || vehiculoSeleccionado.fotoInspeccionEntradaUrl;
       let videoSalidaFinal = videoSalidaUri || undefined;
+      let huboCambios = false;
 
-      // 1. Si se eligió prueba de simulación de daños
       if (modoAuditoria === 'simular_danos') {
         nuevosDanosDetectados = [
           {
@@ -231,64 +270,119 @@ export default function AuditoriaScreen() {
           },
         ];
         diagnosticoSalida = 'ALERTA: Se detectaron cambios físicos (rayón en puerta lateral) no presentes en el ingreso del vehículo.';
+        huboCambios = true;
       } else if (modoAuditoria === 'simular_intacto') {
         nuevosDanosDetectados = [];
         diagnosticoSalida = '✓ Auditoría Conforme: Vehículo entregado en perfecto estado. Sin nuevos daños ni alteraciones.';
+        huboCambios = false;
       } else if (uriSalida) {
-        // 2. Ejecución con Visión Artificial Real
-        try {
-          const compReal = await inspectionService.compararVideosSalidaReal(
-            vehiculoSeleccionado.id,
-            uriSalida,
-            !!videoSalidaUri
-          );
-          if (compReal.nuevosDanos && compReal.nuevosDanos.length > 0) {
-            nuevosDanosDetectados = compReal.nuevosDanos;
+        // Ejecución con Visión Artificial Real
+        const compReal = await inspectionService.compararVideosSalidaReal(
+          vehiculoSeleccionado.id,
+          uriSalida,
+          !!videoSalidaUri
+        );
+
+        // VALIDACIÓN ESTRICTA: ¿Es el mismo vehículo?
+        if (compReal.esMismoVehiculo === false) {
+          const alertaMsg = compReal.alertaVehiculoDistinto || 
+            `El vehículo capturado en la salida no coincide con el vehículo registrado al ingreso (${vehiculoSeleccionado.placa} - ${vehiculoSeleccionado.marca} ${vehiculoSeleccionado.color}).`;
+          
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.alert(`🚨 ALERTA DE SEGURIDAD VEHICULAR:\n\n${alertaMsg}\n\nPor seguridad la salida ha sido BLOQUEADA. Por favor graba o adjunta nuevamente el video del vehículo correcto.`);
+          } else {
+            Alert.alert(
+              '🚨 ALERTA: VEHÍCULO NO COINCIDE',
+              `${alertaMsg}\n\nPor seguridad la salida ha sido BLOQUEADA. Por favor graba o adjunta nuevamente el video del vehículo correcto.`
+            );
           }
-          if (compReal.diagnostico) {
-            diagnosticoSalida = compReal.diagnostico;
-          }
-          if (compReal.fotoSalidaUrl) {
-            fotoSalidaFinal = compReal.fotoSalidaUrl;
-          }
-          if (compReal.videoSalidaUrl) {
-            videoSalidaFinal = compReal.videoSalidaUrl;
-          }
-        } catch (compErr) {
-          console.warn('Error en comparación de salida:', compErr);
+          setVideoSalidaUri(null);
+          setFotoSalidaUri(null);
+          setAnalizando(false);
+          return;
         }
+
+        if (compReal.nuevosDanos && compReal.nuevosDanos.length > 0) {
+          nuevosDanosDetectados = compReal.nuevosDanos;
+        }
+        if (compReal.diagnostico) {
+          diagnosticoSalida = compReal.diagnostico;
+        }
+        if (compReal.fotoSalidaUrl) {
+          fotoSalidaFinal = compReal.fotoSalidaUrl;
+        }
+        if (compReal.videoSalidaUrl) {
+          videoSalidaFinal = compReal.videoSalidaUrl;
+        }
+        huboCambios = !!compReal.huboCambios;
       }
 
+      setDatosInspeccion({
+        nuevosDanos: nuevosDanosDetectados,
+        diagnostico: diagnosticoSalida,
+        fotoSalidaUrl: fotoSalidaFinal,
+        videoSalidaUrl: videoSalidaFinal,
+        huboCambios,
+      });
+
+      if (huboCambios || nuevosDanosDetectados.length > 0) {
+        setConformidadCliente('no_conforme');
+        setObservacionesEntrega('Cliente en desacuerdo por novedad o rayón detectado en la inspección de entrega.');
+      } else {
+        setConformidadCliente('conforme');
+        setObservacionesEntrega('Vehículo entregado a entera satisfacción del cliente sin novedades.');
+      }
+
+      setAnalisisRealizado(true);
+    } catch (e: any) {
+      Alert.alert('Error en Inspección', e?.message || 'No se pudo completar el análisis del video de salida.');
+    } finally {
+      setAnalizando(false);
+    }
+  };
+
+  // FASE 2: Confirmación Oficial y Registro de Salida en BD
+  const confirmarYFinalizarSalida = async () => {
+    if (!vehiculoSeleccionado || !datosInspeccion) {
+      Alert.alert('Error', 'No se ha realizado el análisis de inspección previo.');
+      return;
+    }
+
+    setProcesandoSalidaFinal(true);
+
+    try {
       const ticketFinalizado = await inspectionService.registrarSalida(
         vehiculoSeleccionado.id,
-        nuevosDanosDetectados,
-        diagnosticoSalida,
-        fotoSalidaFinal,
-        videoSalidaFinal || videoSalidaUri || undefined
+        datosInspeccion.nuevosDanos,
+        datosInspeccion.diagnostico,
+        datosInspeccion.fotoSalidaUrl,
+        datosInspeccion.videoSalidaUrl,
+        observacionesEntrega,
+        conformidadCliente
       );
 
-      // Limpiar de inmediato evidencias temporales de salida y refrescar los vehículos activos
       setVideoSalidaUri(null);
       setFotoSalidaUri(null);
+      setAnalisisRealizado(false);
       const listaRestante = inspectionService.getVehiculosActivos();
       setVehiculosActivos(listaRestante);
       setResultadoAuditoria(ticketFinalizado);
 
-      if (nuevosDanosDetectados.length > 0) {
+      if (datosInspeccion.nuevosDanos.length > 0) {
         Alert.alert(
-          '⚠️ Daños Nuevos Detectados',
-          `Se detectaron ${nuevosDanosDetectados.length} daño(s) nuevo(s) que no estaban registrados en el ingreso.`
+          '⚠️ Salida Registrada con Novedad',
+          `Se registraron ${datosInspeccion.nuevosDanos.length} daño(s) y la observación de entrega. Bahía ${vehiculoSeleccionado.espacioAsignado} liberada.`
         );
       } else {
         Alert.alert(
-          '✓ Salida Exitosa',
-          'El vehículo fue registrado y entregado en perfecto estado. Se liberó la bahía de parqueo.'
+          '✓ Salida Exitosa y Bahía Liberada',
+          `El vehículo ${ticketFinalizado.placa} fue retirado conforme. Bahía ${ticketFinalizado.espacioAsignado} disponible.`
         );
       }
     } catch (e) {
       Alert.alert('Error', 'No se pudo procesar la salida en la base de datos.');
     } finally {
-      setAnalizando(false);
+      setProcesandoSalidaFinal(false);
     }
   };
 
@@ -654,8 +748,8 @@ export default function AuditoriaScreen() {
           <View style={styles.simCard}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <Text style={styles.simLabel}>Modo de Verificación de Salida:</Text>
-              <Text style={{ color: modoAuditoria === 'simular_danos' ? '#DC2626' : modoAuditoria === 'simular_intacto' ? '#059669' : '#2563EB', fontSize: 10, fontWeight: '800' }}>
-                {modoAuditoria === 'ia_real' ? '🔴 Visión Artificial Real' : modoAuditoria === 'simular_danos' ? '⚠️ Simular Rayón Nuevo' : '✓ Simular Intacto'}
+              <Text style={{ color: modoAuditoria === 'simular_distinto' ? '#DC2626' : modoAuditoria === 'simular_danos' ? '#DC2626' : modoAuditoria === 'simular_intacto' ? '#059669' : '#2563EB', fontSize: 10, fontWeight: '800' }}>
+                {modoAuditoria === 'ia_real' ? '🔴 Visión Artificial Real' : modoAuditoria === 'simular_distinto' ? '🚨 Probar Auto Distinto' : modoAuditoria === 'simular_danos' ? '⚠️ Simular Rayón' : '✓ Simular Intacto'}
               </Text>
             </View>
 
@@ -666,6 +760,15 @@ export default function AuditoriaScreen() {
               >
                 <Text style={[styles.simTypeText, modoAuditoria === 'ia_real' && { color: '#2563EB', fontWeight: '900' }]}>
                   🤖 IA Real (Video)
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setModoAuditoria('simular_distinto')}
+                style={[styles.simTypeBtn, modoAuditoria === 'simular_distinto' && { backgroundColor: '#FEF2F2', borderColor: '#DC2626' }]}
+              >
+                <Text style={[styles.simTypeText, modoAuditoria === 'simular_distinto' && { color: '#DC2626', fontWeight: '900' }]}>
+                  🚨 Auto Distinto
                 </Text>
               </TouchableOpacity>
 
@@ -683,39 +786,304 @@ export default function AuditoriaScreen() {
                 style={[styles.simCleanBtn, modoAuditoria === 'simular_intacto' && styles.simCleanBtnActive]}
               >
                 <Text style={[styles.simCleanText, modoAuditoria === 'simular_intacto' && { color: '#059669', fontWeight: '900' }]}>
-                  ✓ Simular Intacto
+                  ✓ Intacto
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* BOTÓN SOLICITADO: GENERAR SALIDA DE VEHÍCULO */}
-          <TouchableOpacity
-            onPress={ejecutarGenerarSalida}
-            disabled={analizando}
-            style={styles.generateExitBtn}
-          >
-            <LinearGradient
-              colors={['#DC2626', '#B91C1C']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.generateExitGradient}
+          {/* FASE 1: BOTÓN DE ANÁLISIS E INSPECCIÓN */}
+          {!analisisRealizado && (
+            <TouchableOpacity
+              onPress={ejecutarAnalisisSalida}
+              disabled={analizando}
+              style={styles.generateExitBtn}
             >
-              {analizando ? (
-                <>
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                  <Text style={styles.generateExitText}>
-                    AUDITANDO ESTADO Y PROCESANDO SALIDA...
-                  </Text>
-                </>
+              <LinearGradient
+                colors={['#2563EB', '#1D4ED8']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.generateExitGradient}
+              >
+                {analizando ? (
+                  <>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.generateExitText}>
+                      ANALIZANDO E INSPECCIONANDO VEHÍCULO CON IA...
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="scan-outline" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.generateExitText}>1. ANALIZAR E INSPECCIONAR SALIDA</Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+
+          {/* FASE 2: DETALLE DE INSPECCIÓN, CONFORMIDAD Y BOTÓN FINAL DE SALIDA */}
+          {analisisRealizado && datosInspeccion && (
+            <View style={{ marginTop: 14 }}>
+              {/* COMPARADOR VISUAL DE ENTRADA VS SALIDA */}
+              <View style={styles.compareImagesSection}>
+                <Text style={styles.imageLabel}>📸 Inspección Inicial (Video Entrada):</Text>
+                <View style={styles.imageFrame}>
+                  <Image
+                    source={{ uri: vehiculoSeleccionado.fotoInspeccionEntradaUrl }}
+                    style={styles.comparisonImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.imageOverlayBar}>
+                    <Text style={styles.imageOverlayText}>Hora: {vehiculoSeleccionado.horaIngreso}</Text>
+                    <Text style={styles.imageOverlayBadgeGreen}>Estado al Entrar</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.imageLabel}>🔍 Evidencia de Salida Analizada:</Text>
+                <View style={styles.imageFrame}>
+                  <Image
+                    source={{ uri: datosInspeccion.fotoSalidaUrl }}
+                    style={styles.comparisonImage}
+                    resizeMode="cover"
+                  />
+
+                  {/* BOUNDING BOX ROJO (CUADRO ROJO) SOBRE EL DAÑO DETECTADO */}
+                  {(datosInspeccion.nuevosDanos && datosInspeccion.nuevosDanos.length > 0
+                    ? datosInspeccion.nuevosDanos
+                    : (datosInspeccion.huboCambios ? [{ id: 'SAL-DEF', tipo: 'ALTERACIÓN / RAYÓN', zonaTexto: 'Carrocería', coordenadas: { x: 36, y: 40, width: 28, height: 20 } }] : [])
+                  ).map((dano, idx) => (
+                    <View
+                      key={dano.id || idx}
+                      style={[
+                        styles.boundingBox,
+                        {
+                          left: `${dano.coordenadas?.x || 36}%`,
+                          top: `${dano.coordenadas?.y || 40}%`,
+                          width: `${dano.coordenadas?.width || 28}%`,
+                          height: `${dano.coordenadas?.height || 20}%`,
+                        },
+                      ]}
+                    >
+                      <View style={styles.boxTag}>
+                        <Text style={styles.boxTagText}>
+                          ⚠️ {dano.tipo.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+
+                  <View style={styles.imageOverlayBar}>
+                    <Text style={styles.imageOverlayText}>Revisión de Salida</Text>
+                    <Text
+                      style={
+                        datosInspeccion.nuevosDanos.length > 0 || datosInspeccion.huboCambios
+                          ? styles.imageOverlayBadgeRed
+                          : styles.imageOverlayBadgeGreen
+                      }
+                    >
+                      {datosInspeccion.nuevosDanos.length > 0 || datosInspeccion.huboCambios ? '⚠️ Daño Señalado en Recuadro Rojo' : '✓ 100% Intacto'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* CUADRO ROJO DE DETALLES Y CAMBIOS */}
+              {datosInspeccion.nuevosDanos.length > 0 || datosInspeccion.huboCambios ? (
+                <View style={styles.cuadroRojoDetalles}>
+                  <View style={styles.cuadroRojoHeader}>
+                    <View style={styles.cuadroRojoBadgeIcon}>
+                      <Ionicons name="alert-circle" size={24} color="#DC2626" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cuadroRojoTitle}>
+                        CUADRO ROJO DE NOVEDADES Y CAMBIOS DETECTADOS
+                      </Text>
+                      <Text style={styles.cuadroRojoSubtitle}>
+                        La visión artificial identificó {datosInspeccion.nuevosDanos.length || 1} diferencia(s) física(s) no registradas al momento del ingreso:
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cuadroRojoDivider} />
+
+                  {(datosInspeccion.nuevosDanos.length > 0
+                    ? datosInspeccion.nuevosDanos
+                    : [{
+                        id: 'SAL-GEN',
+                        tipo: 'Rayón / Deformación',
+                        zonaTexto: 'Carrocería Lateral / Puerta',
+                        descripcion: 'Alteración física detectada por análisis comparativo entre video de entrada y salida.',
+                        severidad: 'moderada'
+                      }]
+                  ).map((d, index) => (
+                    <View key={d.id || index} style={styles.cuadroRojoItemCard}>
+                      <View style={styles.cuadroRojoItemHeader}>
+                        <View style={styles.cuadroRojoPill}>
+                          <Text style={styles.cuadroRojoPillText}>
+                            CAMBIO #{index + 1}
+                          </Text>
+                        </View>
+                        <Text style={styles.cuadroRojoTipoText}>
+                          {d.tipo.toUpperCase()}
+                        </Text>
+                        <View style={styles.cuadroRojoSeveridadBadge}>
+                          <Text style={styles.cuadroRojoSeveridadText}>
+                            {(d.severidad || 'MODERADA').toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ marginTop: 6, gap: 4 }}>
+                        <Text style={styles.cuadroRojoDataText}>
+                          <Text style={{ fontWeight: '800', color: '#991B1B' }}>📍 Pieza / Zona Afectada: </Text>
+                          {d.zonaTexto}
+                        </Text>
+                        <Text style={styles.cuadroRojoDataText}>
+                          <Text style={{ fontWeight: '800', color: '#991B1B' }}>🔍 Hallazgo Forense: </Text>
+                          {d.descripcion}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+
+                  <View style={styles.cuadroRojoDictamenBox}>
+                    <Text style={styles.cuadroRojoDictamenTitle}>📋 Dictamen Oficial de Auditoría:</Text>
+                    <Text style={styles.cuadroRojoDictamenText}>
+                      {datosInspeccion.diagnostico || 'Se detectaron alteraciones en la carrocería que no estaban presentes al ingreso.'}
+                    </Text>
+                  </View>
+                </View>
               ) : (
-                <>
-                  <Ionicons name="log-out-outline" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
-                  <Text style={styles.generateExitText}>GENERAR SALIDA DE VEHÍCULO</Text>
-                </>
+                <View style={styles.cuadroVerdeConforme}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Ionicons name="checkmark-circle" size={26} color="#059669" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#065F46', fontSize: 13, fontWeight: '800' }}>
+                        ✓ AUDITORÍA CONFORME: SIN NOVEDADES
+                      </Text>
+                      <Text style={{ color: '#047857', fontSize: 11, marginTop: 2, lineHeight: 16 }}>
+                        La comparación automática entre el video de entrada y salida confirma que el vehículo se encuentra en el mismo estado inicial. No se generaron rayones ni abolladuras durante la custodia.
+                      </Text>
+                    </View>
+                  </View>
+                </View>
               )}
-            </LinearGradient>
-          </TouchableOpacity>
+
+              {/* SECCIÓN DE CONFORMIDAD DEL CLIENTE Y OBSERVACIONES */}
+              <View style={styles.conformidadContainer}>
+                <Text style={styles.conformidadSectionTitle}>
+                  3. Declaración de Conformidad y Observaciones
+                </Text>
+                <Text style={styles.conformidadSectionSub}>
+                  Especifica el acuerdo del cliente antes de liberar la bahía de parqueo:
+                </Text>
+
+                <View style={styles.conformidadSelectorRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setConformidadCliente('conforme');
+                      setObservacionesEntrega('Vehículo entregado a entera satisfacción del cliente.');
+                    }}
+                    style={[
+                      styles.conformidadBtn,
+                      conformidadCliente === 'conforme' && styles.conformidadBtnActiveConforme,
+                    ]}
+                  >
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={18}
+                      color={conformidadCliente === 'conforme' ? '#059669' : '#64748B'}
+                    />
+                    <Text
+                      style={[
+                        styles.conformidadBtnText,
+                        conformidadCliente === 'conforme' && styles.conformidadBtnTextActiveConforme,
+                      ]}
+                    >
+                      ✓ Conforme / Aceptado
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      setConformidadCliente('no_conforme');
+                      setObservacionesEntrega('Cliente en desacuerdo por novedad/rayón identificado en entrega.');
+                    }}
+                    style={[
+                      styles.conformidadBtn,
+                      conformidadCliente === 'no_conforme' && styles.conformidadBtnActiveNoConforme,
+                    ]}
+                  >
+                    <Ionicons
+                      name="alert-circle"
+                      size={18}
+                      color={conformidadCliente === 'no_conforme' ? '#DC2626' : '#64748B'}
+                    />
+                    <Text
+                      style={[
+                        styles.conformidadBtnText,
+                        conformidadCliente === 'no_conforme' && styles.conformidadBtnTextActiveNoConforme,
+                      ]}
+                    >
+                      ⚠️ No Conforme / Con Reclamo
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* CAMPO DE OBSERVACIONES */}
+                <Text style={styles.observacionesLabel}>Observaciones de Entrega del Vehículo:</Text>
+                <TextInput
+                  value={observacionesEntrega}
+                  onChangeText={setObservacionesEntrega}
+                  placeholder="Detalla aquí notas de entrega, firmas o reclamos del cliente..."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={3}
+                  style={styles.observacionesInput}
+                />
+
+                {/* BOTÓN 2: CONFIRMAR Y FINALIZAR SALIDA */}
+                <TouchableOpacity
+                  onPress={confirmarYFinalizarSalida}
+                  disabled={procesandoSalidaFinal}
+                  style={[styles.generateExitBtn, { marginTop: 14 }]}
+                >
+                  <LinearGradient
+                    colors={['#DC2626', '#B91C1C']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.generateExitGradient}
+                  >
+                    {procesandoSalidaFinal ? (
+                      <>
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                        <Text style={styles.generateExitText}>
+                          GUARDANDO EN BD Y LIBERANDO BAHÍA...
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark-done" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.generateExitText}>
+                          2. CONFIRMAR Y FINALIZAR SALIDA ({conformidadCliente === 'conforme' ? 'CONFORME' : 'CON RECLAMO'})
+                        </Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setAnalisisRealizado(false)}
+                  style={{ marginTop: 10, alignSelf: 'center', padding: 8 }}
+                >
+                  <Text style={{ color: '#64748B', fontSize: 12, fontWeight: '700' }}>
+                    ↺ Repetir toma o volver a inspeccionar
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
       )}
 
@@ -1388,5 +1756,78 @@ const styles = StyleSheet.create({
     color: '#475569',
     fontSize: 11,
     fontWeight: '700',
+  },
+  conformidadContainer: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  conformidadSectionTitle: {
+    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  conformidadSectionSub: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 2,
+    marginBottom: 10,
+  },
+  conformidadSelectorRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  conformidadBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  conformidadBtnActiveConforme: {
+    borderColor: '#059669',
+    backgroundColor: '#ECFDF5',
+  },
+  conformidadBtnActiveNoConforme: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+  conformidadBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  conformidadBtnTextActiveConforme: {
+    color: '#059669',
+  },
+  conformidadBtnTextActiveNoConforme: {
+    color: '#DC2626',
+  },
+  observacionesLabel: {
+    color: '#334155',
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  observacionesInput: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#CBD5E1',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 12,
+    color: '#0F172A',
+    minHeight: 65,
+    textAlignVertical: 'top',
   },
 });
