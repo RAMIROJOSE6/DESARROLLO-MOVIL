@@ -278,6 +278,8 @@ def normalizar_placa(texto: str) -> Optional[str]:
     Limpia y valida si un texto corresponde a una placa vehicular (ej: AAA123, AAA-123, AAA12B)
     """
     limpio = re.sub(r'[^A-Z0-9]', '', texto.upper())
+    for ciudad in ['ENVIGADO', 'BOGOTA', 'MEDELLIN', 'CALI', 'BARRANQUILLA', 'SOACHA', 'GIRON', 'BUCARAMANGA', 'PEREIRA', 'MANIZALES', 'CUCUTA', 'CARTAGENA']:
+        limpio = limpio.replace(ciudad, '')
     
     # Formato Automóvil particular Colombia (3 letras + 3 dígitos: ABC123)
     match_carro = re.search(r'([A-Z]{3})([0-9]{3})', limpio)
@@ -291,18 +293,14 @@ def normalizar_placa(texto: str) -> Optional[str]:
 
     # Formato alternativo con errores comunes OCR (0 por O en letras o viceversa)
     if len(limpio) >= 6:
-        sub = limpio[:6]
-        letras = list(sub[:3])
-        numeros = list(sub[3:])
-        # Corregir números comunes en letras
-        mapa_a_letras = {'0': 'O', '1': 'I', '2': 'Z', '5': 'S', '8': 'B'}
-        mapa_a_num = {'O': '0', 'I': '1', 'Z': '2', 'S': '5', 'B': '8', 'Q': '0'}
-        
-        cand_letras = "".join([mapa_a_letras.get(c, c) for c in letras])
-        cand_num = "".join([mapa_a_num.get(c, c) for c in numeros])
-        
-        if re.match(r'^[A-Z]{3}$', cand_letras) and re.match(r'^[0-9]{3}$', cand_num):
-            return f"{cand_letras}-{cand_num}"
+        for i in range(len(limpio) - 5):
+            sub = limpio[i:i+6]
+            mapa_a_letras = {'0': 'O', '1': 'I', '2': 'Z', '5': 'S', '8': 'B'}
+            mapa_a_num = {'O': '0', 'I': '1', 'Z': '2', 'S': '5', 'B': '8', 'Q': '0'}
+            cand_letras = "".join([mapa_a_letras.get(c, c) for c in sub[:3]])
+            cand_num = "".join([mapa_a_num.get(c, c) for c in sub[3:]])
+            if re.match(r'^[A-Z]{3}$', cand_letras) and re.match(r'^[0-9]{3}$', cand_num):
+                return f"{cand_letras}-{cand_num}"
 
     return None
 
@@ -511,13 +509,10 @@ def consultar_gemini_vision_ingreso(frame_completo: Union[np.ndarray, List[np.nd
         inline_parts = []
         for img in frames_list:
             h, w = img.shape[:2]
-            if max(w, h) > 1024:
-                scale = 1024.0 / max(w, h)
-                img_send = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-            else:
-                img_send = img
+            scale = 640.0 / max(w, h) if max(w, h) > 640 else 1.0
+            img_send = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
 
-            _, buf = cv2.imencode(".jpg", img_send, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            _, buf = cv2.imencode(".jpg", img_send, [cv2.IMWRITE_JPEG_QUALITY, 75])
             img_b64 = base64.b64encode(buf).decode("utf-8")
             inline_parts.append({
                 "inlineData": {
@@ -559,7 +554,7 @@ Analiza las imágenes en conjunto con máxima rigurosidad y responde ÚNICAMENTE
             }
         }
 
-        modelos = ["gemini-3-flash-preview", "gemini-2.5-flash", GEMINI_MODEL, "gemini-flash-latest", "gemini-3.5-flash"]
+        modelos = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-3-flash-preview"]
         modelos_unicos = list(dict.fromkeys([m for m in modelos if m]))
 
         for modelo in modelos_unicos:
@@ -570,7 +565,7 @@ Analiza las imágenes en conjunto con máxima rigurosidad y responde ÚNICAMENTE
                 headers={"Content-Type": "application/json"}
             )
             try:
-                with urllib.request.urlopen(req, timeout=12) as resp:
+                with urllib.request.urlopen(req, timeout=25) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     cand = data.get("candidates", [])
                     if cand:
@@ -968,7 +963,24 @@ async def analizar_archivo_endpoint(
                     else:
                         fase = "trasera"
 
-                    score = (1000.0 if es_auto else 0.0) + (conf_max * 150.0) + (area_max * 100.0) + min(nitidez, 300.0)
+                    # PLATE HUNTER: Escaneo rápido de placas en cada fotograma del video
+                    placa_frame = None
+                    conf_placa_frame = 0.0
+                    try:
+                        res_ocr_cand = ocr_reader.readtext(f_small)
+                        for bbox, text, prob in res_ocr_cand:
+                            p_cand = normalizar_placa(text)
+                            if p_cand and prob > 0.15:
+                                placa_frame = p_cand
+                                conf_placa_frame = float(prob)
+                                print(f"[VIDEO HUNTER] ⭐ Placa encontrada en fotograma {idx} ({idx/fps:.1f}s): {p_cand} (conf: {prob:.2f})")
+                                break
+                    except Exception as e_hunter:
+                        pass
+
+                    # Si el fotograma muestra la placa del auto, otorgar una bonificación masiva para que sea prioritario
+                    bonus_placa = (3500.0 + conf_placa_frame * 1000.0) if placa_frame else 0.0
+                    score = (1000.0 if es_auto else 0.0) + (conf_max * 150.0) + (area_max * 100.0) + min(nitidez, 300.0) + bonus_placa
 
                     candidatos_frames.append({
                         "frame": f,
@@ -978,7 +990,9 @@ async def analizar_archivo_endpoint(
                         "conf_max": conf_max,
                         "area_max": area_max,
                         "fase": fase,
-                        "idx": idx
+                        "idx": idx,
+                        "placa_detectada": placa_frame,
+                        "conf_placa": conf_placa_frame
                     })
 
                 cap.release()
@@ -1016,10 +1030,25 @@ async def analizar_archivo_endpoint(
                         "tipo_servicio": tipo_servicio,
                     }
 
+                # Recopilar la mejor placa detectada por el Plate Hunter en todo el video
+                placas_en_video = [c for c in candidatos_frames if c.get("placa_detectada")]
+                placa_video_final = None
+                conf_placa_video = 0.0
+                frame_con_placa = None
+                if placas_en_video:
+                    mejor_cand = max(placas_en_video, key=lambda x: x["conf_placa"])
+                    placa_video_final = mejor_cand["placa_detectada"]
+                    conf_placa_video = round(float(mejor_cand["conf_placa"]) * 100, 1)
+                    frame_con_placa = mejor_cand["frame"]
+                    print(f"[VIDEO INGRESO] ⭐ PLACA IDENTIFICADA EN VIDEO: {placa_video_final} ({conf_placa_video}%)")
+
                 # Seleccionar los fotogramas clave por fase del recorrido (Frente, Costado, Trasera)
                 keyframes_recorrido = []
+                if frame_con_placa is not None:
+                    keyframes_recorrido.append(frame_con_placa)
+
                 for fase_nom in ["frente", "lateral", "trasera"]:
-                    fase_cands = [c for c in candidatos_autos if c["fase"] == fase_nom]
+                    fase_cands = [c for c in candidatos_autos if c["fase"] == fase_nom and (frame_con_placa is None or c["frame"] is not frame_con_placa)]
                     if fase_cands:
                         fase_cands.sort(key=lambda x: x["score"], reverse=True)
                         keyframes_recorrido.append(fase_cands[0]["frame"])
@@ -1028,7 +1057,7 @@ async def analizar_archivo_endpoint(
                     candidatos_autos.sort(key=lambda x: x["score"], reverse=True)
                     keyframes_recorrido = [c["frame"] for c in candidatos_autos[:3]]
 
-                mejor_frame = keyframes_recorrido[0]
+                mejor_frame = frame_con_placa if frame_con_placa is not None else keyframes_recorrido[0]
 
                 # Miniatura representativa en JPEG liviano (máx 500px)
                 h_c, w_c = mejor_frame.shape[:2]
@@ -1075,6 +1104,9 @@ async def analizar_archivo_endpoint(
                     elif placa_gem and len(placa_gem) >= 5 and placa_gem != "EN-REVISION":
                         placa_final = placa_gem
                         conf_placa = 80
+                    elif placa_video_final:
+                        placa_final = placa_video_final
+                        conf_placa = conf_placa_video or 85.0
                     else:
                         # Si Gemini no distinguió la placa, aplicar EasyOCR local sobre los fotogramas clave del recorrido
                         placa_final = ""
@@ -1121,6 +1153,11 @@ async def analizar_archivo_endpoint(
                     diagnostico_texto = res_cuadro.get("diagnostico_texto", "")
                     caja_vehiculo = res_cuadro.get("caja_vehiculo", [0, 0, w_c, h_c])
                     suciedad_descartada = res_cuadro.get("suciedad_descartada", 0)
+
+                # Garantía definitiva: Si el Plate Hunter capturó la placa en cualquier fotograma del video, usarla
+                if placa_video_final and (not placa_final or placa_final == "EN-REVISION"):
+                    placa_final = placa_video_final
+                    conf_placa = conf_placa_video or 85.0
 
                 print(f"[VIDEO INGRESO] ✓ Consolidado y enviado a la app: Placa={placa_final}, Marca={marca_final}, Color={color_final}")
 
