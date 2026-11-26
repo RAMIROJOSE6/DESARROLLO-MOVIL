@@ -1,6 +1,7 @@
 """
 GENERADOR DE INFORME ACADÉMICO EN PDF PARA LA UNIVERSIDAD DE LA GUAJIRA
-ASIGNATURA: VISIÓN ARTIFICIAL - DOCENTE: ING. EDUARDO SIERRA FRAGOZO
+ASIGNATURA: INTERNET DE LAS COSAS (IOT) - ENFOQUE: VISIÓN ARTIFICIAL
+DOCENTE: ING. EDUARDO SIERRA FRAGOZO
 PROYECTO: PARKVISION - CONTROL DE ESTACIONAMIENTO E INSPECCIÓN VEHICULAR INTELIGENTE
 """
 
@@ -38,7 +39,7 @@ class NumberedCanvas(canvas.Canvas):
 
         # Encabezado en páginas > 1
         if self._pageNumber > 1:
-            self.drawString(45, 755, "UNIVERSIDAD DE LA GUAJIRA | VISIÓN ARTIFICIAL | PROYECTO PARKVISION")
+            self.drawString(45, 755, "UNIVERSIDAD DE LA GUAJIRA | IOT (VISIÓN ARTIFICIAL) | PROYECTO PARKVISION")
             self.drawRightString(567, 755, "DOCENTE: ING. EDUARDO SIERRA FRAGOZO")
             self.setStrokeColor(colors.HexColor("#CBD5E1"))
             self.setLineWidth(0.75)
@@ -189,7 +190,7 @@ def construir_pdf(archivo_salida):
 
     meta_data = [
         [
-            Paragraph("<b>ASIGNATURA:</b> Visión Artificial (Corte 3 - Proyecto Final)<br/><b>DOCENTE:</b> Ing. Eduardo Sierra Fragozo<br/><b>FECHA:</b> Noviembre de 2026", estilo_meta_box),
+            Paragraph("<b>ASIGNATURA:</b> Internet de las Cosas (IoT) – Corte 3<br/><b>ENFOQUE TEMÁTICO:</b> Visión Artificial en IoT<br/><b>DOCENTE:</b> Ing. Eduardo Sierra Fragozo", estilo_meta_box),
             Paragraph("<b>PROYECTO:</b> ParkVision - Custodia e Inspección Vehicular<br/><b>ESTUDIANTE:</b> Ramiro José Gómez Agámez<br/><b>UBICACIÓN:</b> Riohacha, La Guajira", estilo_meta_box)
         ]
     ]
@@ -396,5 +397,13 @@ def construir_pdf(archivo_salida):
     print(f"[OK] Documento PDF generado exitosamente en: {archivo_salida}")
 
 if __name__ == "__main__":
-    salida = "INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.pdf"
-    construir_pdf(salida)
+    salida_principal = "INFORME_FINAL_PROYECTO_IOT_VISION_ARTIFICIAL.pdf"
+    construir_pdf(salida_principal)
+    
+    # También intentar actualizar el archivo original si no está bloqueado por el visor del usuario
+    try:
+        import shutil
+        shutil.copyfile(salida_principal, "INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.pdf")
+        print("[OK] Actualizado también INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.pdf")
+    except Exception as e:
+        print(f"[AVISO] Archivo anterior bloqueado por visor abierto ({e}). Se ha generado {salida_principal}")

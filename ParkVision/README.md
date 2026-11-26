@@ -111,3 +111,4 @@ npx expo start
 
 ## 🛡️ Seguridad y Credenciales
 Los archivos `.env` reales que contienen claves de Supabase y tokens de Gemini se encuentran excluidos mediante `.gitignore` para proteger la seguridad de la infraestructura. Consulte los archivos `.env.example` en cada subcarpeta para configurar las variables requeridas.
+

@@ -1,6 +1,7 @@
 # UNIVERSIDAD DE LA GUAJIRA
 ## FACULTAD DE INGENIERÍA – PROGRAMA DE INGENIERÍA DE SISTEMAS
-### ASIGNATURA: VISIÓN ARTIFICIAL (CORTE 3 – PROYECTO FINAL)
+### ASIGNATURA: INTERNET DE LAS COSAS (IOT) – CORTE 3
+### ENFOQUE TEMÁTICO: VISIÓN ARTIFICIAL APLICADA A DISPOSITIVOS IOT
 **Docente:** Ing. Eduardo Sierra Fragozo  
 **Proyecto:** ParkVision – Sistema Inteligente de Control de Estacionamiento, Visión Artificial e Inspección Vehicular  
 **Estudiante / Integrante:** Ramiro José Gómez Agámez (y equipo de trabajo)  

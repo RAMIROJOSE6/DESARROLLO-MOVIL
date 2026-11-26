@@ -1,6 +1,6 @@
 # DATASET DE PRUEBAS Y VALIDACIÓN – PARKVISION 🚗🅿️
 ## UNIVERSIDAD DE LA GUAJIRA – INGENIERÍA DE SISTEMAS
-**Asignatura:** Visión Artificial  
+**Asignatura:** Internet de las Cosas (IoT) – Enfoque en Visión Artificial  
 **Docente:** Ing. Eduardo Sierra Fragozo  
 
 Este directorio contiene las muestras fotográficas y anotaciones de prueba utilizadas para validar el sistema de visión artificial en patio real.

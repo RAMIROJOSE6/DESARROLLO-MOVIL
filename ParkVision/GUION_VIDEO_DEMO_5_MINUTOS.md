@@ -1,5 +1,6 @@
 # GUION OFICIAL PARA VIDEO DEMOSTRACIÓN (MÁXIMO 5 MINUTOS)
-## PROYECTO FINAL: PARKVISION – VISIÓN ARTIFICIAL (UNIVERSIDAD DE LA GUAJIRA)
+## PROYECTO FINAL: PARKVISION – ASIGNATURA IOT (ENFOQUE EN VISIÓN ARTIFICIAL)
+**Universidad de La Guajira – Facultad de Ingeniería**  
 **Docente:** Ing. Eduardo Sierra Fragozo  
 **Plataforma de Entrega:** Enlace de YouTube (No listado) o Google Drive  
 **Duración Total:** 4:45 a 5:00 minutos  
@@ -23,7 +24,7 @@
 #### ⏱️ MINUTO 0:00 - 0:45 | BLOQUE 1: INTRODUCCIÓN Y CLIENTE
 * **Qué se muestra en pantalla:** Cámara con los integrantes presentándose y diapositiva / pantalla inicial de ParkVision con el logo de la Universidad de La Guajira.
 * **Qué decir:**
-  > "Buenas tardes, profesor Eduardo Sierra y compañeros. Presentamos el proyecto final de Visión Artificial: **ParkVision**, desarrollado para el **AutoParqueadero y Centro de Servicios El Rodadero** en la ciudad de Riohacha.
+  > "Buenas tardes, profesor Eduardo Sierra y compañeros. Presentamos el proyecto final de la asignatura Internet de las Cosas (IoT), con enfoque en Visión Artificial: **ParkVision**, desarrollado para el **AutoParqueadero y Centro de Servicios El Rodadero** en la ciudad de Riohacha.
   > 
   > El problema crítico que resuelve el sistema son los constantes reclamos económicos por rayones y abolladuras que los clientes aseguran haber sufrido dentro del parqueadero, costándole al negocio más de un millón de pesos mensuales en latonería, además de la lentitud del registro manual. Hoy demostraremos cómo automatizamos la custodia vehicular de punta a punta mediante visión artificial y una app móvil conectada a una base de datos en tiempo real."
 
