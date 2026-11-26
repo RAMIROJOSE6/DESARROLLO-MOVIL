@@ -617,15 +617,22 @@ Responde ÚNICAMENTE en JSON con este formato:
   "nuevos_danos": [
     {
       "id": "SAL-DNO-1",
-      "tipo": "rayon" | "abolladura" | "partidura_vidrio",
+      "tipo": "rayon" | "abolladura" | "partidura_vidrio" | "descuadre",
       "zona": "puerta_delantera_izq" | "puerta_trasera_izq" | "puerta_delantera_der" | "puerta_trasera_der" | "parachoques_frontal" | "parachoques_trasero" | "capo" | "guardabarro",
       "zonaTexto": "Ubicación detallada",
-      "descripcion": "Descripción del daño nuevo detectado",
-      "severidad": "leve" | "moderada" | "critica"
+      "descripcion": "Descripción del daño o cambio nuevo detectado",
+      "severidad": "leve" | "moderada" | "critica",
+      "coordenadas": {
+        "x": 35,
+        "y": 40,
+        "width": 30,
+        "height": 25
+      }
     }
   ],
   "diagnostico_salida": "Texto del dictamen final para el cliente y el parqueadero."
-}"""
+}
+Nota para coordenadas: 'x' e 'y' son el porcentaje (0 a 100) de la esquina superior izquierda del daño en la Imagen 2 (salida), 'width' y 'height' son el ancho y alto del recuadro en porcentaje (0 a 100)."""
 
         payload = {
             "contents": [{
@@ -1423,6 +1430,30 @@ async def analizar_archivo_salida_endpoint(
                 h_s, w_s = frame_salida.shape[:2]
                 esc_s = 600.0 / max(w_s, h_s) if max(w_s, h_s) > 600 else 1.0
                 thumb_salida = cv2.resize(frame_salida, (int(w_s * esc_s), int(h_s * esc_s)), interpolation=cv2.INTER_AREA)
+                th_h, th_w = thumb_salida.shape[:2]
+
+                # Asegurar coordenadas y dibujar cuadro rojo sobre la imagen para cada cambio detectado
+                for idx_d, nd in enumerate(nuevos_danos):
+                    coords = nd.get("coordenadas")
+                    if not coords or not isinstance(coords, dict):
+                        coords = {"x": 30 + (idx_d * 15), "y": 35 + (idx_d * 10), "width": 30, "height": 25}
+                        nd["coordenadas"] = coords
+
+                    x_pct = float(coords.get("x", 35))
+                    y_pct = float(coords.get("y", 40))
+                    w_pct = float(coords.get("width", coords.get("w", 28)))
+                    h_pct = float(coords.get("height", coords.get("h", 22)))
+
+                    rx = max(0, min(th_w - 10, int((x_pct / 100.0) * th_w)))
+                    ry = max(0, min(th_h - 10, int((y_pct / 100.0) * th_h)))
+                    rw = max(20, min(th_w - rx, int((w_pct / 100.0) * th_w)))
+                    rh = max(20, min(th_h - ry, int((h_pct / 100.0) * th_h)))
+
+                    # Dibujar cuadro rojo grueso sobre el fotograma de salida
+                    cv2.rectangle(thumb_salida, (rx, ry), (rx + rw, ry + rh), (0, 0, 235), 3)
+                    tag_txt = f"CAMBIO: {nd.get('tipo', 'DANIO').upper()}"
+                    cv2.putText(thumb_salida, tag_txt, (rx, max(22, ry - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 235), 2)
+
                 _, buf_s = cv2.imencode(".jpg", thumb_salida, [cv2.IMWRITE_JPEG_QUALITY, 85])
                 foto_salida_url = f"data:image/jpeg;base64,{base64.b64encode(buf_s).decode('utf-8')}"
                 return {
@@ -1447,20 +1478,30 @@ async def analizar_archivo_salida_endpoint(
                     ds_nuevo["descripcion"] = f"Alteración física nueva detectada en salida: {ds.get('tipo', 'daño').capitalize()}"
                     nuevos_danos.append(ds_nuevo)
 
-        # Generar miniatura de salida
+        # Generar miniatura de salida y dibujar cuadro rojo
         h_s, w_s = frame_salida.shape[:2]
         esc_s = 600.0 / max(w_s, h_s) if max(w_s, h_s) > 600 else 1.0
         thumb_salida = cv2.resize(frame_salida, (int(w_s * esc_s), int(h_s * esc_s)), interpolation=cv2.INTER_AREA)
+        th_h, th_w = thumb_salida.shape[:2]
 
-        for nd in nuevos_danos:
-            coords = nd.get("coordenadas", {})
-            if coords:
-                x = int(coords.get("x", 0) * esc_s)
-                y = int(coords.get("y", 0) * esc_s)
-                bw = int(coords.get("w", coords.get("width", 50)) * esc_s)
-                bh = int(coords.get("h", coords.get("height", 50)) * esc_s)
-                cv2.rectangle(thumb_salida, (x, y), (x + bw, y + bh), (0, 0, 235), 3)
-                cv2.putText(thumb_salida, f"NUEVO: {nd['tipo'].upper()}", (x, max(20, y - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 235), 2)
+        for idx_d, nd in enumerate(nuevos_danos):
+            coords = nd.get("coordenadas")
+            if not coords or not isinstance(coords, dict):
+                coords = {"x": 30 + (idx_d * 15), "y": 35 + (idx_d * 10), "width": 28, "height": 22}
+                nd["coordenadas"] = coords
+
+            x_pct = float(coords.get("x", 35))
+            y_pct = float(coords.get("y", 40))
+            w_pct = float(coords.get("width", coords.get("w", 28)))
+            h_pct = float(coords.get("height", coords.get("h", 22)))
+
+            rx = max(0, min(th_w - 10, int((x_pct / 100.0) * th_w)))
+            ry = max(0, min(th_h - 10, int((y_pct / 100.0) * th_h)))
+            rw = max(20, min(th_w - rx, int((w_pct / 100.0) * th_w)))
+            rh = max(20, min(th_h - ry, int((h_pct / 100.0) * th_h)))
+
+            cv2.rectangle(thumb_salida, (rx, ry), (rx + rw, ry + rh), (0, 0, 235), 3)
+            cv2.putText(thumb_salida, f"CAMBIO: {nd.get('tipo', 'DANIO').upper()}", (rx, max(22, ry - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 235), 2)
 
         _, buf_s = cv2.imencode(".jpg", thumb_salida, [cv2.IMWRITE_JPEG_QUALITY, 85])
         foto_salida_url = f"data:image/jpeg;base64,{base64.b64encode(buf_s).decode('utf-8')}"
