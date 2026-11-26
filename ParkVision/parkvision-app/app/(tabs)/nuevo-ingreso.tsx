@@ -319,20 +319,24 @@ export default function NuevoIngresoScreen() {
   // 2. Guardar en Base de Datos y Enviar por WhatsApp
   const guardarIngresoYEnviarWsp = async () => {
     if (!videoEntradaUri && !placa) {
-      Alert.alert('Video o Foto requerida', 'Presiona el botón para capturar el vehículo.');
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('Video o Foto requerida: Selecciona o graba el vehículo antes de registrar.');
+      } else {
+        Alert.alert('Video o Foto requerida', 'Presiona el botón para capturar el vehículo.');
+      }
       return;
     }
 
     if (!placa.trim() || !marca.trim()) {
-      Alert.alert('Faltan datos', 'Por favor verifica la placa y marca detectadas.');
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('Faltan datos: Por favor verifica la placa y marca del vehículo.');
+      } else {
+        Alert.alert('Faltan datos', 'Por favor verifica la placa y marca detectadas.');
+      }
       return;
     }
 
-    if (!espacioAsignado) {
-      Alert.alert('Selecciona Bahía', 'Elige una bahía de estacionamiento disponible.');
-      return;
-    }
-
+    const bahiaFinal = espacioAsignado || inspectionService.getPrimerEspacioDisponible();
     const ahora = new Date();
     const horaIngreso = `${ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - Hoy`;
 
@@ -342,7 +346,7 @@ export default function NuevoIngresoScreen() {
         marca: marca.trim(),
         color: color.trim() || 'No especificado',
         tipoServicio,
-        espacioAsignado,
+        espacioAsignado: bahiaFinal,
         horaIngreso,
         fotoPlacaUrl: fotoEvidenciaUri || videoEntradaUri || '',
         videoEntradaUrl: videoEntradaUri || '',
@@ -358,9 +362,27 @@ export default function NuevoIngresoScreen() {
       // Generar y enviar mensaje por WhatsApp al cliente
       const mensajeWsp = inspectionService.generarReporteIngresoWhatsApp(ticketCreado);
 
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        // En Web: si hay WhatsApp, abrir pestaña de WhatsApp Web de inmediato con el acta
+        if (clienteWhatsapp.trim()) {
+          const telLimpio = clienteWhatsapp.replace(/[^0-9]/g, '');
+          window.open(
+            `https://api.whatsapp.com/send?phone=${telLimpio}&text=${encodeURIComponent(mensajeWsp)}`,
+            '_blank'
+          );
+        }
+        window.alert(
+          `✓ INGRESO REGISTRADO EXITOSAMENTE\n\n🚗 Vehículo: ${placa.toUpperCase()} (${marca})\n📍 Bahía Asignada: ${bahiaFinal}\n\nSe ha emitido el acta de custodia del vehículo.`
+        );
+        limpiarFormulario();
+        router.push('/(tabs)/');
+        return;
+      }
+
+      // En Móvil: Diálogo nativo con opciones
       Alert.alert(
         '✓ Ingreso Registrado',
-        `🚗 Vehículo: ${placa.toUpperCase()} (${marca})\n📍 Bahía Asignada: ${espacioAsignado}\n\n¿Deseas enviar el acta de ingreso por WhatsApp al cliente ahora?`,
+        `🚗 Vehículo: ${placa.toUpperCase()} (${marca})\n📍 Bahía Asignada: ${bahiaFinal}\n\n¿Deseas enviar el acta de ingreso por WhatsApp al cliente ahora?`,
         [
           {
             text: 'Solo Guardar',
@@ -373,19 +395,12 @@ export default function NuevoIngresoScreen() {
             text: '📲 Enviar por WhatsApp',
             onPress: async () => {
               try {
-                if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                  window.open(
-                    `https://api.whatsapp.com/send?phone=${clienteWhatsapp}&text=${encodeURIComponent(mensajeWsp)}`,
-                    '_blank'
-                  );
+                const url = `whatsapp://send?phone=${clienteWhatsapp}&text=${encodeURIComponent(mensajeWsp)}`;
+                const can = await Linking.canOpenURL(url);
+                if (can) {
+                  await Linking.openURL(url);
                 } else {
-                  const url = `whatsapp://send?phone=${clienteWhatsapp}&text=${encodeURIComponent(mensajeWsp)}`;
-                  const can = await Linking.canOpenURL(url);
-                  if (can) {
-                    await Linking.openURL(url);
-                  } else {
-                    await Share.share({ message: mensajeWsp });
-                  }
+                  await Share.share({ message: mensajeWsp });
                 }
               } catch (err) {
                 await Share.share({ message: mensajeWsp });
@@ -397,7 +412,11 @@ export default function NuevoIngresoScreen() {
         ]
       );
     } catch (e) {
-      Alert.alert('Error', 'No se pudo guardar el registro en la base de datos.');
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('Error: No se pudo guardar el registro en la base de datos.');
+      } else {
+        Alert.alert('Error', 'No se pudo guardar el registro en la base de datos.');
+      }
     }
   };
 
