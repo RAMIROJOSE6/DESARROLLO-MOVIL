@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { inspectionService } from '../../src/services/inspectionService';
 import { TipoServicio, DanoVehiculo, EspacioParqueo } from '../../src/types';
+import { WebCameraModal } from '../../src/components/WebCameraModal';
 
 export default function NuevoIngresoScreen() {
   const router = useRouter();
@@ -54,6 +55,10 @@ export default function NuevoIngresoScreen() {
   const [servidorConectado, setServidorConectado] = useState<boolean | null>(null);
   const [serverUrlInput, setServerUrlInput] = useState('http://192.168.0.17:8000');
   const [modalServerVisible, setModalServerVisible] = useState(false);
+
+  // Modal de Cámara Web para PC / Navegador Web
+  const [modalWebCamVisible, setModalWebCamVisible] = useState(false);
+  const [modoWebCam, setModoWebCam] = useState<'foto' | 'video'>('video');
 
   useEffect(() => {
     cargarBahias();
@@ -115,10 +120,17 @@ export default function NuevoIngresoScreen() {
     }
   };
 
-  // 1. Grabar Video con Cámara del Celular (Tiempo Ilimitado)
+  // 1. Grabar Video con Cámara del Celular o PC
   const grabarVideoDeIngreso = async () => {
     const estado = await inspectionService.verificarServidorVision();
     setServidorConectado(estado.conectado);
+
+    // En navegador Web: Abrir cámara web del equipo directamente
+    if (Platform.OS === 'web') {
+      setModoWebCam('video');
+      setModalWebCamVisible(true);
+      return;
+    }
 
     if (!estado.conectado) {
       Alert.alert(
@@ -154,10 +166,17 @@ export default function NuevoIngresoScreen() {
     }
   };
 
-  // Tomar Foto de Alta Resolución con Cámara del Celular
+  // Tomar Foto de Alta Resolución con Cámara del Celular o PC
   const tomarFotoDeIngreso = async () => {
     const estado = await inspectionService.verificarServidorVision();
     setServidorConectado(estado.conectado);
+
+    // En navegador Web: Abrir cámara web del equipo directamente
+    if (Platform.OS === 'web') {
+      setModoWebCam('foto');
+      setModalWebCamVisible(true);
+      return;
+    }
 
     if (!estado.conectado) {
       Alert.alert(
@@ -172,6 +191,14 @@ export default function NuevoIngresoScreen() {
     }
 
     await abrirCamaraFoto();
+  };
+
+  const onWebCamCapture = (uri: string, esVideo: boolean, base64?: string) => {
+    setVideoEntradaUri(uri);
+    if (!esVideo) {
+      setFotoEvidenciaUri(uri);
+    }
+    ejecutarDiagnostico(uri, esVideo, base64);
   };
 
   const abrirCamaraFoto = async () => {
@@ -928,6 +955,14 @@ export default function NuevoIngresoScreen() {
       </TouchableOpacity>
 
       <View style={{ height: 40 }} />
+
+      {/* MODAL DE CÁMARA WEB DIRECTA PARA NAVEGADOR PC */}
+      <WebCameraModal
+        visible={modalWebCamVisible}
+        modo={modoWebCam}
+        onCapture={onWebCamCapture}
+        onClose={() => setModalWebCamVisible(false)}
+      />
     </ScrollView>
   );
 }

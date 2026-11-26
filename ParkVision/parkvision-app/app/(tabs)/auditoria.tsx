@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { inspectionService } from '../../src/services/inspectionService';
 import { VehiculoTicket, DanoVehiculo } from '../../src/types';
+import { WebCameraModal } from '../../src/components/WebCameraModal';
 
 export default function AuditoriaScreen() {
   const params = useLocalSearchParams<{ ticketIdPreseleccionado?: string }>();
@@ -28,6 +29,10 @@ export default function AuditoriaScreen() {
   // Evidencias de salida
   const [videoSalidaUri, setVideoSalidaUri] = useState<string | null>(null);
   const [fotoSalidaUri, setFotoSalidaUri] = useState<string | null>(null);
+
+  // Modal de Cámara Web para PC
+  const [modalWebCamVisible, setModalWebCamVisible] = useState(false);
+  const [modoWebCam, setModoWebCam] = useState<'foto' | 'video'>('video');
 
   // Control IA
   const [analizando, setAnalizando] = useState(false);
@@ -103,6 +108,13 @@ export default function AuditoriaScreen() {
   };
 
   const grabarVideoSalida = async () => {
+    // En navegador Web: Abrir cámara web del equipo directamente
+    if (Platform.OS === 'web') {
+      setModoWebCam('video');
+      setModalWebCamVisible(true);
+      return;
+    }
+
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permiso Requerido', 'Se requiere acceso a la cámara para grabar la salida.');
@@ -122,6 +134,13 @@ export default function AuditoriaScreen() {
   };
 
   const tomarFotoSalida = async () => {
+    // En navegador Web: Abrir cámara web del equipo directamente
+    if (Platform.OS === 'web') {
+      setModoWebCam('foto');
+      setModalWebCamVisible(true);
+      return;
+    }
+
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permiso Requerido', 'Se requiere acceso a la cámara para fotografiar la salida.');
@@ -135,6 +154,16 @@ export default function AuditoriaScreen() {
 
     if (!result.canceled && result.assets[0]) {
       const uri = result.assets[0].uri;
+      setVideoSalidaUri(null);
+      setFotoSalidaUri(uri);
+    }
+  };
+
+  const onWebCamCaptureSalida = (uri: string, esVideo: boolean) => {
+    if (esVideo) {
+      setVideoSalidaUri(uri);
+      setFotoSalidaUri(uri);
+    } else {
       setVideoSalidaUri(null);
       setFotoSalidaUri(uri);
     }
@@ -768,6 +797,14 @@ export default function AuditoriaScreen() {
       )}
 
       <View style={{ height: 40 }} />
+
+      {/* MODAL DE CÁMARA WEB DIRECTA PARA NAVEGADOR PC */}
+      <WebCameraModal
+        visible={modalWebCamVisible}
+        modo={modoWebCam}
+        onCapture={onWebCamCaptureSalida}
+        onClose={() => setModalWebCamVisible(false)}
+      />
     </ScrollView>
   );
 }
