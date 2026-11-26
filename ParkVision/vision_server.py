@@ -304,6 +304,79 @@ def normalizar_placa(texto: str) -> Optional[str]:
 
     return None
 
+def detectar_placa_amarilla_colombiana(imagen_bgr: np.ndarray) -> Optional[Dict[str, Any]]:
+    """
+    Localiza la placa colombiana estándar (amarilla reflectiva) buscando
+    regiones rectangulares con aspecto 1.4 - 3.4.
+    Aplica OCR directo en el recorte ampliado de alta resolución para lectura rápida e infalible.
+    """
+    try:
+        h_img, w_img = imagen_bgr.shape[:2]
+        hsv = cv2.cvtColor(imagen_bgr, cv2.COLOR_BGR2HSV)
+
+        # Máscara de amarillo reflectivo de placa colombiana (H: 14 a 38, S: 65 a 255, V: 65 a 255)
+        mask_amarillo = cv2.inRange(hsv, np.array([14, 65, 65]), np.array([38, 255, 255]))
+
+        # Operaciones morfológicas para consolidar el rectángulo de la placa
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        mask_cerrada = cv2.morphologyEx(mask_amarillo, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+        contornos, _ = cv2.findContours(mask_cerrada, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        candidatos_placa = []
+
+        for c in contornos:
+            area = cv2.contourArea(c)
+            if area < 500 or area > (h_img * w_img * 0.35):
+                continue
+
+            x, y, w, h = cv2.boundingRect(c)
+            aspecto = float(w) / float(h + 1e-5)
+
+            # Placa colombiana: aspecto típico 2.0 (rango 1.4 a 3.4)
+            if 1.4 <= aspecto <= 3.4 and w >= 40 and h >= 16:
+                score = area * (1.0 - abs(aspecto - 2.0) * 0.25)
+                candidatos_placa.append((score, x, y, w, h))
+
+        if not candidatos_placa:
+            return None
+
+        candidatos_placa.sort(key=lambda item: item[0], reverse=True)
+
+        for _, x, y, w, h in candidatos_placa[:3]:
+            pad_x = int(w * 0.18)
+            pad_y = int(h * 0.18)
+            x1 = max(0, x - pad_x)
+            y1 = max(0, y - pad_y)
+            x2 = min(w_img, x + w + pad_x)
+            y2 = min(h_img, y + h + pad_y)
+
+            crop_placa = imagen_bgr[y1:y2, x1:x2]
+            if crop_placa.size == 0:
+                continue
+
+            ch, cw = crop_placa.shape[:2]
+            if cw < 250:
+                escala = 250.0 / cw
+                crop_placa = cv2.resize(crop_placa, (int(cw * escala), int(ch * escala)), interpolation=cv2.INTER_CUBIC)
+
+            try:
+                res_ocr = ocr_reader.readtext(crop_placa)
+                for bbox, texto, prob in res_ocr:
+                    placa_cand = normalizar_placa(texto)
+                    if placa_cand and prob > 0.15:
+                        return {
+                            "placa": placa_cand,
+                            "confianza": round(float(prob) * 100, 1),
+                            "caja": (x, y, w, h),
+                            "crop": crop_placa
+                        }
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    return None
+
 def extraer_placa_y_marcas(imagen_bgr: np.ndarray) -> Dict[str, Any]:
     """
     Utiliza EasyOCR y filtros de contraste CLAHE para leer la placa y marcas en el vehículo.
