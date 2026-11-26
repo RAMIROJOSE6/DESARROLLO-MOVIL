@@ -99,6 +99,7 @@ class InspectionService {
           }
 
           // SINCRONIZAR DE FORMA CONSISTENTE: Las bahías deben reflejar exactamente los autos activos
+          this.deduplicarTicketsActivos();
           this.reconciliarBahiasConTickets();
 
           await this.persist();
@@ -107,6 +108,7 @@ class InspectionService {
           console.warn('Operando con caché local:', err);
         }
       } else {
+        this.deduplicarTicketsActivos();
         this.reconciliarBahiasConTickets();
         await this.persist();
         this.notify();
@@ -118,9 +120,54 @@ class InspectionService {
   }
 
   /**
+   * Garantiza que no existan múltiples tickets activos para un mismo vehículo o una misma bahía.
+   * Si existen duplicados (por ejemplo, por múltiples clics de registro), conserva el más reciente
+   * y cierra los demás.
+   */
+  private deduplicarTicketsActivos() {
+    const placasVistas = new Set<string>();
+    const espaciosVistos = new Set<string>();
+    const idsADesactivar: string[] = [];
+
+    this.tickets = this.tickets.map((t) => {
+      if (t.estado === 'activo') {
+        const placaNorm = (t.placa || '').trim().toUpperCase();
+        const espacioNorm = (t.espacioAsignado || '').trim().toUpperCase();
+
+        if (
+          (placaNorm && placasVistas.has(placaNorm)) ||
+          (espacioNorm && espaciosVistos.has(espacioNorm))
+        ) {
+          idsADesactivar.push(t.id);
+          return { ...t, estado: 'finalizado' as const, estadoParqueo: 'Salida' };
+        }
+
+        if (placaNorm) placasVistas.add(placaNorm);
+        if (espacioNorm) espaciosVistos.add(espacioNorm);
+      }
+      return t;
+    });
+
+    if (idsADesactivar.length > 0 && isSupabaseConfigured()) {
+      (async () => {
+        try {
+          await supabase
+            .from('tickets_parqueadero')
+            .update({ estado: 'finalizado', estado_parqueo: 'Salida' })
+            .in('id', idsADesactivar);
+        } catch (e: any) {
+          console.warn('Error desactivando duplicados en Supabase:', e);
+        }
+      })();
+    }
+  }
+
+  /**
    * Garantiza coherencia absoluta: Las bahías ocupadas corresponden 1 a 1 con los autos en custodia
    */
   private reconciliarBahiasConTickets() {
+    this.deduplicarTicketsActivos();
+
     // 1. Resetear todas a disponibles
     this.espacios = this.espacios.map((e) => ({
       ...e,
@@ -195,7 +242,21 @@ class InspectionService {
   }
 
   public getVehiculosActivos(): VehiculoTicket[] {
-    return this.tickets.filter((t) => t.estado === 'activo');
+    const activos = this.tickets.filter((t) => t.estado === 'activo');
+    const placasVistas = new Set<string>();
+    const bahiasVistas = new Set<string>();
+
+    return activos.filter((t) => {
+      const placaNorm = (t.placa || '').trim().toUpperCase();
+      const bahiaNorm = (t.espacioAsignado || '').trim().toUpperCase();
+
+      if (placaNorm && placasVistas.has(placaNorm)) return false;
+      if (bahiaNorm && bahiasVistas.has(bahiaNorm)) return false;
+
+      if (placaNorm) placasVistas.add(placaNorm);
+      if (bahiaNorm) bahiasVistas.add(bahiaNorm);
+      return true;
+    });
   }
 
   public getEspacios(): EspacioParqueo[] {
@@ -741,6 +802,36 @@ class InspectionService {
     const estadoParqueo =
       nuevo.tipoServicio === 'solo_lavar' ? 'En Lavado' : 'En Parqueo';
 
+    // Evitar duplicados: Si ya existe un ticket activo con esta placa o en esta bahía, cerrarlo
+    const placaNorm = (nuevo.placa || '').trim().toUpperCase();
+    const espacioNorm = (nuevo.espacioAsignado || '').trim().toUpperCase();
+    const idsDuplicados: string[] = [];
+
+    this.tickets = this.tickets.map((t) => {
+      if (t.estado === 'activo') {
+        const p = (t.placa || '').trim().toUpperCase();
+        const e = (t.espacioAsignado || '').trim().toUpperCase();
+        if ((placaNorm && p === placaNorm) || (espacioNorm && e === espacioNorm)) {
+          idsDuplicados.push(t.id);
+          return { ...t, estado: 'finalizado' as const, estadoParqueo: 'Salida' };
+        }
+      }
+      return t;
+    });
+
+    if (idsDuplicados.length > 0 && isSupabaseConfigured()) {
+      (async () => {
+        try {
+          await supabase
+            .from('tickets_parqueadero')
+            .update({ estado: 'finalizado', estado_parqueo: 'Salida' })
+            .in('id', idsDuplicados);
+        } catch (e: any) {
+          console.warn('Error desactivando duplicados anteriores:', e);
+        }
+      })();
+    }
+
     const ticketCompleto: VehiculoTicket = {
       ...nuevo,
       id,
@@ -1117,7 +1208,21 @@ class InspectionService {
       };
     }
 
-    this.tickets[ticketIndex] = ticketActualizado;
+    // Actualizar ticket y cerrar cualquier otro ticket activo para esta misma placa
+    const placaNorm = (ticketActual.placa || '').trim().toUpperCase();
+    this.tickets = this.tickets.map((t) => {
+      if (t.id === id) return ticketActualizado;
+      if (t.estado === 'activo' && (t.placa || '').trim().toUpperCase() === placaNorm) {
+        return {
+          ...t,
+          estado: 'finalizado' as const,
+          estadoParqueo: 'Salida',
+          horaSalida,
+        };
+      }
+      return t;
+    });
+
     await this.persist();
     this.notify();
 
@@ -1140,6 +1245,17 @@ class InspectionService {
             observaciones: obsSalida,
           })
           .eq('id', id);
+
+        // Cerrar cualquier duplicado de la misma placa en Supabase
+        await supabase
+          .from('tickets_parqueadero')
+          .update({
+            estado: 'finalizado',
+            estado_parqueo: 'Salida',
+            hora_salida: horaSalida,
+          })
+          .eq('placa', ticketActual.placa)
+          .eq('estado', 'activo');
 
         // Dejar espacio como DISPONIBLE en la base de datos
         await supabase

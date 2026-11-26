@@ -13,7 +13,7 @@ import {
   StyleSheet,
   StatusBar,
 } from 'react-native';
-import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -48,20 +48,34 @@ export default function AuditoriaScreen() {
 
   const cargarVehiculos = (idForzado?: string | null) => {
     const lista = inspectionService.getVehiculosActivos();
-    setVehiculosActivos(lista);
+
+    // Asegurar unicidad total en UI (por si la BD tiene registros antiguos pendientes)
+    const placasVistas = new Set<string>();
+    const bahiasVistas = new Set<string>();
+    const listaUnica = lista.filter((v) => {
+      const placaNorm = (v.placa || '').trim().toUpperCase();
+      const bahiaNorm = (v.espacioAsignado || '').trim().toUpperCase();
+      if (placaNorm && placasVistas.has(placaNorm)) return false;
+      if (bahiaNorm && bahiasVistas.has(bahiaNorm)) return false;
+      if (placaNorm) placasVistas.add(placaNorm);
+      if (bahiaNorm) bahiasVistas.add(bahiaNorm);
+      return true;
+    });
+
+    setVehiculosActivos(listaUnica);
 
     if (idForzado !== undefined) {
       if (idForzado === null) {
-        setVehiculoSeleccionado(lista.length > 0 ? lista[0] : null);
+        setVehiculoSeleccionado(listaUnica.length > 0 ? listaUnica[0] : null);
       } else {
-        const match = lista.find((v) => v.id === idForzado);
-        setVehiculoSeleccionado(match || (lista.length > 0 ? lista[0] : null));
+        const match = listaUnica.find((v) => v.id === idForzado);
+        setVehiculoSeleccionado(match || (listaUnica.length > 0 ? listaUnica[0] : null));
       }
       return;
     }
 
     if (params.ticketIdPreseleccionado) {
-      const match = lista.find((v) => v.id === params.ticketIdPreseleccionado);
+      const match = listaUnica.find((v) => v.id === params.ticketIdPreseleccionado);
       if (match) {
         setVehiculoSeleccionado(match);
         return;
@@ -69,12 +83,12 @@ export default function AuditoriaScreen() {
     }
 
     if (vehiculoSeleccionado) {
-      const sigueActivo = lista.find((v) => v.id === vehiculoSeleccionado.id);
+      const sigueActivo = listaUnica.find((v) => v.id === vehiculoSeleccionado.id);
       if (!sigueActivo) {
-        setVehiculoSeleccionado(lista.length > 0 ? lista[0] : null);
+        setVehiculoSeleccionado(listaUnica.length > 0 ? listaUnica[0] : null);
       }
-    } else if (lista.length > 0) {
-      setVehiculoSeleccionado(lista[0]);
+    } else if (listaUnica.length > 0) {
+      setVehiculoSeleccionado(listaUnica[0]);
     } else {
       setVehiculoSeleccionado(null);
     }
@@ -262,34 +276,185 @@ export default function AuditoriaScreen() {
 
       {/* 1. SELECCIÓN DEL AUTO EN SALIDA */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>1. Vehículo Seleccionado para Salida</Text>
-        <Text style={styles.cardSubtitle}>
-          Selecciona el vehículo o elígelo tocando su bahía en el mapa:
-        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <Text style={styles.cardTitle}>1. Bahía y Vehículo para Salida</Text>
+          {vehiculoSeleccionado && (
+            <View
+              style={{
+                backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                borderWidth: 1,
+                borderColor: '#38BDF8',
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: '#38BDF8', fontSize: 12, fontWeight: '800' }}>
+                📍 Bahía: {vehiculoSeleccionado.espacioAsignado}
+              </Text>
+            </View>
+          )}
+        </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carListRow}>
-          {vehiculosActivos.map((v) => {
-            const isSelected = vehiculoSeleccionado?.id === v.id;
-            return (
-              <TouchableOpacity
-                key={v.id}
-                onPress={() => {
-                  setVehiculoSeleccionado(v);
-                  setResultadoAuditoria(null);
-                  setFotoSalidaUri(null);
-                  setVideoSalidaUri(null);
-                }}
-                style={[styles.carSelectBox, isSelected && styles.carSelectBoxActive]}
-              >
-                <View style={styles.badgePlate}>
-                  <Text style={styles.badgePlateText}>{v.placa}</Text>
+        {!vehiculoSeleccionado ? (
+          <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+            <Ionicons name="car-outline" size={40} color="#64748B" />
+            <Text style={{ color: '#94A3B8', fontSize: 13, marginTop: 8, textAlign: 'center' }}>
+              No hay vehículos activos en el parqueadero actualmente.
+            </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/nuevo-ingreso')}
+              style={{
+                marginTop: 12,
+                backgroundColor: '#2563EB',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12 }}>
+                Registrar Nuevo Ingreso
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View>
+            <Text style={styles.cardSubtitle}>
+              Vehículo en custodia al que se le realizará la auditoría de salida:
+            </Text>
+
+            {/* TARJETA PRINCIPAL DEL VEHÍCULO SELECCIONADO */}
+            <View
+              style={{
+                backgroundColor: '#0F172A',
+                borderColor: '#2563EB',
+                borderWidth: 1.5,
+                borderRadius: 14,
+                padding: 14,
+                marginBottom: vehiculosActivos.length > 1 ? 12 : 4,
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                  <Text style={{ color: '#64748B', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 }}>
+                    PLACA DEL VEHÍCULO
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor: '#FBBF24',
+                      borderRadius: 6,
+                      paddingHorizontal: 12,
+                      paddingVertical: 4,
+                      alignSelf: 'flex-start',
+                      marginTop: 4,
+                      borderWidth: 1,
+                      borderColor: '#D97706',
+                    }}
+                  >
+                    <Text style={{ color: '#000000', fontWeight: '900', fontSize: 17, letterSpacing: 1 }}>
+                      {vehiculoSeleccionado.placa}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={styles.carSelectName}>{v.marca}</Text>
-                <Text style={styles.carSelectBay}>📍 Bahía: {v.espacioAsignado}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ color: '#64748B', fontSize: 10, fontWeight: '800' }}>
+                    BAHÍA A DESOCUPAR
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor: '#1E293B',
+                      borderColor: '#38BDF8',
+                      borderWidth: 1.5,
+                      borderRadius: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                      marginTop: 4,
+                    }}
+                  >
+                    <Text style={{ color: '#38BDF8', fontWeight: '900', fontSize: 15 }}>
+                      📍 {vehiculoSeleccionado.espacioAsignado}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View
+                style={{
+                  height: 1,
+                  backgroundColor: '#1E293B',
+                  marginVertical: 10,
+                }}
+              />
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <View>
+                  <Text style={{ color: '#94A3B8', fontSize: 12 }}>
+                    <Text style={{ fontWeight: '700', color: '#E2E8F0' }}>Marca/Modelo: </Text>
+                    {vehiculoSeleccionado.marca}
+                  </Text>
+                  <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 4 }}>
+                    <Text style={{ fontWeight: '700', color: '#E2E8F0' }}>Color: </Text>
+                    {vehiculoSeleccionado.color}
+                  </Text>
+                </View>
+
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ color: '#94A3B8', fontSize: 12 }}>
+                    <Text style={{ fontWeight: '700', color: '#E2E8F0' }}>Hora Ingreso: </Text>
+                    {vehiculoSeleccionado.horaIngreso}
+                  </Text>
+                  <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 4 }}>
+                    <Text style={{ fontWeight: '700', color: '#E2E8F0' }}>Servicio: </Text>
+                    {vehiculoSeleccionado.tipoServicio === 'solo_lavar' || vehiculoSeleccionado.tipoServicio === 'lavadero'
+                      ? 'Solo Lavado'
+                      : vehiculoSeleccionado.tipoServicio === 'lavar_y_parquear' || vehiculoSeleccionado.tipoServicio === 'ambos'
+                      ? 'Parqueo + Lavado'
+                      : 'Parqueo General'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* SI HAY OTROS VEHÍCULOS DISTINTOS ESTACIONADOS, PERMITIR CAMBIAR DE VEHÍCULO */}
+            {vehiculosActivos.length > 1 && (
+              <View style={{ marginTop: 4 }}>
+                <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '700', marginBottom: 6 }}>
+                  ¿Deseas dar salida a otro vehículo? ({vehiculosActivos.length} activos en parqueo):
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carListRow}>
+                  {vehiculosActivos.map((v) => {
+                    const isSelected = vehiculoSeleccionado?.id === v.id;
+                    return (
+                      <TouchableOpacity
+                        key={v.id}
+                        onPress={() => {
+                          setVehiculoSeleccionado(v);
+                          setResultadoAuditoria(null);
+                          setFotoSalidaUri(null);
+                          setVideoSalidaUri(null);
+                        }}
+                        style={[
+                          styles.carSelectBox,
+                          isSelected && styles.carSelectBoxActive,
+                          { minWidth: 110, padding: 8 },
+                        ]}
+                      >
+                        <View style={styles.badgePlate}>
+                          <Text style={styles.badgePlateText}>{v.placa}</Text>
+                        </View>
+                        <Text style={styles.carSelectName} numberOfLines={1}>
+                          {v.marca}
+                        </Text>
+                        <Text style={styles.carSelectBay}>📍 Bahía {v.espacioAsignado}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       {/* 2. GRABACIÓN DE VIDEO DE SALIDA Y COMPARADOR */}
