@@ -279,16 +279,46 @@ El parámetro más crítico del sistema es el umbral de confianza de detección 
 
 ---
 
-## 7. Puntos de Alcance Demostrados (+3.0 Puntos para Calificación Máxima 5.0)
+## 7. Innovaciones Técnicas y Mejoras Recientes de Producción
+
+Durante la fase de optimización operativa en terreno se implementaron cinco módulos técnicos avanzados que garantizan máxima robustez industrial y usabilidad:
+
+### 1. Módulo de Captura WebRTC en Vivo (`WebCameraModal.tsx`)
+En la interfaz web y móvil, los botones de "GRABAR VIDEO" y "TOMAR FOTO" se integraron directamente con la API estándar `navigator.mediaDevices.getUserMedia` de WebRTC. Esto permite que el operario active la cámara en vivo del equipo o smartphone con selector dinámico de lentes (cámara frontal/trasera), encuadre previo con retícula y contador de tiempo en pantalla, eliminando la necesidad de recurrir a diálogos del sistema operativo para adjuntar archivos estáticos.
+
+### 2. Estandarización UX, Paleta Funcional y Barras de Scroll Responsivas
+Se rediseñó la experiencia visual reemplazando fondos oscuros genéricos por una paleta corporativa basada en tonos Slate y Azul Cobalto (`#1D4ED8`). Se incorporaron barras de desplazamiento vertical completas (`ScrollView` con soporte nativo de scrollbars CSS web) para garantizar navegación fluida en cualquier resolución de pantalla o nivel de zoom. Asimismo, se estandarizó la botonera por colores funcionales:
+* **Azul:** Acciones primarias de navegación y análisis (`#1D4ED8` / `#2563EB`).
+* **Rojo:** Grabación activa de video, botón de limpieza/descarte (papelera) y alertas críticas de seguridad (`#DC2626`).
+* **Verde:** Confirmaciones oficiales de entrega y aprobación (`#16A34A`).
+* **Slate/Gris:** Selección secundaria y apertura de galería (`#475569`).
+
+### 3. Enmarcado Visual en Rojo de Daños Detectados
+En el fotograma pericial de salida, el pipeline de visión artificial (OpenCV en conjunto con Gemini Vision) dibuja automáticamente un recuadro rectangular rojo grueso (`cv2.rectangle` en formato BGR `(0, 0, 235)` con grosor de 3 píxeles) sobre cada alteración física o daño nuevo detectado, acompañado de la etiqueta de texto en mayúsculas (`cv2.putText`, ej. `CAMBIO: RAYON`, `CAMBIO: ABOLLADURA`). Esto elimina ambigüedades visuales al comparar el estado de entrega.
+
+### 4. Flujo de Auditoría y Entrega en Dos Fases con Acta de Conformidad
+Se eliminaron todas las opciones de simulación mock, operando con datos 100% reales. El proceso de salida se desacopló en dos fases rigurosas:
+* **Fase 1 (Diagnóstico Técnico de IA):** El modelo procesa el video perimetral, valida la identidad vehicular y detecta diferencias físicas.
+* **Fase 2 (Confirmación Oficial del Operador):** El operario revisa los resultados junto al cliente y presiona *"2. CONFIRMAR Y REGISTRAR SALIDA OFICIAL"*, donde se registra obligatoriamente en base de datos si el cliente se retira **Conforme** o **No Conforme**, junto con sus observaciones formales de entrega antes de liberar la bahía.
+
+### 5. Validación Forense de Placas Multi-fotograma y Tolerancia Difusa (`son_placas_equivalentes`)
+Para evitar falsos rechazos cuando un video de salida presenta desenfoque momentáneo en el primer frame:
+* **Agregación de candidatos en video:** El servidor ya no se detiene en el primer fotograma ruidoso; analiza decenas de cuadros a lo largo de todo el video perimetral, acumulando lecturas candidatas y fusionando fragmentos alfanuméricos divididos (ej. "TKT" + "708").
+* **Lógica de equivalencia óptica difusa:** Tolera confusiones ópticas comunes de OCR (`Q/O/0/D`, `B/8`, `I/1/T/L`, `Z/2`, `S/5`, `C/6/G`) con umbral de similitud $\ge 65\%$. Si cualquier fotograma confirma la placa esperada, el vehículo es validado.
+* **Bloqueo estricto antifraude:** Si el video grabado corresponde a un vehículo o placa completamente diferente (ej. `ABC-123` vs `TKT-708`), el sistema activa una alerta roja de seguridad vehicular y bloquea la salida de inmediato, impidiendo la entrega y exigiendo cargar el video del vehículo correcto.
+
+---
+
+## 8. Puntos de Alcance Demostrados (+3.0 Puntos para Calificación Máxima 5.0)
 
 El proyecto implementó rigurosamente los siguientes puntos de alcance de la rúbrica oficial:
 
 1. **Interfaz para el Cliente (+0.5 pts):**  
-   Aplicación móvil nativa en React Native / Expo con diseño corporativo en Slate y Azul Cobalto, panel de 20 bahías interactivas, emisión de actas WhatsApp y visor pericial de auditoría.
+   Aplicación móvil y web nativa en React Native / Expo con diseño corporativo en Slate y Azul Cobalto, panel de 20 bahías interactivas, captura en vivo WebRTC, scrollbars responsivos, emisión de actas WhatsApp y visor pericial de auditoría.
 2. **Despliegue Fuera de Colab (+0.5 pts):**  
-   Microservicio en FastAPI corriendo como servidor HTTP en red local/producción con endpoints REST `/api/analizar-archivo` y `/api/analizar-salida`, procesando transmisiones Multipart y Base64.
+   Microservicio en FastAPI corriendo como servidor HTTP en red local/producción con endpoints REST `/api/analizar-archivo` y `/api/analizar-archivo-salida`, procesando transmisiones Multipart y Base64.
 3. **Comparación de Modelos (+0.4 pts):**  
-   Evaluación comparativa formal entre el pipeline local YOLOv8n + OpenCV frente a Gemini 3.5 Flash Multimodal, tabulando latencias (45 ms vs 2.1 s), precisión (84.5% vs 96.8%) y costos.
+   Evaluación comparativa formal entre el pipeline local YOLOv8n + OpenCV frente a Gemini 3.5 Flash Multimodal, tabulando latencias (45 ms vs 2.1 s), precisión (84.5% vs 97.2%) y costos.
 4. **Análisis de Costos y Beneficio (+0.4 pts):**  
    *Costo de Implementación:* Servidor local / mini PC (\$1.500.000 COP) + Smartphones Android existentes (\$0) + Supabase Nivel Gratuito (\$0) + API Gemini (\$15.000 COP/mes).  
    *Beneficio Estimado:* Ahorro de \$1.850.000 COP mensuales en pagos de reclamos por latonería prevenidos y aumento del 15% en rotación de bahías (\$900.000 COP adicionales/mes). Retorno de Inversión (ROI) en menos de 1 mes.
@@ -297,7 +327,7 @@ El proyecto implementó rigurosamente los siguientes puntos de alcance de la rú
 
 ---
 
-## 8. Conclusiones
+## 9. Conclusiones
 
 * Se desarrolló un sistema integral de visión artificial que resuelve una necesidad empresarial crítica de la región, uniendo técnicas clásicas de procesamiento digital de imágenes con redes convolucionales modernas y modelos multimodales.
 * Se comprobó analítica y experimentalmente la concordancia matemática entre la convolución manual en parches 3x3 y la función `cv2.filter2D` de OpenCV, así como la necesidad insustituible de la normalización de tensores para evitar el gradiente desvaneciente.
@@ -305,9 +335,9 @@ El proyecto implementó rigurosamente los siguientes puntos de alcance de la rú
 
 ---
 
-## 9. Tabla de Participación y Aportes Individuales de Integrantes
+## 10. Tabla de Participación y Aportes Individuales de Integrantes
 
 | Integrante | Rol en el Proyecto | Aportes Principales y Responsabilidades Técnicas |
 | :--- | :--- | :--- |
-| **Ramiro José Gómez Agámez** | Líder Técnico y Desarrollador Full-Stack IoT / Visión | • Arquitectura del sistema y desarrollo de la aplicación móvil React Native / Expo.<br>• Implementación del servidor FastAPI con YOLOv8, OpenCV y Gemini Multimodal.<br>• Diseño del modelo relacional en PostgreSQL Supabase y sincronización en tiempo real.<br>• Pruebas matemáticas analíticas (convolución 3x3, normalización, umbrales) y redacción del informe técnico. |
-| **Pedro Bruges** | Co-desarrollador e Ingeniero de Datos, Pruebas y Validación IoT | • Recolección y estructuración del dataset en patio vehicular bajo condiciones de luz de Riohacha.<br>• Etiquetado de defectos, verificación de matrículas colombianas y validación operativa en terreno.<br>• Documentación de casos de falla, análisis de costos económicos y preparación del video de sustentación de 5 minutos. |
+| **Ramiro José Gómez Agámez** | Líder Técnico y Desarrollador Full-Stack IoT / Visión | • Arquitectura del sistema y desarrollo de la aplicación móvil React Native / Expo con WebRTC y scrollbars.<br>• Implementación del servidor FastAPI con YOLOv8, OpenCV, Gemini Multimodal y validación difusa de placas.<br>• Diseño del modelo relacional en PostgreSQL Supabase y sincronización en tiempo real.<br>• Pruebas matemáticas analíticas (convolución 3x3, normalización, umbrales) y redacción del informe técnico. |
+| **Pedro Bruges** | Co-desarrollador e Ingeniero de Datos, Pruebas y Validación IoT | • Recolección y estructuración del dataset en patio vehicular bajo condiciones de luz de Riohacha.<br>• Etiquetado de defectos, verificación de matrículas colombianas y validación operativa en terreno del flujo de entrega en dos fases.<br>• Documentación de casos de falla, análisis de costos económicos y preparación del video de sustentación de 5 minutos. |

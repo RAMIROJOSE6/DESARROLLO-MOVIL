@@ -1,119 +1,114 @@
 # ParkVision – Sistema Inteligente de Control de Estacionamiento e Inspección Vehicular 🚗🅿️
 
 **Universidad de La Guajira – Facultad de Ingeniería**  
-**Asignatura:** Visión Artificial (Corte 3 – Proyecto Final)  
+**Asignatura:** Internet de las Cosas (IoT) – Corte 3  
+**Enfoque Temático:** Visión Artificial aplicada a Dispositivos IoT  
 **Docente:** Ing. Eduardo Sierra Fragozo  
-**Cliente:** AutoParqueadero & Centro de Servicios "La Pen�nsula" (Calle 4 N 4-28, Riohacha)  
+**Integrantes:** Ramiro José Gómez Agámez & Pedro Bruges  
+**Cliente:** AutoParqueadero & Centro de Servicios "La Península" (Calle 4 N 4-28, Riohacha)  
 
 ---
 
-## 📑 Entregables Académicos de la Guía Docente
+## 📑 Entregables Académicos Oficiales
 
 | Documento / Recurso | Descripción | Enlace Directo |
 | :--- | :--- | :---: |
-| **📄 Informe Final Completo** | Informe técnico de 12 páginas con ficha de cliente, problema, metodología, resultados, análisis A-E y costos. | [INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.md](./INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.md) |
+| **📄 Informe Final Completo (PDF)** | Informe técnico formal con ficha de cliente, problema, metodología, resultados, análisis A-E y costos. | [INFORME_FINAL_PROYECTO_IOT_VISION_ARTIFICIAL.pdf](./INFORME_FINAL_PROYECTO_IOT_VISION_ARTIFICIAL.pdf) |
+| **📝 Informe Final Completo (Markdown)** | Versión Markdown estructurada del informe académico con fórmulas matemáticas y tablas. | [INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.md](./INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.md) |
+| **🎬 Guía Oficial de Sustentación (PDF)** | Guion técnico detallado para el video de 5 minutos, con división de roles (Ramiro & Pedro) y cues en pantalla. | [GUIA_SUSTENTACION_PARKVISION.pdf](./GUIA_SUSTENTACION_PARKVISION.pdf) |
 | **🧮 Script de Validación Técnica** | Demostración matemática ejecutable: parche 3x3 a mano vs OpenCV, normalización, umbrales YOLO y comparación. | [evaluacion_tecnica_uniguajira.py](./evaluacion_tecnica_uniguajira.py) |
-| **🎬 Guion del Video Demo (5 min)** | Estructura minuto a minuto para la sustentación audiovisual en vivo requerida por el docente. | [GUION_VIDEO_DEMO_5_MINUTOS.md](./GUION_VIDEO_DEMO_5_MINUTOS.md) |
+| **🗄️ Modelo Relacional SQL** | Script DDL de tablas `tickets_parqueadero` y `espacios_parqueadero` para PostgreSQL en Supabase. | [supabase_schema.sql](./supabase_schema.sql) |
 | **📊 Dataset de Pruebas** | Muestras de prueba reales y anotaciones ground truth (vehículo, placa, daños). | [dataset_pruebas/](./dataset_pruebas/) |
-| **🗄️ Modelo Relacional SQL** | Script DDL de tablas `tickets_parqueadero` y `espacios_parqueo` para PostgreSQL. | [supabase_schema.sql](./supabase_schema.sql) |
 
 ---
 
-## 🏗️ Arquitectura del Sistema
+## 🏗️ Arquitectura Limpia del Proyecto
 
 ```
 ParkVision/
-├── INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.md  # 📄 Informe completo según rúbrica
-├── evaluacion_tecnica_uniguajira.py             # 🧮 Código de validación teórica A a E
-├── GUION_VIDEO_DEMO_5_MINUTOS.md                # 🎬 Guion de grabación
-├── supabase_schema.sql                          # 🗄️ DDL de base de datos relacional
-├── dataset_pruebas/                             # 📊 Conjunto de datos propio
+├── INFORME_FINAL_PROYECTO_IOT_VISION_ARTIFICIAL.pdf  # 📄 Informe final en PDF
+├── INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.md       # 📝 Informe final en Markdown
+├── GUIA_SUSTENTACION_PARKVISION.pdf                  # 🎬 Guía oficial de sustentación (5 min)
+├── GUION_VIDEO_DEMO_5_MINUTOS.md                     # 📋 Guion del video demo
+├── evaluacion_tecnica_uniguajira.py                  # 🧮 Script de validación técnica A a E
+├── generar_pdf_informe.py                            # ⚙️ Generador automatizado del informe PDF
+├── generar_guia_pdf.py                               # ⚙️ Generador automatizado de la guía PDF
+├── supabase_schema.sql                               # 🗄️ DDL relacional para PostgreSQL Supabase
+├── vision_server.py                                  # 🚀 Servidor FastAPI (YOLOv8 + EasyOCR + Gemini Vision)
+├── yolov8n.pt                                        # 🧠 Pesos del modelo YOLOv8n (PyTorch)
+├── requirements.txt                                  # 📦 Dependencias Python del backend
+├── .env.example                                      # 🔐 Plantilla de variables de entorno del servidor
+├── iniciar_servidor_vision.bat                       # ⚡ Script de inicio del servidor en Windows
+├── iniciar_app_web.bat                               # ⚡ Script de inicio de la app web en Windows
+├── dataset_pruebas/                                  # 📊 Dataset propio de validación
 │   ├── anotaciones_ground_truth.json
 │   └── README.md
 │
-├── parkvision-app/           # Aplicación Móvil (React Native + Expo SDK 52 + NativeWind)
-│   ├── app/                  # Rutas Expo Router (Tabs: Bahías, Entrada, Salida, Historial)
-│   │   ├── (tabs)/
-│   │   │   ├── index.tsx         # Tab 1: Mapa dinámico de bahías (20 cupos) y métricas en vivo
-│   │   │   ├── nuevo-ingreso.tsx # Tab 2: Registro perimetral (video/foto) y emisión de acta
-│   │   │   ├── auditoria.tsx     # Tab 3: Inspección de salida y detección diferencial de daños
-│   │   │   └── historial.tsx     # Tab 4: Archivo histórico de actas de custodia
-│   │   └── vehiculo/[id].tsx     # Vista pericial detallada del vehículo
-│   ├── src/
-│   │   ├── services/         # inspectionService: Sincronización Supabase y reglas de negocio
-│   │   ├── lib/              # Cliente Supabase
-│   │   └── types/            # Tipos TypeScript del dominio
-│   └── package.json
-│
-├── vision-server/            # Microservicio de Visión por Computadora e IA
-│   ├── vision_server.py      # Servidor FastAPI con endpoints de análisis perimetral y diferencial
-│   ├── yolov8n.pt            # Modelo de detección local ultrarrápido YOLOv8
-│   ├── iniciar_servidor_vision.bat # Script de inicio rápido en Windows
-│   └── requirements.txt      # Dependencias Python
-└── README.md
+└── parkvision-app/                                   # 📱 Frontend Móvil y Web (React Native + Expo SDK 52)
+    ├── app/                                          # Rutas Expo Router (Tabs: Bahías, Entrada, Salida, Historial)
+    │   ├── (tabs)/
+    │   │   ├── index.tsx                             # Tab 1: Mapa dinámico de bahías (20 cupos) y estado en vivo
+    │   │   ├── nuevo-ingreso.tsx                     # Tab 2: Registro perimetral, cámara WebRTC y acta
+    │   │   ├── auditoria.tsx                         # Tab 3: Inspección de salida, daños en rojo y entrega
+    │   │   └── historial.tsx                         # Tab 4: Historial de tickets y actas en Supabase
+    │   └── vehiculo/[id].tsx                         # Vista pericial detallada
+    ├── src/
+    │   ├── components/WebCameraModal.tsx             # Modal de cámara en vivo WebRTC (getUserMedia)
+    │   ├── services/inspectionService.ts             # Lógica de sincronización y conexión con IA
+    │   ├── lib/supabase.ts                           # Conector Supabase PostgreSQL
+    │   └── types/index.ts                            # Definiciones TypeScript del dominio
+    └── package.json
 ```
 
 ---
 
-## ✨ Características Principales
+## ✨ Características Técnicas Destacadas
 
-1. **Recepción y Entrada (Proceso Azul Cobalto)**:
-   - Captura en video perimetral o fotografía del vehículo.
-   - Detección automática de tipo de vehículo, placa colombiana, color y marca.
-   - Diagnóstico pericial inicial de abolladuras, rayones y estado de carrocería.
+1. **Recepción e Ingreso Vehicular con Cámara en Vivo (WebRTC)**:
+   - Integración nativa con la API `navigator.mediaDevices.getUserMedia` para capturar fotos o grabar videos directamente desde la cámara del computador o smartphone.
+   - Reconocimiento automático de placa amarilla colombiana mediante máscara reflectiva HSV, realce CLAHE y EasyOCR.
+   - Diagnóstico pericial inicial de abolladuras o rayones preexistentes.
    - Asignación inteligente de bahía libre (`P-01` a `P-20`) y selección del servicio (*Solo Parquear*, *Lavar y Parquear*, *Solo Lavar*).
-   - Botón de descarte inmediato si la toma no es satisfactoria.
-   - Emisión y envío automático de acta de custodia por WhatsApp al cliente.
+   - Botón de descarte inmediato (papelera roja) para reiniciar la captura limpiamente.
+   - Generación de acta de custodia bilateral con fotos y sellado de tiempo.
 
-2. **Mapa de Bahías y Capacidad en Vivo**:
-   - Monitoreo en tiempo real de 20 bahías con código de color: verde (libre) y gris pizarra con placa (ocupada).
-   - Acceso táctil directo para registrar ingreso sobre una bahía libre o auditar salida sobre una ocupada.
+2. **Mapa de Bahías y Capacidad en Tiempo Real**:
+   - Monitoreo interactivo de 20 bahías con estados dinámicos: azul/verde (disponible) y pizarra con placa (ocupada).
+   - Sincronización instantánea con PostgreSQL en Supabase.
 
-3. **Salida y Auditoría Perimetral Diferencial (Proceso Granate)**:
-   - Grabación perimetral de salida con comparación fotograma a fotograma contra el estado de ingreso.
-   - Bounding boxes con clasificación de daños no existentes al entrar (rayón, abolladura, golpe).
-   - Generación de acta de descargo y liquidación de salida con actualización instantánea de la bahía a estado disponible.
+3. **Auditoría de Salida en Dos Fases con Enmarcado Rojo**:
+   - **Fase 1 (Diagnóstico IA):** Análisis perimetral del video de salida comparando fotograma a fotograma con el estado de ingreso mediante Google Gemini 3.5 Flash Vision. Los daños nuevos se enmarcan visualmente con un recuadro rojo grueso (`cv2.rectangle` con etiqueta `CAMBIO: RAYON/ABOLLADURA`).
+   - **Fase 2 (Confirmación Oficial del Operador):** El operario revisa el diagnóstico junto al cliente y registra formalmente si el cliente se retira **Conforme** o **No Conforme**, guardando las observaciones antes de liberar la bahía.
 
-4. **Persistencia y Respaldo en la Nube**:
-   - Backend as a Service con **Supabase PostgreSQL** (`tickets_parqueadero`, `espacios_parqueo`).
-   - Sincronización en tiempo real y fallback offline para continuidad operativa.
+4. **Validación Forense de Placas Multi-fotograma**:
+   - Agregación de candidatos a lo largo de todo el video de salida para evitar falsos rechazos en tomas en ángulo o con desenfoque temporal.
+   - Algoritmo de equivalencia difusa (`son_placas_equivalentes`) tolerante a ruido óptico de OCR (`Q/O/0`, `B/8`, `I/1/T`, `Z/2`, `S/5`, `C/6`).
+   - Bloqueo estricto e inmediato de seguridad si el auto grabado es diferente al que ingresó en la bahía.
 
 ---
 
-## 🚀 Guía de Instalación y Uso
+## 🚀 Guía de Instalación y Uso Rápido
 
-### 1. Requisitos Previos
-- Node.js 18+ y npm
-- Python 3.10+
-- Cuenta de Supabase (tablas creadas con `supabase_schema.sql`)
-- Clave de API de Google Gemini
-
-### 2. Configuración del Servidor de Visión (`vision-server`)
+### 1. Iniciar el Servidor de Visión Artificial (Backend Python)
 ```bash
-cd vision-server
+cd ParkVision
 pip install -r requirements.txt
 cp .env.example .env
 # Configura tu GEMINI_API_KEY en .env
 python vision_server.py
-# O ejecuta iniciar_servidor_vision.bat en Windows
+# O simplemente ejecuta: iniciar_servidor_vision.bat
 ```
 
-### 3. Configuración de la App Móvil (`parkvision-app`)
+### 2. Iniciar la Aplicación Móvil / Web (Frontend React Native)
 ```bash
-cd parkvision-app
+cd ParkVision/parkvision-app
 npm install
-cp .env.example .env
-# Configura EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY y EXPO_PUBLIC_VISION_SERVER_URL
-npx expo start
-# O para ejecutar directamente en la WEB (navegador):
 npx expo start --web
-# O ejecuta iniciar_app_web.bat en Windows
+# O simplemente ejecuta: iniciar_app_web.bat
 ```
 
 ---
 
-## 🛡️ Seguridad y Credenciales
-Los archivos `.env` reales que contienen claves de Supabase y tokens de Gemini se encuentran excluidos mediante `.gitignore` para proteger la seguridad de la infraestructura. Consulte los archivos `.env.example` en cada subcarpeta para configurar las variables requeridas.
-
-
-
+## 🛡️ Seguridad y Buenas Prácticas
+* **Sin archivos basura:** El repositorio se mantiene depurado sin cachés, sin scripts de prueba obsoletos y sin dependencias no rastreadas.
+* **Secretos protegidos:** Los archivos `.env` reales con claves API y credenciales de base de datos están rigurosamente excluidos en `.gitignore`.

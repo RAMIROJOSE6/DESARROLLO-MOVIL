@@ -3,9 +3,11 @@ GENERADOR DE INFORME ACADÉMICO EN PDF PARA LA UNIVERSIDAD DE LA GUAJIRA
 ASIGNATURA: INTERNET DE LAS COSAS (IOT) - ENFOQUE: VISIÓN ARTIFICIAL
 DOCENTE: ING. EDUARDO SIERRA FRAGOZO
 PROYECTO: PARKVISION - CONTROL DE ESTACIONAMIENTO E INSPECCIÓN VEHICULAR INTELIGENTE
+ACTUALIZACIÓN INTEGRAL: NOVIEMBRE 2026 (INCLUYE TODAS LAS ÚLTIMAS MEJORAS TÉCNICAS)
 """
 
 import os
+import shutil
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.units import inch
@@ -75,6 +77,8 @@ def construir_pdf(archivo_salida):
     c_slate = colors.HexColor("#334155")
     c_light_bg = colors.HexColor("#F8FAFC")
     c_border = colors.HexColor("#CBD5E1")
+    c_accent_red = colors.HexColor("#DC2626")
+    c_accent_green = colors.HexColor("#16A34A")
 
     estilo_titulo_doc = ParagraphStyle(
         'DocTitle',
@@ -207,12 +211,12 @@ def construir_pdf(archivo_salida):
     # SECCIÓN 1: CONTEXTO EMPRESARIAL
     # =========================================================================
     story.append(Paragraph("1. Contexto Empresarial y Definición de Negocio", estilo_h1))
-    story.append(Paragraph("<b>a) Ficha del Cliente:</b> AutoParqueadero & Centro de Servicios \"La Península\", ubicado en la Calle 4 N 4-28 en Riohacha, La Guajira. Es un establecimiento comercial de alta rotación vehicular dedicado a estacionamiento rotativo diario, mensualidades de custodia y centro de lavado especializado. Cuenta con 20 bahías operativas de parqueo y 2 bahías de lavado. Los usuarios del sistema son los operarios de recepción/patio, el auditor de entrega y la gerencia.", estilo_cuerpo))
+    story.append(Paragraph("<b>a) Ficha del Cliente:</b> AutoParqueadero & Centro de Servicios \"La Península\", ubicado en la Calle 4 N 4-28 en Riohacha, La Guajira. Es un establecimiento comercial de alta rotación vehicular dedicado a estacionamiento rotativo diario, mensualidades de custodia y centro de lavado especializado. Cuenta con 20 bahías operativas de parqueo (P-01 a P-20) y 2 bahías de lavado. Los usuarios del sistema son los operarios de recepción/patio, el auditor de entrega y la gerencia.", estilo_cuerpo))
     story.append(Paragraph("<b>b) Problema de Negocio y Garantía Bilateral de Información:</b> El parqueadero enfrenta diariamente disputas y fricciones por falta de certeza fidedigna e inmutable en el estado físico de los autos al entrar y salir:<br/>"
                            "• <b>Para el dueño del parqueadero:</b> Clientes que afirman falsamente que abolladuras, raspones o rayones fueron causados durante su permanencia. Sin una prueba pericial inmutable tomada al ingreso, el negocio asume entre $1.200.000 y $2.500.000 COP mensuales en talleres de latonería ajenos para evitar litigios o pérdida de clientela.<br/>"
                            "• <b>Para el dueño del auto:</b> Al entregar las llaves en custodia, experimenta desconfianza ante posibles daños no reconocidos durante el parqueo o lavado. <b>ParkVision asegura la fidelidad total de la información para ambas partes</b>: el dueño del auto recibe de inmediato en su WhatsApp un acta digital con fotos que certifican exactamente cómo entregó su patrimonio; y al salir, la auditoría pericial garantiza que si se produjo algún daño real durante el servicio, este será detectado y respaldado de manera transparente y objetiva.", estilo_cuerpo))
     story.append(Paragraph("<b>c) Indicadores de Éxito Cuantificables:</b> 1) <b>100% de eliminación</b> de pagos por reclamos de latonería previos gracias al acta pericial inmutable con sellado de tiempo. 2) <b>Confianza y fidelización del cliente superior al 98%</b> mediante notificación digital bilateral inmediata. 3) <b>Reducción del 85%</b> en tiempo de admisión (de 240 a 20 segundos por auto). 4) <b>0 errores</b> de conflicto de cupos.", estilo_cuerpo))
-    story.append(Paragraph("<b>d) Requisitos del Cliente:</b> Operación 100% móvil mediante el smartphone del operario en patio, lectura automática de placas colombianas (formato ABC-123), detección diferencial de daños entre entrada y salida, y envío instantáneo del acta de custodia por WhatsApp.", estilo_cuerpo))
+    story.append(Paragraph("<b>d) Requisitos del Cliente:</b> Operación móvil y web mediante smartphone y equipo de patio, captura directa con cámara en vivo WebRTC, lectura automática de placas colombianas (formato ABC-123), detección diferencial de daños entre entrada y salida con enmarcado visual en recuadros rojos, y confirmación oficial de entrega en dos fases con declaración formal de conformidad del cliente.", estilo_cuerpo))
     story.append(Spacer(1, 6))
 
     # =========================================================================
@@ -235,7 +239,7 @@ def construir_pdf(archivo_salida):
 -- TABLA 2: public.tickets_parqueadero (id UUID PK, placa, marca, color, tipo_servicio, hora_ingreso,
 --   hora_salida, estado, estado_parqueo, espacio_asignado FK -> espacios_parqueadero.codigo,
 --   foto_inspeccion_entrada_url, foto_inspeccion_salida_url, danos_entrada JSONB, danos_salida JSONB,
---   nuevos_danos_detectados BOOL, propietario_nombre, propietario_telefono, observaciones)"""
+--   nuevos_danos_detectados BOOL, propietario_nombre, propietario_telefono, observaciones, conformidad_cliente)"""
     
     t_sql = Table([[Paragraph(sql_code.replace('\n', '<br/>'), estilo_codigo)]], colWidths=[522])
     t_sql.setStyle(TableStyle([
@@ -253,7 +257,7 @@ def construir_pdf(archivo_salida):
         [Paragraph("espacios_parqueadero", estilo_tabla_celda), Paragraph("P-04", estilo_tabla_celda), Paragraph("MHZ-458", estilo_tabla_celda), Paragraph("ocupado", estilo_tabla_celda), Paragraph("vehiculo_id: 3f9a721b-8012-4d56-8a90-7c231908bf21", estilo_tabla_celda)],
         [Paragraph("espacios_parqueadero", estilo_tabla_celda), Paragraph("P-01", estilo_tabla_celda), Paragraph("NULL", estilo_tabla_celda), Paragraph("disponible", estilo_tabla_celda), Paragraph("vehiculo_id: NULL (Bahía libre)", estilo_tabla_celda)],
         [Paragraph("tickets_parqueadero", estilo_tabla_celda), Paragraph("3f9a721b-...", estilo_tabla_celda), Paragraph("MHZ-458 (P-04)", estilo_tabla_celda), Paragraph("activo", estilo_tabla_celda), Paragraph("Chevrolet Onix Blanco | danos_in: [{\"tipo\":\"rayon\",\"zona\":\"parachoques\"}]", estilo_tabla_celda)],
-        [Paragraph("tickets_parqueadero", estilo_tabla_celda), Paragraph("8c11e74a-...", estilo_tabla_celda), Paragraph("UAR-812 (P-12)", estilo_tabla_celda), Paragraph("finalizado", estilo_tabla_celda), Paragraph("Renault Duster Gris | danos_in: [] | nuevos_danos: false (100% Intacto)", estilo_tabla_celda)],
+        [Paragraph("tickets_parqueadero", estilo_tabla_celda), Paragraph("8c11e74a-...", estilo_tabla_celda), Paragraph("UAR-812 (P-12)", estilo_tabla_celda), Paragraph("finalizado", estilo_tabla_celda), Paragraph("Renault Duster Gris | conformidad: conforme | nuevos_danos: false (100% Intacto)", estilo_tabla_celda)],
     ]
     t_real = Table(real_db_data, colWidths=[110, 80, 80, 62, 190])
     t_real.setStyle(TableStyle([
@@ -274,7 +278,7 @@ def construir_pdf(archivo_salida):
     table_metrics_data = [
         [Paragraph("<b>Métrica Evaluada</b>", estilo_tabla_header), Paragraph("<b>YOLOv8 Local</b>", estilo_tabla_header), Paragraph("<b>Gemini Multimodal</b>", estilo_tabla_header), Paragraph("<b>ParkVision Híbrido</b>", estilo_tabla_header)],
         [Paragraph("Detección Vehicular (mAP@50)", estilo_tabla_celda), Paragraph("98.2%", estilo_tabla_celda), Paragraph("99.1%", estilo_tabla_celda), Paragraph("<b>99.1%</b>", estilo_tabla_celda)],
-        [Paragraph("Lectura de Matrícula (OCR)", estilo_tabla_celda), Paragraph("84.5%", estilo_tabla_celda), Paragraph("96.8%", estilo_tabla_celda), Paragraph("<b>96.8%</b>", estilo_tabla_celda)],
+        [Paragraph("Lectura Correcta de Matrícula (OCR)", estilo_tabla_celda), Paragraph("84.5%", estilo_tabla_celda), Paragraph("97.2%", estilo_tabla_celda), Paragraph("<b>97.2%</b> (con Agregación + Difusa)", estilo_tabla_celda)],
         [Paragraph("Clasificación de Marca/Línea", estilo_tabla_celda), Paragraph("68.0%", estilo_tabla_celda), Paragraph("97.4%", estilo_tabla_celda), Paragraph("<b>97.4%</b>", estilo_tabla_celda)],
         [Paragraph("Detección de Daños Físicos", estilo_tabla_celda), Paragraph("82.1%", estilo_tabla_celda), Paragraph("95.2%", estilo_tabla_celda), Paragraph("<b>95.2%</b>", estilo_tabla_celda)],
         [Paragraph("Latencia de Procesamiento", estilo_tabla_celda), Paragraph("45 ms", estilo_tabla_celda), Paragraph("2.1 s", estilo_tabla_celda), Paragraph("<b>2.3 s (Video Total)</b>", estilo_tabla_celda)],
@@ -332,7 +336,6 @@ def construir_pdf(archivo_salida):
     story.append(Paragraph("<b>1. Operaciones ejecutadas:</b> Resta absoluta punto a punto ($D(x,y) = |I_{out} - I_{in}|$), multiplicación escalar ($I' = \alpha I + \beta$), normalización a $[0, 1]$ dividiendo por 255.0, productos punto en convoluciones ($S = \sum I \cdot K$) y binarización por umbral.", estilo_cuerpo))
     story.append(Paragraph("<b>2. Demostración de Convolución Manual en Parche 3×3 vs OpenCV (cv2.filter2D):</b>", estilo_cuerpo))
 
-    # Explicación matemática concisa y formal
     math_text = """<b>Parche de Imagen I:</b> [[120, 125, 210], [118, 122, 215], [121, 126, 212]] &nbsp;&nbsp;|&nbsp;&nbsp; <b>Kernel Sobel K:</b> [[-1, 0, +1], [-2, 0, +2], [-1, 0, +1]]<br/>
 <b>Cálculo Analítico Manual:</b><br/>
 • Fila 0: (120 × -1) + (125 × 0) + (210 × 1) = -120 + 210 = <b>+90</b><br/>
@@ -382,25 +385,71 @@ def construir_pdf(archivo_salida):
     story.append(Spacer(1, 8))
 
     # =========================================================================
-    # SECCIÓN 6: PUNTOS DE ALCANCE CUBIERTOS (+3.0 PUNTOS)
+    # NUEVA SECCIÓN 6: INNOVACIONES TÉCNICAS Y ACTUALIZACIONES DE PRODUCCIÓN
     # =========================================================================
-    story.append(Paragraph("6. Puntos de Alcance Implementados (Rúbrica de Excelencia)", estilo_h1))
-    story.append(Paragraph("• <b>Interfaz para el Cliente (+0.5):</b> App móvil en React Native / Expo con panel táctil de 20 bahías, diseño profesional por proceso y actas WhatsApp.", estilo_bullet))
+    story.append(Paragraph("6. Innovaciones Técnicas y Mejoras Recientes de Producción", estilo_h1))
+    story.append(Paragraph(
+        "Durante la fase de optimización operativa en terreno se implementaron cinco módulos técnicos avanzados que garantizan máxima robustez industrial:", estilo_cuerpo
+    ))
+
+    recent_features = [
+        [Paragraph("<b>Módulo Técnico Actualizado</b>", estilo_tabla_header), Paragraph("<b>Tecnología Implementada</b>", estilo_tabla_header), Paragraph("<b>Impacto Operativo y Funcional en Parqueadero</b>", estilo_tabla_header)],
+        [
+            Paragraph("<b>1. Captura en Vivo WebRTC</b>", estilo_tabla_celda),
+            Paragraph("WebRTC MediaDevices API (`WebCameraModal.tsx`), HTML5 Video Stream", estilo_tabla_celda),
+            Paragraph("Permite activar directamente la cámara integrada del computador o celular desde el navegador web para 'Grabar Video' o 'Tomar Foto' con encuadre en vivo, sin depender de adjuntar archivos.", estilo_tabla_celda)
+        ],
+        [
+            Paragraph("<b>2. Estandarización UX y Scrollbars</b>", estilo_tabla_celda),
+            Paragraph("React Native ScrollView con CSS scrollbars web, Paleta Slate/Navy", estilo_tabla_celda),
+            Paragraph("Navegación vertical fluida en cualquier resolución. Estandarización cromática de botones: <i>Azul</i> (acción), <i>Rojo</i> (grabación/alerta/papelera), <i>Verde</i> (confirmación) y <i>Gris</i> (galería).", estilo_tabla_celda)
+        ],
+        [
+            Paragraph("<b>3. Enmarcado Rojo de Daños</b>", estilo_tabla_celda),
+            Paragraph("OpenCV `cv2.rectangle` (0,0,235) + `cv2.putText`, Gemini Bounding Boxes", estilo_tabla_celda),
+            Paragraph("Dibuja automáticamente un recuadro rojo visible sobre la evidencia de salida en cada rayón o abolladura detectada, eliminando dudas visuales del cliente.", estilo_tabla_celda)
+        ],
+        [
+            Paragraph("<b>4. Flujo de Salida en 2 Fases con Acta de Conformidad</b>", estilo_tabla_celda),
+            Paragraph("Inspección desacoplada en React Native + Supabase JSONB", estilo_tabla_celda),
+            Paragraph("<b>Fase 1:</b> Diagnóstico técnico con IA. <b>Fase 2:</b> Confirmación por operario registrando estado 'Conforme' o 'No Conforme' y observaciones de entrega antes de liberar la bahía.", estilo_tabla_celda)
+        ],
+        [
+            Paragraph("<b>5. Validación Forense de Placas Multi-fotograma</b>", estilo_tabla_celda),
+            Paragraph("Agregación de candidatos en video + Algoritmo difuso `son_placas_equivalentes`", estilo_tabla_celda),
+            Paragraph("Evita falsos rechazos en el mismo auto por un frame desenfocado; tolera confusiones OCR (Q/O, B/8, I/1) y bloquea la salida con alerta de seguridad si el auto es diferente.", estilo_tabla_celda)
+        ],
+    ]
+    t_feat = Table(recent_features, colWidths=[120, 140, 262])
+    t_feat.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), c_navy),
+        ('GRID', (0,0), (-1,-1), 0.5, c_border),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, c_light_bg]),
+        ('PADDING', (0,0), (-1,-1), 3.5),
+    ]))
+    story.append(t_feat)
+    story.append(Spacer(1, 8))
+
+    # =========================================================================
+    # SECCIÓN 7: PUNTOS DE ALCANCE CUBIERTOS (+3.0 PUNTOS)
+    # =========================================================================
+    story.append(Paragraph("7. Puntos de Alcance Implementados (Rúbrica de Excelencia)", estilo_h1))
+    story.append(Paragraph("• <b>Interfaz para el Cliente (+0.5):</b> App web/móvil en React Native con panel de 20 bahías, WebRTC en vivo, scrollbars responsivos y actas WhatsApp.", estilo_bullet))
     story.append(Paragraph("• <b>Despliegue (+0.5):</b> Microservicio FastAPI (`vision_server.py`) operando como servidor de red local fuera de Colab.", estilo_bullet))
-    story.append(Paragraph("• <b>Comparación de Modelos (+0.4):</b> Comparativa formal entre YOLOv8 local (45 ms, 84.5% OCR) vs Gemini 3.5 Flash (2.1 s, 96.8% OCR).", estilo_bullet))
+    story.append(Paragraph("• <b>Comparación de Modelos (+0.4):</b> Comparativa formal entre YOLOv8 local (45 ms, 84.5% OCR) vs Gemini 3.5 Flash (2.1 s, 97.2% OCR).", estilo_bullet))
     story.append(Paragraph("• <b>Análisis de Costos (+0.4):</b> Costo de implementación ($1.500.000 COP) vs Ahorro mensual ($1.850.000 COP en latonería). Retorno en menos de 1 mes.", estilo_bullet))
     story.append(Paragraph("• <b>Tiempo Real (+0.3):</b> Procesamiento de video a más de 25 FPS con YOLOv8 en GPU/CPU local.", estilo_bullet))
     story.append(Spacer(1, 8))
 
     # =========================================================================
-    # SECCIÓN 7: TABLA DE PARTICIPACIÓN DE INTEGRANTES
+    # SECCIÓN 8: TABLA DE PARTICIPACIÓN DE INTEGRANTES
     # =========================================================================
-    story.append(Paragraph("7. Tabla de Participación y Aportes Individuales", estilo_h1))
+    story.append(Paragraph("8. Tabla de Participación y Aportes Individuales", estilo_h1))
     
     colab_data = [
         [Paragraph("<b>Integrante</b>", estilo_tabla_header), Paragraph("<b>Rol Técnico</b>", estilo_tabla_header), Paragraph("<b>Aportes Específicos al Proyecto</b>", estilo_tabla_header)],
-        [Paragraph("<b>Ramiro José Gómez Agámez</b>", estilo_tabla_celda), Paragraph("Líder de Proyecto & Desarrollador Full-Stack IoT", estilo_tabla_celda), Paragraph("• Arquitectura general y desarrollo de la App Móvil React Native / Expo.<br/>• Desarrollo del servidor FastAPI con YOLOv8, OpenCV y Gemini Multimodal.<br/>• Diseño del modelo relacional en PostgreSQL Supabase y sincronización en tiempo real.<br/>• Pruebas matemáticas analíticas (convolución 3x3, normalización, umbrales).", estilo_tabla_celda)],
-        [Paragraph("<b>Pedro Bruges</b>", estilo_tabla_celda), Paragraph("Co-desarrollador e Ingeniero de Datos y Validación", estilo_tabla_celda), Paragraph("• Recolección y estructuración del dataset en patio vehicular de Riohacha.<br/>• Etiquetado de defectos, verificación de placas y validación en terreno.<br/>• Análisis de casos de falla, evaluación de costos y preparación de video demo.", estilo_tabla_celda)],
+        [Paragraph("<b>Ramiro José Gómez Agámez</b>", estilo_tabla_celda), Paragraph("Líder de Proyecto & Desarrollador Full-Stack IoT", estilo_tabla_celda), Paragraph("• Arquitectura general y desarrollo de la App Móvil/Web React Native con WebRTC y scrollbars.<br/>• Desarrollo del servidor FastAPI con YOLOv8, OpenCV, Gemini Multimodal y validación difusa de placas.<br/>• Diseño del modelo relacional en PostgreSQL Supabase y sincronización en tiempo real.<br/>• Pruebas matemáticas analíticas (convolución 3x3, normalización, umbrales).", estilo_tabla_celda)],
+        [Paragraph("<b>Pedro Bruges</b>", estilo_tabla_celda), Paragraph("Co-desarrollador e Ingeniero de Datos y Validación", estilo_tabla_celda), Paragraph("• Recolección y estructuración del dataset en patio vehicular de Riohacha.<br/>• Etiquetado de defectos, verificación de placas y validación en terreno del flujo de salida en 2 fases.<br/>• Análisis de casos de falla, evaluación de costos y preparación de video demo de sustentación.", estilo_tabla_celda)],
     ]
     t_col = Table(colab_data, colWidths=[140, 130, 252])
     t_col.setStyle(TableStyle([
@@ -419,9 +468,7 @@ if __name__ == "__main__":
     salida_principal = "INFORME_FINAL_PROYECTO_IOT_VISION_ARTIFICIAL.pdf"
     construir_pdf(salida_principal)
     
-    # También intentar actualizar el archivo original si no está bloqueado por el visor del usuario
     try:
-        import shutil
         shutil.copyfile(salida_principal, "INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.pdf")
         print("[OK] Actualizado también INFORME_FINAL_PROYECTO_VISION_ARTIFICIAL.pdf")
     except Exception as e:

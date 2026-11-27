@@ -1,8 +1,8 @@
-# Dependencies
+﻿# Dependencies
 node_modules/
 */node_modules/
 
-# Expo
+# Expo & Web builds
 .expo/
 */.expo/
 dist/
@@ -35,13 +35,22 @@ __pycache__/
 */__pycache__/
 */*/__pycache__/
 *.py[cod]
-*$py.class
+*.class
 .venv/
 venv/
 env/
 .yolo/
+*/.yolo/
 .easyocr/
+*/.easyocr/
 evidencias_videos/
 */evidencias_videos/
+scratch_frames/
+*/scratch_frames/
 
-
+# Archivos de prueba y videos pesados
+*.mp4
+*.avi
+*.mov
+test_*.py
+test_*.pdf
